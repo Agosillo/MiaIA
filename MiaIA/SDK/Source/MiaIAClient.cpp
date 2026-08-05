@@ -4,6 +4,12 @@
 
 namespace MiaIA::SDK
 {
+    int MiaIAClient::TestConnection()
+    {
+        return 1001;
+    }
+
+    /*
     Core::NetworkSnapshot MiaIAClient::CreateDemoSnapshot()
     {
         Core::Network network;
@@ -22,4 +28,5 @@ namespace MiaIA::SDK
 
         return Core::SnapshotBuilder::Build(network);
     }
+    */
 }

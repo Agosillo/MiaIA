@@ -1,0 +1,24 @@
+# Unreal Engine generated folders
+Binaries/
+DerivedDataCache/
+Intermediate/
+Saved/
+
+# Visual Studio
+.vs/
+
+# Build outputs
+*.obj
+*.lib
+*.dll
+*.pdb
+*.exp
+
+# Unreal generated files
+*.bin
+*.tmp
+
+# Unreal generated solution files
+*.sln
+*.slnx
+.vsconfig

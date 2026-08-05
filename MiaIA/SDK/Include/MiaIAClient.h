@@ -8,6 +8,7 @@ namespace MiaIA::SDK
     {
     public:
         [[nodiscard]]
-        static Core::NetworkSnapshot CreateDemoSnapshot();
+       // static Core::NetworkSnapshot CreateDemoSnapshot();
+        static int TestConnection();
     };
 }
