@@ -1,20 +1,34 @@
-// Tests.cpp : Questo file contiene la funzione 'main', in cui inizia e termina l'esecuzione del programma.
-//
+#include "../Core/Execution/SnapshotBuilder.h"
 
+#include <cassert>
 #include <iostream>
 
 int main()
 {
-    std::cout << "Hello World!\n";
+    MiaIA::Core::Network network;
+
+    MiaIA::Core::Layer layer;
+    layer.Id = 1;
+    layer.Name = "Input";
+
+    MiaIA::Core::Neuron neuron;
+    neuron.Id = 1001;
+    neuron.Bias = 0.25;
+    neuron.Activation = 0.75;
+
+    layer.Neurons.push_back(neuron);
+    network.Layers.push_back(layer);
+
+    const MiaIA::Core::NetworkSnapshot snapshot =
+        MiaIA::Core::SnapshotBuilder::Build(network);
+
+    assert(snapshot.Layers.size() == 1);
+    assert(snapshot.Layers[0].Id == 1);
+    assert(snapshot.Layers[0].Neurons.size() == 1);
+    assert(snapshot.Layers[0].Neurons[0].Id == 1001);
+    assert(snapshot.Layers[0].Neurons[0].Activation == 0.75);
+
+    std::cout << "Snapshot test passed\n";
+
+    return 0;
 }
-
-// Per eseguire il programma: CTRL+F5 oppure Debug > Avvia senza eseguire debug
-// Per eseguire il debug del programma: F5 oppure Debug > Avvia debug
-
-// Suggerimenti per iniziare: 
-//   1. Usare la finestra Esplora soluzioni per aggiungere/gestire i file
-//   2. Usare la finestra Team Explorer per connettersi al controllo del codice sorgente
-//   3. Usare la finestra di output per visualizzare l'output di compilazione e altri messaggi
-//   4. Usare la finestra Elenco errori per visualizzare gli errori
-//   5. Passare a Progetto > Aggiungi nuovo elemento per creare nuovi file di codice oppure a Progetto > Aggiungi elemento esistente per aggiungere file di codice esistenti al progetto
-//   6. Per aprire di nuovo questo progetto in futuro, passare a File > Apri > Progetto e selezionare il file con estensione sln
