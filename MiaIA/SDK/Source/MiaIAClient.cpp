@@ -9,11 +9,12 @@ namespace MiaIA::SDK
         return 1001;
     }
 
-    /*
-    Core::NetworkSnapshot MiaIAClient::CreateDemoSnapshot()
+
+    Core::NetworkSnapshot MiaIAClient::GetSnapshot()
     {
         Core::Network network;
 
+        // temporaneamente: dati provenienti dal Core
         Core::Layer layer;
         layer.Id = 1;
         layer.Name = "Input";
@@ -28,5 +29,5 @@ namespace MiaIA::SDK
 
         return Core::SnapshotBuilder::Build(network);
     }
-    */
+
 }

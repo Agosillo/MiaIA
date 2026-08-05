@@ -9,6 +9,7 @@ namespace MiaIA::Core
     {
         std::uint64_t Id{};
         double Activation{};
+        double Bias{};
     };
 
     struct LayerSnapshot

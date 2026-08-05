@@ -27,7 +27,8 @@ namespace MiaIA::Core
                     layerSnapshot.Neurons.push_back(
                         NeuronSnapshot{
                             neuron.Id,
-                            neuron.Activation
+                            neuron.Activation,
+                            neuron.Bias
                         });
                 }
 

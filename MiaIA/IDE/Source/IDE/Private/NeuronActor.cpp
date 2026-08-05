@@ -16,17 +16,15 @@ ANeuronActor::ANeuronActor()
 void ANeuronActor::BeginPlay()
 {
 	Super::BeginPlay();
-	/*
-	auto Snapshot = MiaIA::SDK::MiaIAClient::CreateDemoSnapshot();
+    auto Snapshot = MiaIA::SDK::MiaIAClient::GetSnapshot();
 
-	UE_LOG(LogTemp, Warning,
-		TEXT("MiaIA Neuron ID: %d"),
-		Snapshot.Layers[0].Neurons[0].Id
-	);
-	*/
-	int id = MiaIA::SDK::MiaIAClient::TestConnection();
+    if (!Snapshot.Layers.empty() && !Snapshot.Layers[0].Neurons.empty())
+    {
+        const auto& Neuron = Snapshot.Layers[0].Neurons[0];
 
-	UE_LOG(LogTemp, Warning, TEXT("MiaIA Neuron ID: %d"), id);
+        UE_LOG(LogTemp, Warning, TEXT("MiaIA Neuron ID: %d Bias: %.2f Activation: %.2f"), Neuron.Id, Neuron.Bias, Neuron.Activation);
+            
+    }
 }
 
 // Called every frame
