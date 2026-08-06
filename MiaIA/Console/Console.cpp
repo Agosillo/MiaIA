@@ -10,8 +10,8 @@ int main()
 
     MiaIAClient::ClearNetwork();
 
-    MiaIAClient::AddLayer(0, "Input");
-    MiaIAClient::AddLayer(1, "Hidden");
+    MiaIAClient::AddLayer(0, "Input", 0);
+    MiaIAClient::AddLayer(1, "Hidden", 1);
 
     MiaIAClient::AddNeuron(0, 1001, 0.75, 0.25);
     MiaIAClient::AddNeuron(0, 1002, 0.45, 0.10);
@@ -57,7 +57,7 @@ int main()
     std::cout << std::boolalpha;
 
     std::cout << "Duplicate layer: "
-        << MiaIAClient::AddLayer(0, "Duplicate")
+        << MiaIAClient::AddLayer(0, "Duplicate", 0)
         << '\n';
 
     std::cout << "Duplicate neuron: "

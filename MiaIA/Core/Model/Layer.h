@@ -20,6 +20,7 @@ namespace MiaIA::Core
     {
         std::uint64_t Id{};
         std::string Name;
+        std::uint64_t Order{};
         std::vector<Neuron> Neurons;
         ActivationType Activation{ ActivationType::Sigmoid };
     };

@@ -20,7 +20,7 @@ namespace MiaIA::SDK
         CurrentNetwork.Connections.clear();
     }
 
-    bool MiaIAClient::AddLayer(std::uint64_t id, const std::string& name)
+    bool MiaIAClient::AddLayer(std::uint64_t id, const std::string& name, std::uint64_t order)
     {
         if (name.empty())
         {
@@ -33,11 +33,23 @@ namespace MiaIA::SDK
             {
                 return false;
             }
+            
+            if (layer.Order == order)
+            {
+                return false;
+            }
+
+            if (order > CurrentNetwork.Layers.size())
+            {
+                return false;
+            }
+            
         }
 
         Core::Layer layer;
         layer.Id = id;
         layer.Name = name;
+        layer.Order = order;
 
         CurrentNetwork.Layers.push_back(layer);
 
@@ -140,7 +152,7 @@ namespace MiaIA::SDK
             return false;
         }
 
-        if (fromLayer->Id >= toLayer->Id)
+        if (fromLayer->Order >= toLayer->Order)
         {
             return false;
         }
@@ -360,6 +372,8 @@ namespace MiaIA::SDK
         {
             if (layerIt->Id == layerId)
             {
+                const std::uint64_t removedOrder = layerIt->Order;
+
                 for (const Core::Neuron& neuron : layerIt->Neurons)
                 {
                     for (auto connectionIt = CurrentNetwork.Connections.begin();
@@ -379,6 +393,15 @@ namespace MiaIA::SDK
                 }
 
                 CurrentNetwork.Layers.erase(layerIt);
+
+                for (Core::Layer& layer : CurrentNetwork.Layers)
+                {
+                    if (layer.Order > removedOrder)
+                    {
+                        --layer.Order;
+                    }
+                }
+
                 return true;
             }
         }

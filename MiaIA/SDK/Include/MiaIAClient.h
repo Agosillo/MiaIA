@@ -14,7 +14,7 @@ namespace MiaIA::SDK
         [[nodiscard]]
         static Core::NetworkSnapshot GetSnapshot();
         static void ClearNetwork();
-        static bool AddLayer(std::uint64_t id, const std::string& name);
+        static bool AddLayer(std::uint64_t id, const std::string& name, std::uint64_t order);
         static bool AddNeuron(std::uint64_t layerId, std::uint64_t neuronId, double bias, double activation);
         static bool AddConnection(std::uint64_t id, std::uint64_t fromNeuron, std::uint64_t toNeuron, double weight);
         static bool SetNeuronActivation(std::uint64_t neuronId, double activation);
