@@ -591,6 +591,50 @@ int main()
 
     });
 
+    runner.Run("Dense network factory", [&]()
+    {
+    MiaIAClient::ClearNetwork();
+
+    assert(MiaIAClient::CreateDenseNetwork(2, 3, 2, 1));
+
+    const auto denseSnapshot = MiaIAClient::GetSnapshot();
+
+    assert(denseSnapshot.Layers.size() == 4);
+    assert(denseSnapshot.Layers[0].Name == "Input");
+    assert(denseSnapshot.Layers[1].Name == "Hidden");
+    assert(denseSnapshot.Layers[2].Name == "Hidden");
+    assert(denseSnapshot.Layers[3].Name == "Output");
+    assert(denseSnapshot.Layers[0].Order == 0);
+    assert(denseSnapshot.Layers[1].Order == 1);
+    assert(denseSnapshot.Layers[2].Order == 2);
+    assert(denseSnapshot.Layers[3].Order == 3);
+    assert(denseSnapshot.Layers[0].Neurons.size() == 2);
+    assert(denseSnapshot.Layers[1].Neurons.size() == 3);
+    assert(denseSnapshot.Layers[2].Neurons.size() == 3);
+    assert(denseSnapshot.Layers[3].Neurons.size() == 1);
+    assert(denseSnapshot.Connections.size() == 18);
+
+    assert(!MiaIAClient::CreateDenseNetwork(0, 3, 2, 1));
+    assert(!MiaIAClient::CreateDenseNetwork(2, 0, 2, 1));
+    assert(!MiaIAClient::CreateDenseNetwork(2, 3, -1, 1));
+    assert(!MiaIAClient::CreateDenseNetwork(2, 3, 2, 0));
+
+    const auto afterInvalidCreation = MiaIAClient::GetSnapshot();
+
+    assert(afterInvalidCreation.Layers.size() == 4);
+    assert(afterInvalidCreation.Connections.size() == 18);
+
+    assert(MiaIAClient::CreateDenseNetwork(2, 1, 0, 1));
+
+    const auto directSnapshot = MiaIAClient::GetSnapshot();
+
+    assert(directSnapshot.Layers.size() == 2);
+    assert(directSnapshot.Layers[0].Name == "Input");
+    assert(directSnapshot.Layers[1].Name == "Output");
+    assert(directSnapshot.Connections.size() == 2);
+
+    });
+
     runner.Run("Connection weights", [&]()
     {
     MiaIAClient::ClearNetwork();

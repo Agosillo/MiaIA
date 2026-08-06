@@ -10,7 +10,8 @@ namespace MiaIA::Engine
 
         static Core::Network Create();
 
-        static Core::Network CreateDense(
+        static bool CreateDense(
+            Core::Network& network,
             int inputCount,
             int hiddenCount,
             int hiddenLayers,
