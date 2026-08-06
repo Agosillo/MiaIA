@@ -67,6 +67,14 @@ namespace MiaIA::SDK
             activation);
     }
 
+    bool MiaIAClient::SetInputValues(
+        const std::vector<double>& values)
+    {
+        return Engine::NetworkInput::SetValues(
+            CurrentNetwork,
+            values);
+    }
+
     bool MiaIAClient::SetNeuronBias(
         std::uint64_t neuronId,
         double bias)

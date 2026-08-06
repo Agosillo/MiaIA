@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <string>
+#include <vector>
 
 #include "../../Core/Public/NetworkSnapshot.h"
 
@@ -17,6 +18,7 @@ namespace MiaIA::SDK
         static bool AddNeuron(std::uint64_t layerId, std::uint64_t neuronId, double bias, double activation);
         static bool AddConnection(std::uint64_t id, std::uint64_t fromNeuron, std::uint64_t toNeuron, double weight);
         static bool SetNeuronActivation(std::uint64_t neuronId, double activation);
+        static bool SetInputValues(const std::vector<double>& values);
         static bool SetNeuronBias(std::uint64_t neuronId, double bias);
         static bool SetConnectionWeight(std::uint64_t connectionId, double weight);
         static bool TryGetNeuron(std::uint64_t neuronId, Core::NeuronSnapshot& result);

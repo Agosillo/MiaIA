@@ -1,5 +1,6 @@
 #include <cmath>
 #include <limits>
+#include <vector>
 #include "TestHarness.h"
 #include "../SDK/Include/MiaIAClient.h"
 #include "../Core/Execution/Activation.h"
@@ -155,6 +156,54 @@ int main()
     const auto afterConnectionRemoval = MiaIAClient::GetSnapshot();
 
     assert(afterConnectionRemoval.Connections.empty());
+
+    });
+
+    runner.Run("Network input", [&]()
+    {
+    MiaIAClient::ClearNetwork();
+
+    assert(MiaIAClient::CreateDenseNetwork(3, 2, 1, 1));
+
+    const std::vector<double> inputValues{
+        0.25,
+        -0.5,
+        1.0
+    };
+
+    assert(MiaIAClient::SetInputValues(inputValues));
+
+    const auto inputSnapshot = MiaIAClient::GetSnapshot();
+
+    assert(inputSnapshot.Layers[0].Neurons.size() == 3);
+    assert(inputSnapshot.Layers[0].Neurons[0].Activation == 0.25);
+    assert(inputSnapshot.Layers[0].Neurons[1].Activation == -0.5);
+    assert(inputSnapshot.Layers[0].Neurons[2].Activation == 1.0);
+
+    assert(!MiaIAClient::SetInputValues({ 0.1, 0.2 }));
+    assert(!MiaIAClient::SetInputValues({ 0.1, 0.2, 0.3, 0.4 }));
+    assert(!MiaIAClient::SetInputValues({
+        0.1,
+        std::numeric_limits<double>::quiet_NaN(),
+        0.3
+        }));
+    assert(!MiaIAClient::SetInputValues({
+        0.1,
+        std::numeric_limits<double>::infinity(),
+        0.3
+        }));
+
+    const auto afterInvalidInput = MiaIAClient::GetSnapshot();
+
+    assert(afterInvalidInput.Layers[0].Neurons[0].Activation == 0.25);
+    assert(afterInvalidInput.Layers[0].Neurons[1].Activation == -0.5);
+    assert(afterInvalidInput.Layers[0].Neurons[2].Activation == 1.0);
+
+    assert(MiaIAClient::Forward());
+
+    MiaIAClient::ClearNetwork();
+
+    assert(!MiaIAClient::SetInputValues({ 1.0 }));
 
     });
 

@@ -6,6 +6,24 @@
 
 #include "../SDK/Include/MiaIAClient.h"
 
+std::string Trim(const std::string& value)
+{
+    const std::size_t first =
+        value.find_first_not_of(" \t\r\n");
+
+    if (first == std::string::npos)
+    {
+        return "";
+    }
+
+    const std::size_t last =
+        value.find_last_not_of(" \t\r\n");
+
+    return value.substr(
+        first,
+        last - first + 1);
+}
+
 
 void PrintHelp()
 {
@@ -20,6 +38,11 @@ void PrintHelp()
         << "      Create a dense neural network\n\n"
         << "      Example:\n"
         << "        create 784 256 3 10\n\n"
+
+        << "  input [values]\n"
+        << "      Set the input layer activation values\n\n"
+        << "      Example:\n"
+        << "        input 0.5 0.2 0.9\n\n"
 
         << "  summary\n"
         << "      Show network overview\n\n"
@@ -53,7 +76,7 @@ void CreateNetwork(const std::string& command)
 
     std::string token;
 
-    ss >> token; // elimina "create"
+    ss >> token; // Remove "create".
 
 
     if (ss >> inputCount
@@ -61,7 +84,7 @@ void CreateNetwork(const std::string& command)
         >> hiddenLayers
         >> outputCount)
     {
-        // parametri ricevuti
+        // Parameters received.
     }
 
     if (MiaIAClient::CreateDenseNetwork(
@@ -78,6 +101,50 @@ void CreateNetwork(const std::string& command)
         std::cout
             << "Network creation failed.\n";
     }
+}
+
+void SetInput(const std::string& command)
+{
+    using MiaIA::SDK::MiaIAClient;
+
+    std::stringstream stream(command);
+    std::string token;
+    std::vector<double> values;
+    double value{};
+
+    stream >> token;
+
+    while (stream >> value)
+    {
+        values.push_back(value);
+    }
+
+    if (!stream.eof())
+    {
+        std::cout
+            << "Input contains an invalid numeric value.\n";
+
+        return;
+    }
+
+    if (values.empty())
+    {
+        std::cout
+            << "Input requires at least one value.\n";
+
+        return;
+    }
+
+    if (!MiaIAClient::SetInputValues(values))
+    {
+        std::cout
+            << "Input values do not match the current network.\n";
+
+        return;
+    }
+
+    std::cout
+        << "Input values applied.\n";
 }
 
 
@@ -300,6 +367,7 @@ std::string ResolveCommand(
     {
         "help",
         "create",
+        "input",
         "summary",
         "inspect",
         "forward",
@@ -345,6 +413,8 @@ int main()
             std::cin,
             command);
 
+        command = Trim(command);
+
         if (command.empty())
         {
             continue;
@@ -367,6 +437,11 @@ int main()
         else if (command.rfind("create", 0) == 0)
         {
             CreateNetwork(command);
+            continue;
+        }
+        else if (command.rfind("input", 0) == 0)
+        {
+            SetInput(command);
             continue;
         }
         else if (command == "summary")
