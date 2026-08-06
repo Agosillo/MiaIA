@@ -1,5 +1,7 @@
 #include <algorithm>
+#include <cmath>
 #include "NetworkEditor.h"
+#include "../Topology/NetworkTopology.h"
 
 namespace MiaIA::Engine
 {
@@ -51,31 +53,33 @@ namespace MiaIA::Engine
         double bias,
         double activation)
     {
-        for (Core::Layer& layer : network.Layers)
+        Core::Layer* layer =
+            NetworkTopology::FindLayer(
+                network,
+                layerId);
+
+        if (layer == nullptr)
         {
-            if (layer.Id == layerId)
+            return false;
+        }
+
+        for (const Core::Neuron& neuron : layer->Neurons)
+        {
+            if (neuron.Id == neuronId)
             {
-                for (const Core::Neuron& neuron : layer.Neurons)
-                {
-                    if (neuron.Id == neuronId)
-                    {
-                        return false;
-                    }
-                }
-
-                Core::Neuron neuron;
-
-                neuron.Id = neuronId;
-                neuron.Bias = bias;
-                neuron.Activation = activation;
-
-                layer.Neurons.push_back(neuron);
-
-                return true;
+                return false;
             }
         }
 
-        return false;
+        Core::Neuron neuron;
+
+        neuron.Id = neuronId;
+        neuron.Bias = bias;
+        neuron.Activation = activation;
+
+        layer->Neurons.push_back(neuron);
+
+        return true;
     }
 
 
@@ -86,6 +90,12 @@ namespace MiaIA::Engine
         std::uint64_t toNeuron,
         double weight)
     {
+
+        if (!std::isfinite(weight))
+        {
+            return false;
+        }
+
         for (const Core::Connection& connection : network.Connections)
         {
             if (connection.Id == id)
@@ -100,24 +110,15 @@ namespace MiaIA::Engine
             }
         }
 
-        Core::Layer* fromLayer = nullptr;
-        Core::Layer* toLayer = nullptr;
+        Core::Layer* fromLayer =
+            NetworkTopology::FindLayerForNeuron(
+                network,
+                fromNeuron);
 
-        for (Core::Layer& layer : network.Layers)
-        {
-            for (const Core::Neuron& neuron : layer.Neurons)
-            {
-                if (neuron.Id == fromNeuron)
-                {
-                    fromLayer = &layer;
-                }
-
-                if (neuron.Id == toNeuron)
-                {
-                    toLayer = &layer;
-                }
-            }
-        }
+        Core::Layer* toLayer =
+            NetworkTopology::FindLayerForNeuron(
+                network,
+                toNeuron);
 
         if (fromLayer == nullptr || toLayer == nullptr)
         {
@@ -163,29 +164,36 @@ namespace MiaIA::Engine
         Core::Network& network,
         std::uint64_t neuronId)
     {
-        for (Core::Layer& layer : network.Layers)
+        Core::Layer* layer =
+            NetworkTopology::FindLayerForNeuron(
+                network,
+                neuronId);
+
+        if (layer == nullptr)
         {
-            for (auto neuronIt = layer.Neurons.begin();
-                neuronIt != layer.Neurons.end();
-                ++neuronIt)
-            {
-                if (neuronIt->Id == neuronId)
+            return false;
+        }
+
+        network.Connections.erase(
+            std::remove_if(
+                network.Connections.begin(),
+                network.Connections.end(),
+                [neuronId](const Core::Connection& connection)
                 {
-                    network.Connections.erase(
-                        std::remove_if(
-                            network.Connections.begin(),
-                            network.Connections.end(),
-                            [neuronId](const Core::Connection& connection)
-                            {
-                                return connection.FromNeuron == neuronId ||
-                                    connection.ToNeuron == neuronId;
-                            }),
-                        network.Connections.end());
+                    return connection.FromNeuron == neuronId ||
+                        connection.ToNeuron == neuronId;
+                }),
+            network.Connections.end());
 
-                    layer.Neurons.erase(neuronIt);
 
-                    return true;
-                }
+        for (auto neuronIt = layer->Neurons.begin();
+            neuronIt != layer->Neurons.end();
+            ++neuronIt)
+        {
+            if (neuronIt->Id == neuronId)
+            {
+                layer->Neurons.erase(neuronIt);
+                return true;
             }
         }
 
@@ -196,42 +204,66 @@ namespace MiaIA::Engine
         Core::Network& network,
         std::uint64_t layerId)
     {
-        for (auto layerIt = network.Layers.begin();
-            layerIt != network.Layers.end();
-            ++layerIt)
+        Core::Layer* layer =
+            NetworkTopology::FindLayer(
+                network,
+                layerId);
+
+        if (layer == nullptr)
         {
-            if (layerIt->Id == layerId)
+            return false;
+        }
+
+        std::vector<std::uint64_t> neuronIds;
+
+        neuronIds.reserve(layer->Neurons.size());
+
+        for (const Core::Neuron& neuron : layer->Neurons)
+        {
+            neuronIds.push_back(neuron.Id);
+        }
+
+        network.Connections.erase(
+            std::remove_if(
+                network.Connections.begin(),
+                network.Connections.end(),
+                [&neuronIds](const Core::Connection& connection)
+                {
+                    return std::find(
+                        neuronIds.begin(),
+                        neuronIds.end(),
+                        connection.FromNeuron) != neuronIds.end()
+                        ||
+                        std::find(
+                            neuronIds.begin(),
+                            neuronIds.end(),
+                            connection.ToNeuron) != neuronIds.end();
+                }),
+            network.Connections.end());
+
+
+        const std::uint64_t removedOrder = layer->Order;
+
+
+        network.Layers.erase(
+            std::remove_if(
+                network.Layers.begin(),
+                network.Layers.end(),
+                [layerId](const Core::Layer& item)
+                {
+                    return item.Id == layerId;
+                }),
+            network.Layers.end());
+
+
+        for (Core::Layer& currentLayer : network.Layers)
+        {
+            if (currentLayer.Order > removedOrder)
             {
-                const std::uint64_t removedOrder = layerIt->Order;
-
-                for (const Core::Neuron& neuron : layerIt->Neurons)
-                {
-                    network.Connections.erase(
-                        std::remove_if(
-                            network.Connections.begin(),
-                            network.Connections.end(),
-                            [&neuron](const Core::Connection& connection)
-                            {
-                                return connection.FromNeuron == neuron.Id ||
-                                    connection.ToNeuron == neuron.Id;
-                            }),
-                        network.Connections.end());
-                }
-
-                network.Layers.erase(layerIt);
-
-                for (Core::Layer& layer : network.Layers)
-                {
-                    if (layer.Order > removedOrder)
-                    {
-                        --layer.Order;
-                    }
-                }
-
-                return true;
+                --currentLayer.Order;
             }
         }
 
-        return false;
+        return true;
     }
 }

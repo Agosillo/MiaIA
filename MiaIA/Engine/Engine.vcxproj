@@ -147,6 +147,7 @@
     <ClInclude Include="pch.h" />
     <ClInclude Include="Runtime\NetworkFactory.h" />
     <ClInclude Include="Runtime\NetworkRuntime.h" />
+    <ClInclude Include="Topology\NetworkTopology.h" />
     <ClInclude Include="Validation\NetworkValidator.h" />
     <ClInclude Include="Weights\NetworkWeights.h" />
   </ItemGroup>
@@ -164,6 +165,7 @@
     </ClCompile>
     <ClCompile Include="Runtime\NetworkFactory.cpp" />
     <ClCompile Include="Runtime\NetworkRuntime.cpp" />
+    <ClCompile Include="Topology\NetworkTopology.cpp" />
     <ClCompile Include="Validation\NetworkValidator.cpp" />
     <ClCompile Include="Weights\NetworkWeights.cpp" />
   </ItemGroup>

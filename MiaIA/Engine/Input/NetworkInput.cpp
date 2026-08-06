@@ -1,6 +1,6 @@
-#include "NetworkInput.h"
-
 #include <cmath>
+#include "NetworkInput.h"
+#include "../Topology/NetworkTopology.h"
 
 namespace MiaIA::Engine
 {
@@ -14,18 +14,18 @@ namespace MiaIA::Engine
             return false;
         }
 
-        for (Core::Layer& layer : network.Layers)
+        Core::Neuron* neuron =
+            NetworkTopology::FindNeuron(
+                network,
+                neuronId);
+
+        if (neuron == nullptr)
         {
-            for (Core::Neuron& neuron : layer.Neurons)
-            {
-                if (neuron.Id == neuronId)
-                {
-                    neuron.Activation = activation;
-                    return true;
-                }
-            }
+            return false;
         }
 
-        return false;
+        neuron->Activation = activation;
+
+        return true;
     }
 }

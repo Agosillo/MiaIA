@@ -1,4 +1,5 @@
 #include "NetworkParameters.h"
+#include "../Topology/NetworkTopology.h"
 
 #include <cmath>
 
@@ -14,18 +15,18 @@ namespace MiaIA::Engine
             return false;
         }
 
-        for (Core::Layer& layer : network.Layers)
+        Core::Neuron* neuron =
+            NetworkTopology::FindNeuron(
+                network,
+                neuronId);
+
+        if (neuron == nullptr)
         {
-            for (Core::Neuron& neuron : layer.Neurons)
-            {
-                if (neuron.Id == neuronId)
-                {
-                    neuron.Bias = bias;
-                    return true;
-                }
-            }
+            return false;
         }
 
-        return false;
+        neuron->Bias = bias;
+
+        return true;
     }
 }

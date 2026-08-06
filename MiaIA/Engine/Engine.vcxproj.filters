@@ -45,6 +45,9 @@
     <ClInclude Include="Weights\NetworkWeights.h">
       <Filter>File di intestazione</Filter>
     </ClInclude>
+    <ClInclude Include="Topology\NetworkTopology.h">
+      <Filter>File di intestazione</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Engine.cpp">
@@ -75,6 +78,9 @@
       <Filter>File di origine</Filter>
     </ClCompile>
     <ClCompile Include="Weights\NetworkWeights.cpp">
+      <Filter>File di origine</Filter>
+    </ClCompile>
+    <ClCompile Include="Topology\NetworkTopology.cpp">
       <Filter>File di origine</Filter>
     </ClCompile>
   </ItemGroup>
