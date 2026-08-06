@@ -1,6 +1,7 @@
 #include <cmath>
 #include "NetworkWeights.h"
 #include "../Topology/NetworkTopology.h"
+#include <iostream>
 
 
 namespace MiaIA::Engine
@@ -36,8 +37,7 @@ namespace MiaIA::Engine
         std::uint64_t connectionId,
         double& weight)
     {
-        NetworkTopology topology(
-            const_cast<Core::Network&>(network));
+        const NetworkTopology topology(network);
 
         const Core::Connection* connection =
             topology.FindConnection(connectionId);

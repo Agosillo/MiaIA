@@ -1,3 +1,4 @@
+#include <iostream>
 #include "NetworkTopology.h"
 
 namespace MiaIA::Engine
@@ -6,7 +7,8 @@ namespace MiaIA::Engine
     NetworkTopology::NetworkTopology(
         Core::Network& network)
         :
-        network(network)
+        network(&network),
+        constNetwork(nullptr)
     {
         for (Core::Layer& layer : network.Layers)
         {
@@ -24,6 +26,27 @@ namespace MiaIA::Engine
         }
     }
 
+    NetworkTopology::NetworkTopology(
+        const Core::Network& network)
+        :
+        network(nullptr),
+        constNetwork(&network)
+    {
+        for (const Core::Layer& layer : network.Layers)
+        {
+            constLayers[layer.Id] = &layer;
+
+            for (const Core::Neuron& neuron : layer.Neurons)
+            {
+                constNeurons[neuron.Id] = &neuron;
+            }
+        }
+
+        for (const Core::Connection& connection : network.Connections)
+        {
+            constConnections[connection.Id] = &connection;
+        }
+    }
 
     Core::Neuron* NetworkTopology::FindNeuron(
         std::uint64_t neuronId)
@@ -52,7 +75,6 @@ namespace MiaIA::Engine
         return it->second;
     }
 
-
     Core::Connection* NetworkTopology::FindConnection(
         std::uint64_t connectionId)
     {
@@ -65,7 +87,22 @@ namespace MiaIA::Engine
 
         return it->second;
     }
+    
+    const Core::Connection* NetworkTopology::FindConnection(
+        std::uint64_t connectionId) const
+    {
+        const auto it =
+            constConnections.find(connectionId);
 
+        if (it == constConnections.end())
+        {
+
+            return nullptr;
+        }
+
+        return it->second;
+    }
+    
     Core::Layer* NetworkTopology::FindLayerForNeuron(
         std::uint64_t neuronId)
     {
