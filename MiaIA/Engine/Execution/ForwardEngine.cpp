@@ -3,19 +3,16 @@
 #include <vector>
 #include <algorithm>
 #include <unordered_map>
+#include <unordered_set>
 #include "ForwardEngine.h"
 #include "../../Core/Execution/Activation.h"
+#include "../Validation/NetworkValidator.h"
 
 namespace MiaIA::Engine
 {
     bool ForwardEngine::Run(Core::Network& network)
     {
-        if (network.Layers.size() < 2)
-        {
-            return false;
-        }
-
-        if (network.Connections.empty())
+        if (!NetworkValidator::ValidateForForward(network))
         {
             return false;
         }
@@ -51,19 +48,6 @@ namespace MiaIA::Engine
             connectionsByTarget[connection.ToNeuron].push_back(&connection);
         }
 
-        for (const Core::Connection& connection : network.Connections)
-        {
-            if (neuronsById.find(connection.FromNeuron) == neuronsById.end())
-            {
-                return false;
-            }
-
-            if (neuronsById.find(connection.ToNeuron) == neuronsById.end())
-            {
-                return false;
-            }
-        }
-
         std::sort(
             network.Layers.begin(),
             network.Layers.end(),
@@ -71,14 +55,6 @@ namespace MiaIA::Engine
             {
                 return a.Order < b.Order;
             });
-
-        for (std::size_t index = 0; index < network.Layers.size(); ++index)
-        {
-            if (network.Layers[index].Order != index)
-            {
-                return false;
-            }
-        }
 
         for (std::size_t layerIndex = 1;
             layerIndex < network.Layers.size();
@@ -92,20 +68,10 @@ namespace MiaIA::Engine
 
                 const auto targetIt = connectionsByTarget.find(neuron.Id);
 
-                if (targetIt == connectionsByTarget.end())
-                {
-                    return false;
-                }
-
                 for (const Core::Connection* connection : targetIt->second)
                 {
                     const auto sourceIt =
                         neuronsById.find(connection->FromNeuron);
-
-                    if (sourceIt == neuronsById.end())
-                    {
-                        return false;
-                    }
 
                     sum +=
                         sourceIt->second->Activation *

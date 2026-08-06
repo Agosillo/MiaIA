@@ -349,5 +349,15 @@ int main()
 
     assert(!MiaIAClient::Forward());
 
+    MiaIAClient::ClearNetwork();
+
+    assert(MiaIAClient::AddLayer(0, "Input", 0));
+    assert(MiaIAClient::AddLayer(1, "Output", 1));
+
+    assert(MiaIAClient::AddNeuron(0, 1001, 0.0, 1.0));
+    assert(MiaIAClient::AddNeuron(1, 2001, 0.0, 0.0));
+
+    assert(!MiaIAClient::AddConnection(1, 2001, 1001, 1.0));
+
     return 0;
 }
