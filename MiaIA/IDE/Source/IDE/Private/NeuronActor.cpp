@@ -16,8 +16,18 @@ ANeuronActor::ANeuronActor()
 void ANeuronActor::BeginPlay()
 {
 	Super::BeginPlay();
-    auto Snapshot = MiaIA::SDK::MiaIAClient::GetSnapshot();
+    int inputCount = 10;
+    int hiddenCount = 32;
+    int hiddenLayers = 2;
+    int outputCount = 3;
+    MiaIA::SDK::MiaIAClient::CreateDenseNetwork(
+        inputCount,
+        hiddenCount,
+        hiddenLayers,
+        outputCount);
 
+    auto Snapshot = MiaIA::SDK::MiaIAClient::GetSnapshot();
+    
     if (!Snapshot.Layers.empty() && !Snapshot.Layers[0].Neurons.empty())
     {
         for (const auto& Layer : Snapshot.Layers)
@@ -45,6 +55,7 @@ void ANeuronActor::BeginPlay()
                 Connection.Weight);
         }
     }
+
 }
 
 // Called every frame
