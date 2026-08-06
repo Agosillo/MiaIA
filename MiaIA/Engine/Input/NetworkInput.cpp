@@ -14,10 +14,10 @@ namespace MiaIA::Engine
             return false;
         }
 
+        NetworkTopology topology(network);
+
         Core::Neuron* neuron =
-            NetworkTopology::FindNeuron(
-                network,
-                neuronId);
+            topology.FindNeuron(neuronId);
 
         if (neuron == nullptr)
         {

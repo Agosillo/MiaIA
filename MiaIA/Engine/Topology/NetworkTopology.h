@@ -10,39 +10,41 @@ namespace MiaIA::Engine
     {
     public:
 
-        static Core::Neuron* FindNeuron(
-            Core::Network& network,
+        explicit NetworkTopology(
+            Core::Network& network);
+
+
+        Core::Neuron* FindNeuron(
             std::uint64_t neuronId);
 
-        static const Core::Neuron* FindNeuron(
-            const Core::Network& network,
-            std::uint64_t neuronId);
 
-
-        static Core::Layer* FindLayer(
-            Core::Network& network,
-            std::uint64_t layerId);
-
-        static const Core::Layer* FindLayer(
-            const Core::Network& network,
+        Core::Layer* FindLayer(
             std::uint64_t layerId);
 
 
-        static Core::Connection* FindConnection(
-            Core::Network& network,
+        Core::Connection* FindConnection(
             std::uint64_t connectionId);
 
-        static const Core::Connection* FindConnection(
-            const Core::Network& network,
-            std::uint64_t connectionId);
-
-
-        static Core::Layer* FindLayerForNeuron(
-            Core::Network& network,
+        Core::Layer* FindLayerForNeuron(
             std::uint64_t neuronId);
 
-        static const Core::Layer* FindLayerForNeuron(
-            const Core::Network& network,
-            std::uint64_t neuronId);
+    private:
+
+        Core::Network& network;
+
+
+        std::unordered_map<
+            std::uint64_t,
+            Core::Neuron*> neurons;
+
+
+        std::unordered_map<
+            std::uint64_t,
+            Core::Layer*> layers;
+
+
+        std::unordered_map<
+            std::uint64_t,
+            Core::Connection*> connections;
     };
 }

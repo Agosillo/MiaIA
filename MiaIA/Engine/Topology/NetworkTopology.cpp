@@ -2,130 +2,82 @@
 
 namespace MiaIA::Engine
 {
-    Core::Neuron* NetworkTopology::FindNeuron(
-        Core::Network& network,
-        std::uint64_t neuronId)
+
+    NetworkTopology::NetworkTopology(
+        Core::Network& network)
+        :
+        network(network)
     {
         for (Core::Layer& layer : network.Layers)
         {
+            layers[layer.Id] = &layer;
+
             for (Core::Neuron& neuron : layer.Neurons)
             {
-                if (neuron.Id == neuronId)
-                {
-                    return &neuron;
-                }
+                neurons[neuron.Id] = &neuron;
             }
         }
 
-        return nullptr;
-    }
-
-    const Core::Neuron* NetworkTopology::FindNeuron(
-        const Core::Network& network,
-        std::uint64_t neuronId)
-    {
-        for (const Core::Layer& layer : network.Layers)
-        {
-            for (const Core::Neuron& neuron : layer.Neurons)
-            {
-                if (neuron.Id == neuronId)
-                {
-                    return &neuron;
-                }
-            }
-        }
-
-        return nullptr;
-    }
-    Core::Layer* NetworkTopology::FindLayer(
-        Core::Network& network,
-        std::uint64_t layerId)
-    {
-        for (Core::Layer& layer : network.Layers)
-        {
-            if (layer.Id == layerId)
-            {
-                return &layer;
-            }
-        }
-
-        return nullptr;
-    }
-
-    const Core::Layer* NetworkTopology::FindLayer(
-        const Core::Network& network,
-        std::uint64_t layerId)
-    {
-        for (const Core::Layer& layer : network.Layers)
-        {
-            if (layer.Id == layerId)
-            {
-                return &layer;
-            }
-        }
-
-        return nullptr;
-    }
-
-    Core::Connection* NetworkTopology::FindConnection(
-        Core::Network& network,
-        std::uint64_t connectionId)
-    {
         for (Core::Connection& connection : network.Connections)
         {
-            if (connection.Id == connectionId)
-            {
-                return &connection;
-            }
+            connections[connection.Id] = &connection;
         }
-
-        return nullptr;
     }
 
-    const Core::Connection* NetworkTopology::FindConnection(
-        const Core::Network& network,
-        std::uint64_t connectionId)
+
+    Core::Neuron* NetworkTopology::FindNeuron(
+        std::uint64_t neuronId)
     {
-        for (const Core::Connection& connection : network.Connections)
+        const auto it = neurons.find(neuronId);
+
+        if (it == neurons.end())
         {
-            if (connection.Id == connectionId)
-            {
-                return &connection;
-            }
+            return nullptr;
         }
 
-        return nullptr;
+        return it->second;
+    }
+
+
+    Core::Layer* NetworkTopology::FindLayer(
+        std::uint64_t layerId)
+    {
+        const auto it = layers.find(layerId);
+
+        if (it == layers.end())
+        {
+            return nullptr;
+        }
+
+        return it->second;
+    }
+
+
+    Core::Connection* NetworkTopology::FindConnection(
+        std::uint64_t connectionId)
+    {
+        const auto it = connections.find(connectionId);
+
+        if (it == connections.end())
+        {
+            return nullptr;
+        }
+
+        return it->second;
     }
 
     Core::Layer* NetworkTopology::FindLayerForNeuron(
-        Core::Network& network,
         std::uint64_t neuronId)
     {
-        for (Core::Layer& layer : network.Layers)
+        for (auto& pair : layers)
         {
-            for (Core::Neuron& neuron : layer.Neurons)
+            Core::Layer* layer = pair.second;
+
+            for (Core::Neuron& neuron : layer->Neurons)
             {
                 if (neuron.Id == neuronId)
                 {
-                    return &layer;
-                }
-            }
-        }
-
-        return nullptr;
-    }
-
-    const Core::Layer* NetworkTopology::FindLayerForNeuron(
-        const Core::Network& network,
-        std::uint64_t neuronId)
-    {
-        for (const Core::Layer& layer : network.Layers)
-        {
-            for (const Core::Neuron& neuron : layer.Neurons)
-            {
-                if (neuron.Id == neuronId)
-                {
-                    return &layer;
+                    return layer;
                 }
             }
         }

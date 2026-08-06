@@ -53,10 +53,10 @@ namespace MiaIA::Engine
         double bias,
         double activation)
     {
+        NetworkTopology topology(network);
+
         Core::Layer* layer =
-            NetworkTopology::FindLayer(
-                network,
-                layerId);
+            topology.FindLayer(layerId);
 
         if (layer == nullptr)
         {
@@ -110,15 +110,12 @@ namespace MiaIA::Engine
             }
         }
 
-        Core::Layer* fromLayer =
-            NetworkTopology::FindLayerForNeuron(
-                network,
-                fromNeuron);
+        NetworkTopology topology(network);
 
-        Core::Layer* toLayer =
-            NetworkTopology::FindLayerForNeuron(
-                network,
-                toNeuron);
+
+        Core::Layer* fromLayer = topology.FindLayerForNeuron(fromNeuron);
+
+        Core::Layer* toLayer = topology.FindLayerForNeuron(toNeuron);
 
         if (fromLayer == nullptr || toLayer == nullptr)
         {
@@ -164,9 +161,11 @@ namespace MiaIA::Engine
         Core::Network& network,
         std::uint64_t neuronId)
     {
+
+        NetworkTopology topology(network);
+
         Core::Layer* layer =
-            NetworkTopology::FindLayerForNeuron(
-                network,
+            topology.FindLayerForNeuron(
                 neuronId);
 
         if (layer == nullptr)
@@ -204,10 +203,10 @@ namespace MiaIA::Engine
         Core::Network& network,
         std::uint64_t layerId)
     {
+        NetworkTopology topology(network);
+
         Core::Layer* layer =
-            NetworkTopology::FindLayer(
-                network,
-                layerId);
+            topology.FindLayer(layerId);
 
         if (layer == nullptr)
         {

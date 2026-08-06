@@ -2,6 +2,7 @@
 #include "NetworkWeights.h"
 #include "../Topology/NetworkTopology.h"
 
+
 namespace MiaIA::Engine
 {
     bool NetworkWeights::SetWeight(
@@ -14,10 +15,10 @@ namespace MiaIA::Engine
             return false;
         }
 
+        NetworkTopology topology(network);
+
         Core::Connection* connection =
-            NetworkTopology::FindConnection(
-                network,
-                connectionId);
+            topology.FindConnection(connectionId);
 
         if (connection == nullptr)
         {
@@ -29,15 +30,17 @@ namespace MiaIA::Engine
         return true;
     }
 
+
     bool NetworkWeights::GetWeight(
         const Core::Network& network,
         std::uint64_t connectionId,
         double& weight)
     {
+        NetworkTopology topology(
+            const_cast<Core::Network&>(network));
+
         const Core::Connection* connection =
-            NetworkTopology::FindConnection(
-                network,
-                connectionId);
+            topology.FindConnection(connectionId);
 
         if (connection == nullptr)
         {
