@@ -1,20 +1,20 @@
 #include "../Include/MiaIAClient.h"
 #include "../../Engine/Runtime/NetworkRuntime.h"
 #include "../../Engine/Runtime/NetworkFactory.h"
+#include "../../Engine/Inspection/NetworkInspector.h"
 #include "../../Engine/Editing/NetworkEditor.h"
 #include "../../Engine/Input/NetworkInput.h"
 #include "../../Engine/Parameters/NetworkParameters.h"
 #include "../../Engine/Weights/NetworkWeights.h"
+#include "../../Core/Model/Network.h"
+
+namespace
+{
+    MiaIA::Core::Network CurrentNetwork;
+}
 
 namespace MiaIA::SDK
 {
-    Core::Network MiaIAClient::CurrentNetwork;
-
-    int MiaIAClient::TestConnection()
-    {
-        return 1001;
-    }
-
     void MiaIAClient::ClearNetwork()
     {
         Engine::NetworkEditor::Clear(CurrentNetwork);
@@ -91,78 +91,30 @@ namespace MiaIA::SDK
         std::uint64_t neuronId,
         Core::NeuronSnapshot& result)
     {
-        for (const Core::Layer& layer : CurrentNetwork.Layers)
-        {
-            for (const Core::Neuron& neuron : layer.Neurons)
-            {
-                if (neuron.Id == neuronId)
-                {
-                    result = Core::NeuronSnapshot{
-                        neuron.Id,
-                        neuron.Activation,
-                        neuron.Bias
-                    };
-
-                    return true;
-                }
-            }
-        }
-
-        return false;
+        return Engine::NetworkInspector::TryGetNeuron(
+            CurrentNetwork,
+            neuronId,
+            result);
     }
 
     bool MiaIAClient::TryGetConnection(
         std::uint64_t connectionId,
         Core::ConnectionSnapshot& result)
     {
-        for (const Core::Connection& connection : CurrentNetwork.Connections)
-        {
-            if (connection.Id == connectionId)
-            {
-                result = Core::ConnectionSnapshot{
-                    connection.Id,
-                    connection.FromNeuron,
-                    connection.ToNeuron,
-                    connection.Weight
-                };
-
-                return true;
-            }
-        }
-
-        return false;
+        return Engine::NetworkInspector::TryGetConnection(
+            CurrentNetwork,
+            connectionId,
+            result);
     }
 
     bool MiaIAClient::TryGetLayer(
         std::uint64_t layerId,
         Core::LayerSnapshot& result)
     {
-        for (const Core::Layer& layer : CurrentNetwork.Layers)
-        {
-            if (layer.Id == layerId)
-            {
-                result.Id = layer.Id;
-                result.Name = layer.Name;
-                result.Order = layer.Order;
-                result.Activation = layer.Activation;
-                result.Neurons.clear();
-                result.Neurons.reserve(layer.Neurons.size());
-
-                for (const Core::Neuron& neuron : layer.Neurons)
-                {
-                    result.Neurons.push_back(
-                        Core::NeuronSnapshot{
-                            neuron.Id,
-                            neuron.Activation,
-                            neuron.Bias
-                        });
-                }
-
-                return true;
-            }
-        }
-
-        return false;
+        return Engine::NetworkInspector::TryGetLayer(
+            CurrentNetwork,
+            layerId,
+            result);
     }
 
     bool MiaIAClient::RemoveConnection(
@@ -206,7 +158,7 @@ namespace MiaIA::SDK
 
     Core::NetworkSnapshot MiaIAClient::GetSnapshot()
     {
-        return Engine::NetworkRuntime::Snapshot(CurrentNetwork);
+        return Engine::NetworkInspector::Snapshot(CurrentNetwork);
     }
 
     bool MiaIAClient::GetConnectionWeight(

@@ -21,9 +21,15 @@ namespace MiaIA::Engine
         Core::Neuron* FindNeuron(
             std::uint64_t neuronId);
 
+        const Core::Neuron* FindNeuron(
+            std::uint64_t neuronId) const;
+
 
         Core::Layer* FindLayer(
             std::uint64_t layerId);
+
+        const Core::Layer* FindLayer(
+            std::uint64_t layerId) const;
 
 
         Core::Connection* FindConnection(

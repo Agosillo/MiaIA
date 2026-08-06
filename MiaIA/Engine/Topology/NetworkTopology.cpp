@@ -60,6 +60,19 @@ namespace MiaIA::Engine
         return it->second;
     }
 
+    const Core::Neuron* NetworkTopology::FindNeuron(
+        std::uint64_t neuronId) const
+    {
+        const auto it = constNeurons.find(neuronId);
+
+        if (it == constNeurons.end())
+        {
+            return nullptr;
+        }
+
+        return it->second;
+    }
+
 
     Core::Layer* NetworkTopology::FindLayer(
         std::uint64_t layerId)
@@ -67,6 +80,19 @@ namespace MiaIA::Engine
         const auto it = layers.find(layerId);
 
         if (it == layers.end())
+        {
+            return nullptr;
+        }
+
+        return it->second;
+    }
+
+    const Core::Layer* NetworkTopology::FindLayer(
+        std::uint64_t layerId) const
+    {
+        const auto it = constLayers.find(layerId);
+
+        if (it == constLayers.end())
         {
             return nullptr;
         }

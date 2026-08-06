@@ -4,7 +4,6 @@
 #include <string>
 
 #include "../../Core/Public/NetworkSnapshot.h"
-#include "../../Core/Model/Network.h"
 
 namespace MiaIA::SDK
 {
@@ -30,10 +29,5 @@ namespace MiaIA::SDK
         static bool GetConnectionWeight(std::uint64_t connectionId, double& weight);
         static bool CreateDenseNetwork(int inputCount, int hiddenCount, int hiddenLayers, int outputCount);
         static bool Forward();
-
-        static int TestConnection();
-
-    private:
-        static Core::Network CurrentNetwork;
     };
 }

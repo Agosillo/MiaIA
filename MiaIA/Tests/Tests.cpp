@@ -108,8 +108,13 @@ int main()
 
     assert(MiaIAClient::TryGetNeuron(1001, neuron));
     assert(neuron.Id == 1001);
+    assert(neuron.Bias == 0.75);
+    assert(neuron.Activation == 0.25);
 
     assert(MiaIAClient::TryGetConnection(1, connection));
+    assert(connection.Id == 1);
+    assert(connection.FromNeuron == 1001);
+    assert(connection.ToNeuron == 2001);
     assert(connection.Weight == 0.8);
 
     assert(MiaIAClient::SetLayerActivation(
@@ -134,6 +139,15 @@ int main()
     assert(!MiaIAClient::TryGetNeuron(9999, neuron));
     assert(!MiaIAClient::TryGetConnection(9999, connection));
     assert(!MiaIAClient::TryGetLayer(9999, layer));
+
+    assert(neuron.Id == 1001);
+    assert(connection.Id == 1);
+    assert(layer.Id == 1);
+
+    const auto afterInspection = MiaIAClient::GetSnapshot();
+
+    assert(afterInspection.Layers.size() == 2);
+    assert(afterInspection.Connections.size() == 1);
 
     assert(MiaIAClient::RemoveConnection(1));
     assert(!MiaIAClient::RemoveConnection(1));

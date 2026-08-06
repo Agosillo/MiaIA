@@ -142,6 +142,7 @@
     <ClInclude Include="Editing\NetworkEditor.h" />
     <ClInclude Include="Execution\ForwardEngine.h" />
     <ClInclude Include="framework.h" />
+    <ClInclude Include="Inspection\NetworkInspector.h" />
     <ClInclude Include="Input\NetworkInput.h" />
     <ClInclude Include="Parameters\NetworkParameters.h" />
     <ClInclude Include="pch.h" />
@@ -155,6 +156,7 @@
     <ClCompile Include="Editing\NetworkEditor.cpp" />
     <ClCompile Include="Engine.cpp" />
     <ClCompile Include="Execution\ForwardEngine.cpp" />
+    <ClCompile Include="Inspection\NetworkInspector.cpp" />
     <ClCompile Include="Input\NetworkInput.cpp" />
     <ClCompile Include="Parameters\NetworkParameters.cpp" />
     <ClCompile Include="pch.cpp">
