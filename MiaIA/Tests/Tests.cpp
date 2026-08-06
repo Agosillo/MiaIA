@@ -537,5 +537,63 @@ int main()
         !MiaIA::Engine::NetworkValidator::ValidateForForward(
             duplicateNeuronNetwork));
 
+    MiaIAClient::ClearNetwork();
+
+    assert(MiaIAClient::AddLayer(0, "Input", 0));
+    assert(MiaIAClient::AddLayer(1, "Output", 1));
+
+    assert(MiaIAClient::AddNeuron(0, 1001, 0.0, 1.0));
+    assert(MiaIAClient::AddNeuron(1, 2001, 0.0, 0.0));
+
+    assert(MiaIAClient::AddConnection(
+        1,
+        1001,
+        2001,
+        0.5));
+
+    assert(MiaIAClient::SetConnectionWeight(
+        1,
+        0.8));
+
+    const auto weightSnapshot = MiaIAClient::GetSnapshot();
+
+    assert(weightSnapshot.Connections[0].Weight == 0.8);
+
+    MiaIAClient::ClearNetwork();
+
+    assert(MiaIAClient::AddLayer(0, "Input", 0));
+    assert(MiaIAClient::AddLayer(1, "Output", 1));
+
+    assert(MiaIAClient::AddNeuron(0, 1001, 0.0, 1.0));
+    assert(MiaIAClient::AddNeuron(1, 2001, 0.0, 0.0));
+
+    assert(MiaIAClient::AddConnection(
+        1,
+        1001,
+        2001,
+        0.5));
+
+    assert(MiaIAClient::SetConnectionWeight(
+        1,
+        0.8));
+
+    double readWeight = 0.0;
+
+    assert(MiaIAClient::GetConnectionWeight(
+        1,
+        readWeight));
+
+    assert(readWeight == 0.8);
+
+    double missingWeight = 0.0;
+
+    assert(!MiaIAClient::GetConnectionWeight(
+        9999,
+        missingWeight));
+
+    const auto afterWeightChangeSnapshot = MiaIAClient::GetSnapshot();
+
+    assert(afterWeightChangeSnapshot.Connections[0].Weight == 0.8);
+
     return 0;
 }

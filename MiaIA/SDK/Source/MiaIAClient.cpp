@@ -2,6 +2,9 @@
 #include "../Include/MiaIAClient.h"
 #include "../../Engine/Runtime/NetworkRuntime.h"
 #include "../../Engine/Editing/NetworkEditor.h"
+#include "../../Engine/Input/NetworkInput.h"
+#include "../../Engine/Parameters/NetworkParameters.h"
+#include "../../Engine/Weights/NetworkWeights.h"
 
 namespace MiaIA::SDK
 {
@@ -58,69 +61,30 @@ namespace MiaIA::SDK
         std::uint64_t neuronId,
         double activation)
     {
-        if (!std::isfinite(activation))
-        {
-            return false;
-        }
-
-        for (Core::Layer& layer : CurrentNetwork.Layers)
-        {
-            for (Core::Neuron& neuron : layer.Neurons)
-            {
-                if (neuron.Id == neuronId)
-                {
-                    neuron.Activation = activation;
-                    return true;
-                }
-            }
-        }
-
-        return false;
+        return Engine::NetworkInput::SetActivation(
+            CurrentNetwork,
+            neuronId,
+            activation);
     }
 
     bool MiaIAClient::SetNeuronBias(
         std::uint64_t neuronId,
         double bias)
     {
-        if (!std::isfinite(bias))
-        {
-            return false;
-        }
-
-        for (Core::Layer& layer : CurrentNetwork.Layers)
-        {
-            for (Core::Neuron& neuron : layer.Neurons)
-            {
-                if (neuron.Id == neuronId)
-                {
-                    neuron.Bias = bias;
-                    return true;
-                }
-            }
-        }
-
-        return false;
+        return Engine::NetworkParameters::SetBias(
+            CurrentNetwork,
+            neuronId,
+            bias);
     }
 
     bool MiaIAClient::SetConnectionWeight(
         std::uint64_t connectionId,
         double weight)
     {
-        if (!std::isfinite(weight))
-        {
-            return false;
-        }
-
-        for (Core::Connection& connection : CurrentNetwork.Connections)
-        {
-            if (connection.Id == connectionId)
-            {
-                connection.Weight = weight;
-                return true;
-            }
-        }
-
-        return false;
+        return Engine::NetworkWeights::SetWeight(
+            CurrentNetwork,
+            connectionId,
+            weight);
     }
 
     bool MiaIAClient::TryGetNeuron(
@@ -247,6 +211,16 @@ namespace MiaIA::SDK
     Core::NetworkSnapshot MiaIAClient::GetSnapshot()
     {
         return Engine::NetworkRuntime::Snapshot(CurrentNetwork);
+    }
+
+    bool MiaIAClient::GetConnectionWeight(
+        std::uint64_t connectionId,
+        double& weight)
+    {
+        return Engine::NetworkWeights::GetWeight(
+            CurrentNetwork,
+            connectionId,
+            weight);
     }
 
 }

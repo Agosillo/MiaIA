@@ -27,6 +27,7 @@ namespace MiaIA::SDK
         static bool RemoveNeuron(std::uint64_t neuronId);
         static bool RemoveLayer(std::uint64_t layerId);
         static bool SetLayerActivation(std::uint64_t layerId, Core::ActivationType activation);
+        static bool GetConnectionWeight(std::uint64_t connectionId, double& weight);
         static bool Forward();
 
         static int TestConnection();

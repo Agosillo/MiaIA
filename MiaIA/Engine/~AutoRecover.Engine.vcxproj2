@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|Win32">
@@ -143,19 +143,15 @@
     <ClInclude Include="Execution\ForwardEngine.h" />
     <ClInclude Include="framework.h" />
     <ClInclude Include="Input\NetworkInput.h" />
-    <ClInclude Include="Parameters\NetworkParameters.h" />
     <ClInclude Include="pch.h" />
     <ClInclude Include="Runtime\NetworkFactory.h" />
     <ClInclude Include="Runtime\NetworkRuntime.h" />
     <ClInclude Include="Validation\NetworkValidator.h" />
-    <ClInclude Include="Weights\NetworkWeights.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Editing\NetworkEditor.cpp" />
     <ClCompile Include="Engine.cpp" />
     <ClCompile Include="Execution\ForwardEngine.cpp" />
-    <ClCompile Include="Input\NetworkInput.cpp" />
-    <ClCompile Include="Parameters\NetworkParameters.cpp" />
     <ClCompile Include="pch.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Create</PrecompiledHeader>
@@ -165,7 +161,6 @@
     <ClCompile Include="Runtime\NetworkFactory.cpp" />
     <ClCompile Include="Runtime\NetworkRuntime.cpp" />
     <ClCompile Include="Validation\NetworkValidator.cpp" />
-    <ClCompile Include="Weights\NetworkWeights.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
