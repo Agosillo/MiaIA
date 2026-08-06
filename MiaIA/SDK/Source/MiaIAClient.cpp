@@ -142,6 +142,8 @@ namespace MiaIA::SDK
             {
                 result.Id = layer.Id;
                 result.Name = layer.Name;
+                result.Order = layer.Order;
+                result.Activation = layer.Activation;
                 result.Neurons.clear();
                 result.Neurons.reserve(layer.Neurons.size());
 

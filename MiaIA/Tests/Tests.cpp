@@ -112,8 +112,20 @@ int main()
     assert(MiaIAClient::TryGetConnection(1, connection));
     assert(connection.Weight == 0.8);
 
-    assert(MiaIAClient::TryGetLayer(0, layer));
-    assert(layer.Name == "Input");
+    assert(MiaIAClient::SetLayerActivation(
+        1,
+        MiaIA::Core::ActivationType::Tanh));
+
+    layer.Order = 999;
+    layer.Activation = MiaIA::Core::ActivationType::Linear;
+
+    assert(MiaIAClient::TryGetLayer(1, layer));
+    assert(layer.Id == 1);
+    assert(layer.Name == "Hidden");
+    assert(layer.Order == 1);
+    assert(layer.Activation == MiaIA::Core::ActivationType::Tanh);
+    assert(layer.Neurons.size() == 1);
+    assert(layer.Neurons[0].Id == 2001);
 
     assert(!MiaIAClient::TryGetNeuron(9999, neuron));
     assert(!MiaIAClient::TryGetConnection(9999, connection));
