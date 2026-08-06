@@ -1,4 +1,5 @@
 #include <cmath>
+#include <limits>
 #include "TestHarness.h"
 #include "../SDK/Include/MiaIAClient.h"
 #include "../Core/Execution/Activation.h"
@@ -26,8 +27,25 @@ int main()
     assert(MiaIAClient::AddNeuron(0, 1001, 0.75, 0.25));
     assert(!MiaIAClient::AddNeuron(0, 1001, 0.10, 0.10));
 
+    const double nan =
+        std::numeric_limits<double>::quiet_NaN();
+
+    const double infinity =
+        std::numeric_limits<double>::infinity();
+
+    assert(!MiaIAClient::AddNeuron(0, 1002, nan, 0.0));
+    assert(!MiaIAClient::AddNeuron(0, 1002, infinity, 0.0));
+    assert(!MiaIAClient::AddNeuron(0, 1002, 0.0, nan));
+    assert(!MiaIAClient::AddNeuron(0, 1002, 0.0, infinity));
+
     assert(MiaIAClient::AddLayer(1, "Hidden", 1));
+    assert(!MiaIAClient::AddNeuron(1, 1001, 0.60, 0.30));
     assert(MiaIAClient::AddNeuron(1, 2001, 0.60, 0.30));
+
+    const auto afterInvalidNeurons = MiaIAClient::GetSnapshot();
+
+    assert(afterInvalidNeurons.Layers[0].Neurons.size() == 1);
+    assert(afterInvalidNeurons.Layers[1].Neurons.size() == 1);
 
     assert(MiaIAClient::AddConnection(1, 1001, 2001, 0.8));
     assert(!MiaIAClient::AddConnection(1, 1001, 2001, 0.8));

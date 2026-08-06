@@ -53,6 +53,12 @@ namespace MiaIA::Engine
         double bias,
         double activation)
     {
+        if (!std::isfinite(bias) ||
+            !std::isfinite(activation))
+        {
+            return false;
+        }
+
         NetworkTopology topology(network);
 
         Core::Layer* layer =
@@ -63,12 +69,9 @@ namespace MiaIA::Engine
             return false;
         }
 
-        for (const Core::Neuron& neuron : layer->Neurons)
+        if (topology.FindNeuron(neuronId) != nullptr)
         {
-            if (neuron.Id == neuronId)
-            {
-                return false;
-            }
+            return false;
         }
 
         Core::Neuron neuron;
