@@ -1,9 +1,8 @@
 #include <cmath>
 #include "../Include/MiaIAClient.h"
-#include "../../Core/Execution/SnapshotBuilder.h"
 #include "../../Core/Model/Network.h"
 #include "../../Core/Execution/Activation.h"
-#include "../../Engine/Execution/ForwardEngine.h"
+#include "../../Engine/Runtime/NetworkRuntime.h"
 
 namespace MiaIA::SDK
 {
@@ -427,12 +426,12 @@ namespace MiaIA::SDK
 
     bool MiaIAClient::Forward()
     {
-        return Engine::ForwardEngine::Run(CurrentNetwork);
+        return Engine::NetworkRuntime::Forward(CurrentNetwork);
     }
 
     Core::NetworkSnapshot MiaIAClient::GetSnapshot()
     {
-        return Core::SnapshotBuilder::Build(CurrentNetwork);
+        return Engine::NetworkRuntime::Snapshot(CurrentNetwork);
     }
 
 }
