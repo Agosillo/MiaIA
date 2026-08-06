@@ -1,6 +1,8 @@
 #pragma once
 
+#include <vector>
 #include <algorithm>
+#include <unordered_map>
 #include "ForwardEngine.h"
 #include "../../Core/Execution/Activation.h"
 
@@ -16,6 +18,50 @@ namespace MiaIA::Engine
         if (network.Connections.empty())
         {
             return false;
+        }
+
+        std::unordered_map<std::uint64_t, Core::Neuron*> neuronsById;
+
+        std::size_t neuronCount = 0;
+
+        for (const Core::Layer& layer : network.Layers)
+        {
+            neuronCount += layer.Neurons.size();
+        }
+
+        neuronsById.reserve(neuronCount);
+
+        for (Core::Layer& layer : network.Layers)
+        {
+            for (Core::Neuron& neuron : layer.Neurons)
+            {
+                neuronsById[neuron.Id] = &neuron;
+            }
+        }
+
+        std::unordered_map<
+            std::uint64_t,
+            std::vector<const Core::Connection*>>
+            connectionsByTarget;
+
+        connectionsByTarget.reserve(neuronsById.size());
+
+        for (const Core::Connection& connection : network.Connections)
+        {
+            connectionsByTarget[connection.ToNeuron].push_back(&connection);
+        }
+
+        for (const Core::Connection& connection : network.Connections)
+        {
+            if (neuronsById.find(connection.FromNeuron) == neuronsById.end())
+            {
+                return false;
+            }
+
+            if (neuronsById.find(connection.ToNeuron) == neuronsById.end())
+            {
+                return false;
+            }
         }
 
         std::sort(
@@ -44,41 +90,48 @@ namespace MiaIA::Engine
             {
                 double sum = neuron.Bias;
 
-                for (const Core::Connection& connection : network.Connections)
+                const auto targetIt = connectionsByTarget.find(neuron.Id);
+
+                if (targetIt == connectionsByTarget.end())
                 {
-                    if (connection.ToNeuron != neuron.Id)
+                    return false;
+                }
+
+                for (const Core::Connection* connection : targetIt->second)
+                {
+                    const auto sourceIt =
+                        neuronsById.find(connection->FromNeuron);
+
+                    if (sourceIt == neuronsById.end())
                     {
-                        continue;
+                        return false;
                     }
 
-                    for (const Core::Layer& sourceLayer : network.Layers)
-                    {
-                        for (const Core::Neuron& sourceNeuron : sourceLayer.Neurons)
-                        {
-                            if (sourceNeuron.Id == connection.FromNeuron)
-                            {
-                                sum += sourceNeuron.Activation * connection.Weight;
-                            }
-                        }
-                    }
+                    sum +=
+                        sourceIt->second->Activation *
+                        connection->Weight;
                 }
 
                 switch (layer.Activation)
                 {
                 case Core::ActivationType::Sigmoid:
-                    neuron.Activation = Core::Activation::Sigmoid(sum);
+                    neuron.Activation =
+                        Core::Activation::Sigmoid(sum);
                     break;
 
                 case Core::ActivationType::ReLU:
-                    neuron.Activation = Core::Activation::ReLU(sum);
+                    neuron.Activation =
+                        Core::Activation::ReLU(sum);
                     break;
 
                 case Core::ActivationType::Tanh:
-                    neuron.Activation = Core::Activation::Tanh(sum);
+                    neuron.Activation =
+                        Core::Activation::Tanh(sum);
                     break;
 
                 case Core::ActivationType::Linear:
-                    neuron.Activation = Core::Activation::Linear(sum);
+                    neuron.Activation =
+                        Core::Activation::Linear(sum);
                     break;
                 }
             }
