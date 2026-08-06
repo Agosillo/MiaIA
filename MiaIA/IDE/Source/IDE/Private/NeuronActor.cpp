@@ -20,10 +20,30 @@ void ANeuronActor::BeginPlay()
 
     if (!Snapshot.Layers.empty() && !Snapshot.Layers[0].Neurons.empty())
     {
-        const auto& Neuron = Snapshot.Layers[0].Neurons[0];
+        for (const auto& Layer : Snapshot.Layers)
+        {
+            UE_LOG(LogTemp, Warning,
+                TEXT("Layer: %s"),
+                *FString(Layer.Name.c_str()));
 
-        UE_LOG(LogTemp, Warning, TEXT("MiaIA Neuron ID: %d Bias: %.2f Activation: %.2f"), Neuron.Id, Neuron.Bias, Neuron.Activation);
-            
+            for (const auto& Neuron : Layer.Neurons)
+            {
+                UE_LOG(LogTemp, Warning,
+                    TEXT("Neuron %llu Bias %.2f Activation %.2f"),
+                    Neuron.Id,
+                    Neuron.Bias,
+                    Neuron.Activation);
+            }
+        }
+
+        for (const auto& Connection : Snapshot.Connections)
+        {
+            UE_LOG(LogTemp, Warning,
+                TEXT("Connection: %llu -> %llu Weight: %.2f"),
+                Connection.FromNeuron,
+                Connection.ToNeuron,
+                Connection.Weight);
+        }
     }
 }
 

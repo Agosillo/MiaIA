@@ -15,11 +15,13 @@ namespace MiaIA::Core
         {
             NetworkSnapshot snapshot;
             snapshot.Layers.reserve(network.Layers.size());
+            snapshot.Connections.reserve(network.Connections.size());
 
             for (const Layer& layer : network.Layers)
             {
                 LayerSnapshot layerSnapshot;
                 layerSnapshot.Id = layer.Id;
+                layerSnapshot.Name = layer.Name;
                 layerSnapshot.Neurons.reserve(layer.Neurons.size());
 
                 for (const Neuron& neuron : layer.Neurons)
@@ -35,6 +37,15 @@ namespace MiaIA::Core
                 snapshot.Layers.push_back(std::move(layerSnapshot));
             }
 
+            for (const Connection& connection : network.Connections)
+            {
+                snapshot.Connections.push_back(
+                    ConnectionSnapshot{connection.Id,
+                        connection.FromNeuron,
+                        connection.ToNeuron,
+                        connection.Weight
+                    });
+            }
             return snapshot;
         }
     };
