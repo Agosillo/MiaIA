@@ -2,6 +2,7 @@
 #include <cmath>
 #include "../SDK/Include/MiaIAClient.h"
 #include "../Core/Execution/Activation.h"
+#include "../Engine/Validation/NetworkValidator.h"
 
 int main()
 {
@@ -358,6 +359,183 @@ int main()
     assert(MiaIAClient::AddNeuron(1, 2001, 0.0, 0.0));
 
     assert(!MiaIAClient::AddConnection(1, 2001, 1001, 1.0));
+
+    MiaIA::Core::Network invalidNetwork;
+
+    assert(!MiaIA::Engine::NetworkValidator::ValidateForForward(
+        invalidNetwork));
+
+    MiaIA::Core::Network validNetwork;
+
+    MiaIA::Core::Layer inputLayer;
+    inputLayer.Id = 10;
+    inputLayer.Name = "Input";
+    inputLayer.Order = 0;
+    inputLayer.Neurons.push_back({ 1001, 0.0, 1.0 });
+
+    MiaIA::Core::Layer outputLayer;
+    outputLayer.Id = 20;
+    outputLayer.Name = "Output";
+    outputLayer.Order = 1;
+    outputLayer.Neurons.push_back({ 2001, 0.0, 0.0 });
+
+    validNetwork.Layers.push_back(inputLayer);
+    validNetwork.Layers.push_back(outputLayer);
+
+    validNetwork.Connections.push_back({
+        1,
+        1001,
+        2001,
+        1.0
+        });
+
+    assert(
+        MiaIA::Engine::NetworkValidator::ValidateForForward(
+            validNetwork));
+
+    MiaIA::Core::Network invalidOrderNetwork;
+
+    MiaIA::Core::Layer firstLayer;
+    firstLayer.Id = 10;
+    firstLayer.Name = "Input";
+    firstLayer.Order = 0;
+    firstLayer.Neurons.push_back({ 1001, 0.0, 1.0 });
+
+    MiaIA::Core::Layer secondLayer;
+    secondLayer.Id = 20;
+    secondLayer.Name = "Output";
+    secondLayer.Order = 2;
+    secondLayer.Neurons.push_back({ 2001, 0.0, 0.0 });
+
+    invalidOrderNetwork.Layers.push_back(firstLayer);
+    invalidOrderNetwork.Layers.push_back(secondLayer);
+
+    invalidOrderNetwork.Connections.push_back({
+        1,
+        1001,
+        2001,
+        1.0
+        });
+
+    assert(
+        !MiaIA::Engine::NetworkValidator::ValidateForForward(
+            invalidOrderNetwork));
+
+    MiaIA::Core::Network invalidConnectionNetwork;
+
+    MiaIA::Core::Layer input;
+    input.Id = 10;
+    input.Name = "Input";
+    input.Order = 0;
+    input.Neurons.push_back({ 1001, 0.0, 1.0 });
+
+    MiaIA::Core::Layer output;
+    output.Id = 20;
+    output.Name = "Output";
+    output.Order = 1;
+    output.Neurons.push_back({ 2001, 0.0, 0.0 });
+
+    invalidConnectionNetwork.Layers.push_back(input);
+    invalidConnectionNetwork.Layers.push_back(output);
+
+    invalidConnectionNetwork.Connections.push_back({
+        1,
+        1001,
+        9999,
+        1.0
+        });
+
+    assert(
+        !MiaIA::Engine::NetworkValidator::ValidateForForward(
+            invalidConnectionNetwork));
+
+
+    MiaIA::Core::Network backwardConnectionNetwork;
+
+    MiaIA::Core::Layer backwardInput;
+    backwardInput.Id = 10;
+    backwardInput.Name = "Input";
+    backwardInput.Order = 0;
+    backwardInput.Neurons.push_back({ 1001, 0.0, 1.0 });
+
+    MiaIA::Core::Layer backwardOutput;
+    backwardOutput.Id = 20;
+    backwardOutput.Name = "Output";
+    backwardOutput.Order = 1;
+    backwardOutput.Neurons.push_back({ 2001, 0.0, 0.0 });
+
+    backwardConnectionNetwork.Layers.push_back(backwardInput);
+    backwardConnectionNetwork.Layers.push_back(backwardOutput);
+
+    backwardConnectionNetwork.Connections.push_back({
+        1,
+        2001,
+        1001,
+        1.0
+        });
+
+    assert(
+        !MiaIA::Engine::NetworkValidator::ValidateForForward(
+            backwardConnectionNetwork));
+
+
+    MiaIA::Core::Network disconnectedNeuronNetwork;
+
+    MiaIA::Core::Layer disconnectedInput;
+    disconnectedInput.Id = 10;
+    disconnectedInput.Name = "Input";
+    disconnectedInput.Order = 0;
+    disconnectedInput.Neurons.push_back({ 1001, 0.0, 1.0 });
+
+    MiaIA::Core::Layer disconnectedOutput;
+    disconnectedOutput.Id = 20;
+    disconnectedOutput.Name = "Output";
+    disconnectedOutput.Order = 1;
+    disconnectedOutput.Neurons.push_back({ 2001, 0.0, 0.0 });
+    disconnectedOutput.Neurons.push_back({ 2002, 0.0, 0.0 });
+
+    disconnectedNeuronNetwork.Layers.push_back(disconnectedInput);
+    disconnectedNeuronNetwork.Layers.push_back(disconnectedOutput);
+
+    disconnectedNeuronNetwork.Connections.push_back({
+        1,
+        1001,
+        2001,
+        1.0
+        });
+
+    assert(
+        !MiaIA::Engine::NetworkValidator::ValidateForForward(
+            disconnectedNeuronNetwork));
+
+
+    MiaIA::Core::Network duplicateNeuronNetwork;
+
+    MiaIA::Core::Layer duplicateInput;
+    duplicateInput.Id = 10;
+    duplicateInput.Name = "Input";
+    duplicateInput.Order = 0;
+    duplicateInput.Neurons.push_back({ 1001, 0.0, 1.0 });
+
+    MiaIA::Core::Layer duplicateOutput;
+    duplicateOutput.Id = 20;
+    duplicateOutput.Name = "Output";
+    duplicateOutput.Order = 1;
+    duplicateOutput.Neurons.push_back({ 1001, 0.0, 0.0 });
+
+    duplicateNeuronNetwork.Layers.push_back(duplicateInput);
+    duplicateNeuronNetwork.Layers.push_back(duplicateOutput);
+
+    duplicateNeuronNetwork.Connections.push_back({
+        1,
+        1001,
+        1001,
+        1.0
+        });
+
+    assert(
+        !MiaIA::Engine::NetworkValidator::ValidateForForward(
+            duplicateNeuronNetwork));
 
     return 0;
 }

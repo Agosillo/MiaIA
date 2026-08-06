@@ -25,11 +25,15 @@ namespace MiaIA::Engine
         {
             for (const Core::Neuron& neuron : layer.Neurons)
             {
-                neuronIds.insert(neuron.Id);
+                if (!neuronIds.insert(neuron.Id).second)
+                {
+                    return false;
+                }
             }
         }
 
         std::unordered_map<std::uint64_t, std::uint64_t> neuronLayerOrders;
+        neuronLayerOrders.reserve(neuronIds.size());
 
         for (const Core::Layer& layer : network.Layers)
         {
@@ -58,6 +62,7 @@ namespace MiaIA::Engine
         }
 
         std::unordered_set<std::uint64_t> targetNeuronIds;
+        targetNeuronIds.reserve(network.Connections.size());
 
         for (const Core::Connection& connection : network.Connections)
         {
