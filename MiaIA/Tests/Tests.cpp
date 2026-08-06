@@ -1,5 +1,7 @@
 #include <cassert>
+#include <cmath>
 #include "../SDK/Include/MiaIAClient.h"
+#include "../Core/Execution/Activation.h"
 
 int main()
 {
@@ -94,6 +96,91 @@ int main()
     const auto afterConnectionRemoval = MiaIAClient::GetSnapshot();
 
     assert(afterConnectionRemoval.Connections.empty());
+
+
+    MiaIAClient::ClearNetwork();
+
+    assert(MiaIAClient::AddLayer(0, "Input"));
+    assert(MiaIAClient::AddLayer(1, "Output"));
+
+    assert(MiaIAClient::AddNeuron(0, 1001, 0.0, 1.0));
+    assert(MiaIAClient::AddNeuron(1, 2001, 0.0, 0.0));
+
+    assert(MiaIAClient::AddConnection(1, 1001, 2001, 1.0));
+
+    assert(MiaIAClient::Forward());
+
+    const auto forwardSnapshot = MiaIAClient::GetSnapshot();
+
+    const double expected = MiaIA::Core::Activation::Sigmoid(1.0);
+
+    assert(std::abs(forwardSnapshot.Layers[1].Neurons[0].Activation - expected) < 0.000001);
+
+    MiaIAClient::ClearNetwork();
+
+    assert(MiaIAClient::AddLayer(0, "Input"));
+    assert(MiaIAClient::AddLayer(1, "Output"));
+
+    assert(MiaIAClient::AddNeuron(0, 1001, 0.0, 1.0));
+    assert(MiaIAClient::AddNeuron(0, 1002, 0.0, 0.5));
+    assert(MiaIAClient::AddNeuron(1, 2001, 0.2, 0.0));
+
+    assert(MiaIAClient::AddConnection(1, 1001, 2001, 0.8));
+    assert(MiaIAClient::AddConnection(2, 1002, 2001, 0.4));
+
+    assert(MiaIAClient::Forward());
+
+    const auto multiInputSnapshot = MiaIAClient::GetSnapshot();
+
+    const double multiInputExpected =
+        MiaIA::Core::Activation::Sigmoid(
+            0.2 + (1.0 * 0.8) + (0.5 * 0.4));
+
+    assert(std::abs(
+        multiInputSnapshot.Layers[1].Neurons[0].Activation -
+        multiInputExpected
+    ) < 0.000001);
+
+
+    MiaIAClient::ClearNetwork();
+
+    assert(MiaIAClient::AddLayer(0, "Input"));
+    assert(MiaIAClient::AddLayer(1, "Hidden"));
+    assert(MiaIAClient::AddLayer(2, "Output"));
+
+    assert(MiaIAClient::AddNeuron(0, 1001, 0.0, 1.0));
+    assert(MiaIAClient::AddNeuron(1, 2001, 0.0, 0.0));
+    assert(MiaIAClient::AddNeuron(2, 3001, 0.0, 0.0));
+
+    assert(MiaIAClient::AddConnection(1, 1001, 2001, 1.0));
+    assert(MiaIAClient::AddConnection(2, 2001, 3001, 1.0));
+
+    assert(MiaIAClient::Forward());
+
+    const auto threeLayerSnapshot = MiaIAClient::GetSnapshot();
+
+    const double hiddenExpected =
+        MiaIA::Core::Activation::Sigmoid(1.0);
+
+    const double outputExpected =
+        MiaIA::Core::Activation::Sigmoid(hiddenExpected);
+
+    assert(std::abs(
+        threeLayerSnapshot.Layers[1].Neurons[0].Activation -
+        hiddenExpected
+    ) < 0.000001);
+
+    assert(std::abs(
+        threeLayerSnapshot.Layers[2].Neurons[0].Activation -
+        outputExpected
+    ) < 0.000001);
+
+    MiaIAClient::ClearNetwork();
+
+    assert(!MiaIAClient::Forward());
+
+    assert(MiaIAClient::AddLayer(0, "Input"));
+    assert(!MiaIAClient::Forward());
 
     return 0;
 }

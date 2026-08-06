@@ -42,6 +42,9 @@
     <ClInclude Include="Model\Connection.h">
       <Filter>File di intestazione</Filter>
     </ClInclude>
+    <ClInclude Include="Execution\Activation.h">
+      <Filter>File di intestazione</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Core.cpp">

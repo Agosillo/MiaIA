@@ -2,6 +2,7 @@
 #include "../Include/MiaIAClient.h"
 #include "../../Core/Execution/SnapshotBuilder.h"
 #include "../../Core/Model/Network.h"
+#include "../../Core/Execution/Activation.h"
 
 namespace MiaIA::SDK
 {
@@ -382,6 +383,49 @@ namespace MiaIA::SDK
         }
 
         return false;
+    }
+
+    bool MiaIAClient::Forward()
+    {
+        if (CurrentNetwork.Layers.size() < 2)
+        {
+            return false;
+        }
+
+        for (std::size_t layerIndex = 1;
+            layerIndex < CurrentNetwork.Layers.size();
+            ++layerIndex)
+        {
+            Core::Layer& layer = CurrentNetwork.Layers[layerIndex];
+
+            for (Core::Neuron& neuron : layer.Neurons)
+            {
+                double sum = neuron.Bias;
+
+                for (const Core::Connection& connection : CurrentNetwork.Connections)
+                {
+                    if (connection.ToNeuron != neuron.Id)
+                    {
+                        continue;
+                    }
+
+                    for (const Core::Layer& sourceLayer : CurrentNetwork.Layers)
+                    {
+                        for (const Core::Neuron& sourceNeuron : sourceLayer.Neurons)
+                        {
+                            if (sourceNeuron.Id == connection.FromNeuron)
+                            {
+                                sum += sourceNeuron.Activation * connection.Weight;
+                            }
+                        }
+                    }
+                }
+
+                neuron.Activation = Core::Activation::Sigmoid(sum);
+            }
+        }
+
+        return true;
     }
 
     Core::NetworkSnapshot MiaIAClient::GetSnapshot()
