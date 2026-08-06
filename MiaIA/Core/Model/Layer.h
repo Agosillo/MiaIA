@@ -8,10 +8,19 @@
 
 namespace MiaIA::Core
 {
+    enum class ActivationType
+    {
+        Sigmoid,
+        ReLU,
+        Tanh,
+        Linear
+    };
+
     struct Layer
     {
         std::uint64_t Id{};
         std::string Name;
         std::vector<Neuron> Neurons;
+        ActivationType Activation{ ActivationType::Sigmoid };
     };
 }

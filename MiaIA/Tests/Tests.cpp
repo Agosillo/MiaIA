@@ -182,5 +182,86 @@ int main()
     assert(MiaIAClient::AddLayer(0, "Input"));
     assert(!MiaIAClient::Forward());
 
+
+    assert(MiaIA::Core::Activation::ReLU(2.5) == 2.5);
+    assert(MiaIA::Core::Activation::ReLU(0.0) == 0.0);
+    assert(MiaIA::Core::Activation::ReLU(-3.0) == 0.0);
+
+    MiaIAClient::ClearNetwork();
+
+    assert(MiaIAClient::AddLayer(0, "Input"));
+    assert(MiaIAClient::AddLayer(1, "Output"));
+
+    assert(MiaIAClient::SetLayerActivation(1, MiaIA::Core::ActivationType::ReLU));
+
+    assert(MiaIAClient::AddNeuron(0, 1001, 0.0, 1.0));
+    assert(MiaIAClient::AddNeuron(1, 2001, -2.0, 0.0));
+
+    assert(MiaIAClient::AddConnection(1, 1001, 2001, 1.0));
+
+    assert(MiaIAClient::Forward());
+
+    const auto reluSnapshot = MiaIAClient::GetSnapshot();
+
+    assert(reluSnapshot.Layers[1].Neurons[0].Activation == 0.0);
+
+    assert(reluSnapshot.Layers[1].Activation ==  MiaIA::Core::ActivationType::ReLU);
+
+    MiaIAClient::ClearNetwork();
+
+    assert(MiaIAClient::AddLayer(0, "Input"));
+    assert(MiaIAClient::AddLayer(1, "Output"));
+
+    assert(MiaIAClient::SetLayerActivation(
+        1,
+        MiaIA::Core::ActivationType::Tanh));
+
+    assert(MiaIAClient::AddNeuron(0, 1001, 0.0, 1.0));
+    assert(MiaIAClient::AddNeuron(1, 2001, 0.0, 0.0));
+
+    assert(MiaIAClient::AddConnection(1, 1001, 2001, 1.0));
+
+    assert(MiaIAClient::Forward());
+
+    const auto tanhSnapshot = MiaIAClient::GetSnapshot();
+
+    const double tanhExpected =
+        MiaIA::Core::Activation::Tanh(1.0);
+
+    assert(std::abs(
+        tanhSnapshot.Layers[1].Neurons[0].Activation -
+        tanhExpected
+    ) < 0.000001);
+
+    assert(
+        tanhSnapshot.Layers[1].Activation ==
+        MiaIA::Core::ActivationType::Tanh);
+
+    MiaIAClient::ClearNetwork();
+
+    assert(MiaIAClient::AddLayer(0, "Input"));
+    assert(MiaIAClient::AddLayer(1, "Output"));
+
+    assert(MiaIAClient::SetLayerActivation(
+        1,
+        MiaIA::Core::ActivationType::Linear));
+
+    assert(MiaIAClient::AddNeuron(0, 1001, 0.0, 2.0));
+    assert(MiaIAClient::AddNeuron(1, 2001, 0.5, 0.0));
+
+    assert(MiaIAClient::AddConnection(1, 1001, 2001, 1.5));
+
+    assert(MiaIAClient::Forward());
+
+    const auto linearSnapshot = MiaIAClient::GetSnapshot();
+
+    assert(std::abs(
+        linearSnapshot.Layers[1].Neurons[0].Activation - 3.5
+    ) < 0.000001);
+
+    assert(
+        linearSnapshot.Layers[1].Activation ==
+        MiaIA::Core::ActivationType::Linear);
+
     return 0;
 }

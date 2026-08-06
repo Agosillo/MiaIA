@@ -22,6 +22,7 @@ namespace MiaIA::Core
                 LayerSnapshot layerSnapshot;
                 layerSnapshot.Id = layer.Id;
                 layerSnapshot.Name = layer.Name;
+                layerSnapshot.Activation = layer.Activation;
                 layerSnapshot.Neurons.reserve(layer.Neurons.size());
 
                 for (const Neuron& neuron : layer.Neurons)

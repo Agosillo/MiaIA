@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 #include "ConnectionSnapshot.h"
+#include "../Model/Layer.h"
 
 namespace MiaIA::Core
 {
@@ -19,6 +20,7 @@ namespace MiaIA::Core
         std::uint64_t Id{};
         std::string Name;
         std::vector<NeuronSnapshot> Neurons;
+        ActivationType Activation{ ActivationType::Sigmoid };
     };
 
     struct NetworkSnapshot

@@ -41,7 +41,24 @@ namespace MiaIA::Engine
                     }
                 }
 
-                neuron.Activation = Core::Activation::Sigmoid(sum);
+                switch (layer.Activation)
+                {
+                case Core::ActivationType::Sigmoid:
+                    neuron.Activation = Core::Activation::Sigmoid(sum);
+                    break;
+
+                case Core::ActivationType::ReLU:
+                    neuron.Activation = Core::Activation::ReLU(sum);
+                    break;
+
+                case Core::ActivationType::Tanh:
+                    neuron.Activation = Core::Activation::Tanh(sum);
+                    break;
+
+                case Core::ActivationType::Linear:
+                    neuron.Activation = Core::Activation::Linear(sum);
+                    break;
+                }
             }
         }
 
