@@ -30,6 +30,9 @@
     <ClInclude Include="Runtime\NetworkRuntime.h">
       <Filter>File di intestazione</Filter>
     </ClInclude>
+    <ClInclude Include="Runtime\NetworkFactory.h">
+      <Filter>File di intestazione</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Engine.cpp">
@@ -45,6 +48,9 @@
       <Filter>File di origine</Filter>
     </ClCompile>
     <ClCompile Include="Runtime\NetworkRuntime.cpp">
+      <Filter>File di origine</Filter>
+    </ClCompile>
+    <ClCompile Include="Runtime\NetworkFactory.cpp">
       <Filter>File di origine</Filter>
     </ClCompile>
   </ItemGroup>

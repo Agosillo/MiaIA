@@ -142,6 +142,7 @@
     <ClInclude Include="Execution\ForwardEngine.h" />
     <ClInclude Include="framework.h" />
     <ClInclude Include="pch.h" />
+    <ClInclude Include="Runtime\NetworkFactory.h" />
     <ClInclude Include="Runtime\NetworkRuntime.h" />
     <ClInclude Include="Validation\NetworkValidator.h" />
   </ItemGroup>
@@ -154,6 +155,7 @@
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Create</PrecompiledHeader>
     </ClCompile>
+    <ClCompile Include="Runtime\NetworkFactory.cpp" />
     <ClCompile Include="Runtime\NetworkRuntime.cpp" />
     <ClCompile Include="Validation\NetworkValidator.cpp" />
   </ItemGroup>
