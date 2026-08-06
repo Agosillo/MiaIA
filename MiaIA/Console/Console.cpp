@@ -44,6 +44,12 @@ void PrintHelp()
         << "      Example:\n"
         << "        input 0.5 0.2 0.9\n\n"
 
+        << "  import onnx [path]\n"
+        << "      Replace the current network with an ONNX model\n\n"
+
+        << "  export onnx [path]\n"
+        << "      Export the current network as an ONNX model\n\n"
+
         << "  summary\n"
         << "      Show network overview\n\n"
 
@@ -145,6 +151,87 @@ void SetInput(const std::string& command)
 
     std::cout
         << "Input values applied.\n";
+}
+
+bool ReadOnnxPath(
+    const std::string& command,
+    const std::string& expectedAction,
+    std::string& path)
+{
+    std::stringstream stream(command);
+    std::string action;
+    std::string format;
+
+    stream >> action >> format;
+
+    if (action != expectedAction || format != "onnx")
+    {
+        return false;
+    }
+
+    std::getline(stream, path);
+    path = Trim(path);
+
+    if (path.size() >= 2 &&
+        path.front() == '"' &&
+        path.back() == '"')
+    {
+        path = path.substr(1, path.size() - 2);
+    }
+
+    return !path.empty();
+}
+
+void ImportOnnx(const std::string& command)
+{
+    using MiaIA::SDK::MiaIAClient;
+
+    std::string path;
+
+    if (!ReadOnnxPath(command, "import", path))
+    {
+        std::cout
+            << "Usage: import onnx <path>\n";
+
+        return;
+    }
+
+    if (!MiaIAClient::ImportOnnx(path))
+    {
+        std::cout
+            << "ONNX import failed. The current network was not changed.\n";
+
+        return;
+    }
+
+    std::cout
+        << "ONNX model imported.\n";
+}
+
+void ExportOnnx(const std::string& command)
+{
+    using MiaIA::SDK::MiaIAClient;
+
+    std::string path;
+
+    if (!ReadOnnxPath(command, "export", path))
+    {
+        std::cout
+            << "Usage: export onnx <path>\n";
+
+        return;
+    }
+
+    if (!MiaIAClient::ExportOnnx(path))
+    {
+        std::cout
+            << "ONNX export failed.\n";
+
+        return;
+    }
+
+    std::cout
+        << "ONNX model exported.\n";
 }
 
 
@@ -368,6 +455,8 @@ std::string ResolveCommand(
         "help",
         "create",
         "input",
+        "import",
+        "export",
         "summary",
         "inspect",
         "forward",
@@ -442,6 +531,16 @@ int main()
         else if (command.rfind("input", 0) == 0)
         {
             SetInput(command);
+            continue;
+        }
+        else if (command.rfind("import", 0) == 0)
+        {
+            ImportOnnx(command);
+            continue;
+        }
+        else if (command.rfind("export", 0) == 0)
+        {
+            ExportOnnx(command);
             continue;
         }
         else if (command == "summary")

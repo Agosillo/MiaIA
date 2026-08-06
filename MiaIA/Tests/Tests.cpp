@@ -905,5 +905,247 @@ int main()
 
     });
 
+    runner.Run("ONNX import and round trip", [&]()
+    {
+    const std::filesystem::path roundTripPath =
+        std::filesystem::temp_directory_path() /
+        "miaia_round_trip_test.onnx";
+    const std::filesystem::path floatPath =
+        std::filesystem::temp_directory_path() /
+        "miaia_float_import_test.onnx";
+    const std::filesystem::path unsupportedPath =
+        std::filesystem::temp_directory_path() /
+        "miaia_unsupported_import_test.onnx";
+
+    std::filesystem::remove(roundTripPath);
+    std::filesystem::remove(floatPath);
+    std::filesystem::remove(unsupportedPath);
+
+    MiaIAClient::ClearNetwork();
+
+    assert(MiaIAClient::CreateDenseNetwork(2, 2, 1, 1));
+    assert(MiaIAClient::SetLayerActivation(
+        1,
+        MiaIA::Core::ActivationType::ReLU));
+    assert(MiaIAClient::SetLayerActivation(
+        2,
+        MiaIA::Core::ActivationType::Tanh));
+    assert(MiaIAClient::SetNeuronBias(1003, 0.3));
+    assert(MiaIAClient::SetNeuronBias(1004, -0.2));
+    assert(MiaIAClient::SetNeuronBias(1005, 0.7));
+    assert(MiaIAClient::SetConnectionWeight(1, 0.1));
+    assert(MiaIAClient::SetConnectionWeight(2, 0.2));
+    assert(MiaIAClient::SetConnectionWeight(3, 0.3));
+    assert(MiaIAClient::SetConnectionWeight(4, 0.4));
+    assert(MiaIAClient::SetConnectionWeight(5, 0.5));
+    assert(MiaIAClient::SetConnectionWeight(6, 0.6));
+
+    const auto original = MiaIAClient::GetSnapshot();
+
+    assert(MiaIAClient::SetInputValues({ 0.25, -0.5 }));
+    assert(MiaIAClient::Forward());
+
+    const auto originalForward = MiaIAClient::GetSnapshot();
+    const double expectedOutput =
+        originalForward.Layers.back().Neurons.front().Activation;
+
+    assert(MiaIAClient::ExportOnnx(roundTripPath.string()));
+
+    MiaIAClient::ClearNetwork();
+    assert(MiaIAClient::ImportOnnx(roundTripPath.string()));
+
+    const auto imported = MiaIAClient::GetSnapshot();
+
+    assert(imported.Layers.size() == original.Layers.size());
+    assert(imported.Connections.size() == original.Connections.size());
+
+    for (std::size_t layerIndex = 0;
+        layerIndex < original.Layers.size();
+        ++layerIndex)
+    {
+        const auto& expectedLayer = original.Layers[layerIndex];
+        const auto& actualLayer = imported.Layers[layerIndex];
+
+        assert(actualLayer.Id == expectedLayer.Id);
+        assert(actualLayer.Name == expectedLayer.Name);
+        assert(actualLayer.Order == expectedLayer.Order);
+        assert(actualLayer.Activation == expectedLayer.Activation);
+        assert(actualLayer.Neurons.size() ==
+            expectedLayer.Neurons.size());
+
+        for (std::size_t neuronIndex = 0;
+            neuronIndex < expectedLayer.Neurons.size();
+            ++neuronIndex)
+        {
+            assert(actualLayer.Neurons[neuronIndex].Id ==
+                expectedLayer.Neurons[neuronIndex].Id);
+            assert(actualLayer.Neurons[neuronIndex].Bias ==
+                expectedLayer.Neurons[neuronIndex].Bias);
+        }
+    }
+
+    for (std::size_t connectionIndex = 0;
+        connectionIndex < original.Connections.size();
+        ++connectionIndex)
+    {
+        const auto& expectedConnection =
+            original.Connections[connectionIndex];
+        const auto& actualConnection =
+            imported.Connections[connectionIndex];
+
+        assert(actualConnection.Id == expectedConnection.Id);
+        assert(actualConnection.FromNeuron ==
+            expectedConnection.FromNeuron);
+        assert(actualConnection.ToNeuron ==
+            expectedConnection.ToNeuron);
+        assert(actualConnection.Weight == expectedConnection.Weight);
+    }
+
+    assert(MiaIAClient::SetInputValues({ 0.25, -0.5 }));
+    assert(MiaIAClient::Forward());
+
+    const auto importedForward = MiaIAClient::GetSnapshot();
+    const double actualOutput =
+        importedForward.Layers.back().Neurons.front().Activation;
+
+    assert(std::abs(actualOutput - expectedOutput) < 1e-12);
+
+    onnx::ModelProto floatModel;
+    floatModel.set_ir_version(8);
+
+    auto* floatOpset = floatModel.add_opset_import();
+    floatOpset->set_domain("");
+    floatOpset->set_version(18);
+
+    auto* floatGraph = floatModel.mutable_graph();
+    floatGraph->set_name("Float dense model");
+
+    auto setFloatValueInfo = [](
+        onnx::ValueInfoProto& value,
+        const std::string& name,
+        std::int64_t features)
+    {
+        value.set_name(name);
+        auto* tensorType = value.mutable_type()->mutable_tensor_type();
+        tensorType->set_elem_type(onnx::TensorProto_DataType_FLOAT);
+        auto* shape = tensorType->mutable_shape();
+        shape->add_dim()->set_dim_param("batch");
+        shape->add_dim()->set_dim_value(features);
+    };
+
+    setFloatValueInfo(*floatGraph->add_input(), "input", 2);
+    setFloatValueInfo(*floatGraph->add_output(), "output", 1);
+
+    auto* floatWeights = floatGraph->add_initializer();
+    floatWeights->set_name("weights");
+    floatWeights->set_data_type(onnx::TensorProto_DataType_FLOAT);
+    floatWeights->add_dims(2);
+    floatWeights->add_dims(1);
+    floatWeights->add_float_data(0.25f);
+    floatWeights->add_float_data(-0.5f);
+
+    auto* floatBiases = floatGraph->add_initializer();
+    floatBiases->set_name("biases");
+    floatBiases->set_data_type(onnx::TensorProto_DataType_FLOAT);
+    floatBiases->add_dims(1);
+    floatBiases->add_float_data(0.1f);
+
+    auto* floatGemm = floatGraph->add_node();
+    floatGemm->set_name("dense");
+    floatGemm->set_op_type("Gemm");
+    floatGemm->add_input("input");
+    floatGemm->add_input("weights");
+    floatGemm->add_input("biases");
+    floatGemm->add_output("linear");
+
+    auto* floatRelu = floatGraph->add_node();
+    floatRelu->set_name("activation");
+    floatRelu->set_op_type("Relu");
+    floatRelu->add_input("linear");
+    floatRelu->add_output("output");
+
+    onnx::checker::check_model(floatModel);
+
+    {
+        std::ofstream output(floatPath, std::ios::binary);
+        assert(output.good());
+        assert(floatModel.SerializeToOstream(&output));
+    }
+
+    assert(MiaIAClient::ImportOnnx(floatPath.string()));
+
+    const auto floatSnapshot = MiaIAClient::GetSnapshot();
+
+    assert(floatSnapshot.Layers.size() == 2);
+    assert(floatSnapshot.Layers[0].Name == "Input");
+    assert(floatSnapshot.Layers[1].Name == "Output");
+    assert(floatSnapshot.Layers[0].Neurons.size() == 2);
+    assert(floatSnapshot.Layers[1].Neurons.size() == 1);
+    assert(floatSnapshot.Layers[1].Activation ==
+        MiaIA::Core::ActivationType::ReLU);
+    assert(std::abs(
+        floatSnapshot.Layers[1].Neurons[0].Bias - 0.1) < 1e-6);
+    assert(floatSnapshot.Connections.size() == 2);
+    assert(std::abs(
+        floatSnapshot.Connections[0].Weight - 0.25) < 1e-6);
+    assert(std::abs(
+        floatSnapshot.Connections[1].Weight + 0.5) < 1e-6);
+
+    assert(MiaIAClient::SetInputValues({ 2.0, 1.0 }));
+    assert(MiaIAClient::Forward());
+
+    const auto floatForward = MiaIAClient::GetSnapshot();
+
+    assert(std::abs(
+        floatForward.Layers[1].Neurons[0].Activation - 0.1) < 1e-6);
+
+    const auto beforeFailedImport = MiaIAClient::GetSnapshot();
+
+    onnx::ModelProto unsupportedModel;
+    unsupportedModel.set_ir_version(8);
+
+    auto* unsupportedOpset = unsupportedModel.add_opset_import();
+    unsupportedOpset->set_domain("");
+    unsupportedOpset->set_version(18);
+
+    auto* unsupportedGraph = unsupportedModel.mutable_graph();
+    unsupportedGraph->set_name("Unsupported model");
+    setFloatValueInfo(*unsupportedGraph->add_input(), "input", 2);
+    setFloatValueInfo(*unsupportedGraph->add_output(), "output", 2);
+
+    auto* identity = unsupportedGraph->add_node();
+    identity->set_name("identity");
+    identity->set_op_type("Identity");
+    identity->add_input("input");
+    identity->add_output("output");
+
+    onnx::checker::check_model(unsupportedModel);
+
+    {
+        std::ofstream output(unsupportedPath, std::ios::binary);
+        assert(output.good());
+        assert(unsupportedModel.SerializeToOstream(&output));
+    }
+
+    assert(!MiaIAClient::ImportOnnx(unsupportedPath.string()));
+    assert(!MiaIAClient::ImportOnnx(""));
+
+    const auto afterFailedImport = MiaIAClient::GetSnapshot();
+
+    assert(afterFailedImport.Layers.size() ==
+        beforeFailedImport.Layers.size());
+    assert(afterFailedImport.Connections.size() ==
+        beforeFailedImport.Connections.size());
+    assert(afterFailedImport.Layers[0].Neurons[0].Id ==
+        beforeFailedImport.Layers[0].Neurons[0].Id);
+    assert(afterFailedImport.Connections[0].Weight ==
+        beforeFailedImport.Connections[0].Weight);
+
+    std::filesystem::remove(roundTripPath);
+    std::filesystem::remove(floatPath);
+    std::filesystem::remove(unsupportedPath);
+
+    });
+
     return runner.Finish();
 }
