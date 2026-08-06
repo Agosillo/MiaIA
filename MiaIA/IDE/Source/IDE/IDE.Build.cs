@@ -28,6 +28,10 @@ public class IDE : ModuleRules
             Path.Combine(MiaIARoot, "x64", "Release", "SDK.lib")
         );
 
+        PublicAdditionalLibraries.Add(
+            Path.Combine(MiaIARoot, "x64", "Release", "Engine.lib")
+        );
+
 
         // Uncomment if you are using Slate UI
         // PrivateDependencyModuleNames.AddRange(new string[] { "Slate", "SlateCore" });
