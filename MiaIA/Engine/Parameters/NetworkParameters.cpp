@@ -29,4 +29,24 @@ namespace MiaIA::Engine
 
         return true;
     }
+
+    bool NetworkParameters::SetLayerActivation(
+        Core::Network& network,
+        std::uint64_t layerId,
+        Core::ActivationType activation)
+    {
+        NetworkTopology topology(network);
+
+        Core::Layer* layer =
+            topology.FindLayer(layerId);
+
+        if (layer == nullptr)
+        {
+            return false;
+        }
+
+        layer->Activation = activation;
+
+        return true;
+    }
 }

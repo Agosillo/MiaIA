@@ -193,16 +193,10 @@ namespace MiaIA::SDK
         std::uint64_t layerId,
         Core::ActivationType activation)
     {
-        for (Core::Layer& layer : CurrentNetwork.Layers)
-        {
-            if (layer.Id == layerId)
-            {
-                layer.Activation = activation;
-                return true;
-            }
-        }
-
-        return false;
+        return Engine::NetworkParameters::SetLayerActivation(
+            CurrentNetwork,
+            layerId,
+            activation);
     }
 
     bool MiaIAClient::Forward()

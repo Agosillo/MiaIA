@@ -12,5 +12,10 @@ namespace MiaIA::Engine
             Core::Network& network,
             std::uint64_t neuronId,
             double bias);
+
+        static bool SetLayerActivation(
+            Core::Network& network,
+            std::uint64_t layerId,
+            Core::ActivationType activation);
     };
 }

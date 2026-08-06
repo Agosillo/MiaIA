@@ -116,6 +116,10 @@ int main()
         1,
         MiaIA::Core::ActivationType::Tanh));
 
+    assert(!MiaIAClient::SetLayerActivation(
+        9999,
+        MiaIA::Core::ActivationType::Linear));
+
     layer.Order = 999;
     layer.Activation = MiaIA::Core::ActivationType::Linear;
 
