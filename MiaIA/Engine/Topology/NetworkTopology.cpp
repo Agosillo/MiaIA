@@ -1,4 +1,3 @@
-#include <iostream>
 #include "NetworkTopology.h"
 
 namespace MiaIA::Engine

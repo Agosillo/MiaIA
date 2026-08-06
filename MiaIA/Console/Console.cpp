@@ -1,10 +1,41 @@
-// Console.cpp : Questo file contiene la funzione 'main', in cui inizia e termina l'esecuzione del programma.
-//
-
 #include <iostream>
+#include <string>
+#include <chrono>
+#include <vector>
+
 #include "../SDK/Include/MiaIAClient.h"
 
-int main()
+
+void PrintHelp()
+{
+    std::cout
+        << "\nMiaIA Console v0.1\n\n"
+        << "Commands:\n\n"
+
+        << "  help\n"
+        << "      Show available commands\n\n"
+
+        << "  create\n"
+        << "      Create a neural network\n\n"
+
+        << "  summary\n"
+        << "      Show network overview\n\n"
+
+        << "  inspect\n"
+        << "      Show layers, neurons and connections\n\n"
+
+        << "  forward\n"
+        << "      Execute forward propagation\n\n"
+
+        << "  benchmark\n"
+        << "      Measure forward performance\n\n"
+
+        << "  exit\n"
+        << "      Close console\n\n";
+}
+
+
+void CreateNetwork()
 {
     using MiaIA::SDK::MiaIAClient;
 
@@ -12,65 +43,358 @@ int main()
 
     MiaIAClient::AddLayer(0, "Input", 0);
     MiaIAClient::AddLayer(1, "Hidden", 1);
+    MiaIAClient::AddLayer(2, "Output", 2);
 
-    MiaIAClient::AddNeuron(0, 1001, 0.75, 0.25);
-    MiaIAClient::AddNeuron(0, 1002, 0.45, 0.10);
+    MiaIAClient::AddNeuron(
+        0,
+        1001,
+        0.75,
+        0.25);
 
-    MiaIAClient::AddNeuron(1, 2001, 0.60, 0.30);
-    MiaIAClient::AddNeuron(1, 2002, 0.20, 0.15);
+    MiaIAClient::AddNeuron(
+        1,
+        2001,
+        0.60,
+        0.30);
 
-    MiaIAClient::AddConnection(1, 1001, 2001, 0.8);
-    MiaIAClient::AddConnection(2, 1002, 2002, 0.5);
+    MiaIAClient::AddNeuron(
+        2,
+        3001,
+        0.0,
+        0.0);
 
-    std::cout << std::boolalpha;
+    MiaIAClient::AddConnection(
+        1,
+        1001,
+        2001,
+        0.8);
 
-    std::cout << "Set activation: "
-        << MiaIAClient::SetNeuronActivation(1001, 0.95)
-        << '\n';
+    MiaIAClient::AddConnection(
+        2,
+        2001,
+        3001,
+        0.5);
 
-    const auto snapshot = MiaIAClient::GetSnapshot();
+
+    std::cout
+        << "Network created.\n";
+}
+
+
+void PrintSummary()
+{
+    using MiaIA::SDK::MiaIAClient;
+
+    const auto snapshot =
+        MiaIAClient::GetSnapshot();
+
+
+    std::cout
+        << "\nNetwork Summary\n\n";
+
+
+    std::cout
+        << "Layers: "
+        << snapshot.Layers.size()
+        << "\n";
+
 
     for (const auto& layer : snapshot.Layers)
     {
-        std::cout << "Layer: " << layer.Name << '\n';
+        std::cout
+            << "  "
+            << layer.Order
+            << " "
+            << layer.Name
+            << " ("
+            << layer.Neurons.size()
+            << " neurons)\n";
+    }
+
+
+    std::cout
+        << "\nConnections: "
+        << snapshot.Connections.size()
+        << "\n\n";
+}
+
+void InspectNetwork()
+{
+    using MiaIA::SDK::MiaIAClient;
+
+    const auto snapshot =
+        MiaIAClient::GetSnapshot();
+
+
+    std::cout
+        << "\nNetwork Inspection\n\n";
+
+
+    for (const auto& layer : snapshot.Layers)
+    {
+        std::cout
+            << "Layer ["
+            << layer.Order
+            << "] "
+            << layer.Name
+            << "\n";
+
 
         for (const auto& neuron : layer.Neurons)
         {
             std::cout
-                << "  Neuron " << neuron.Id
-                << " Bias " << neuron.Bias
-                << " Activation " << neuron.Activation
-                << '\n';
+                << "  Neuron "
+                << neuron.Id
+                << "\n"
+                << "    Bias: "
+                << neuron.Bias
+                << "\n"
+                << "    Activation: "
+                << neuron.Activation
+                << "\n";
+        }
+
+        std::cout << "\n";
+    }
+
+
+    std::cout
+        << "Connections\n\n";
+
+
+    for (const auto& connection :
+        snapshot.Connections)
+    {
+        std::cout
+            << "  Connection "
+            << connection.Id
+            << "\n"
+            << "    "
+            << connection.FromNeuron
+            << " -> "
+            << connection.ToNeuron
+            << "\n"
+            << "    Weight: "
+            << connection.Weight
+            << "\n\n";
+    }
+}
+
+void RunForward()
+{
+    using MiaIA::SDK::MiaIAClient;
+
+    const bool result =
+        MiaIAClient::Forward();
+
+
+    if (!result)
+    {
+        std::cout
+            << "Forward failed.\n";
+
+        return;
+    }
+
+
+    std::cout
+        << "\nForward completed\n\n";
+
+
+    const auto snapshot =
+        MiaIAClient::GetSnapshot();
+
+
+    std::cout
+        << "Output Layer\n\n";
+
+
+    for (const auto& layer : snapshot.Layers)
+    {
+        if (layer.Name == "Output")
+        {
+            for (const auto& neuron : layer.Neurons)
+            {
+                std::cout
+                    << "  Neuron "
+                    << neuron.Id
+                    << "\n"
+                    << "    Activation: "
+                    << neuron.Activation
+                    << "\n\n";
+            }
+
+            return;
         }
     }
 
-    for (const auto& connection : snapshot.Connections)
+
+    std::cout
+        << "Output layer not found.\n";
+}
+
+void RunBenchmark()
+{
+    using namespace std::chrono;
+
+    using MiaIA::SDK::MiaIAClient;
+
+
+    const int iterations = 10000;
+
+
+    std::cout
+        << "\nBenchmark\n\n";
+
+    std::cout
+        << "Forward iterations: "
+        << iterations
+        << "\n\n";
+
+
+    const auto start =
+        high_resolution_clock::now();
+
+
+    for (int i = 0; i < iterations; i++)
     {
-        std::cout
-            << "Connection " << connection.Id
-            << ": " << connection.FromNeuron
-            << " -> " << connection.ToNeuron
-            << " Weight " << connection.Weight
-            << '\n';
+        MiaIAClient::Forward();
     }
 
-    std::cout << std::boolalpha;
 
-    std::cout << "Duplicate layer: "
-        << MiaIAClient::AddLayer(0, "Duplicate", 0)
-        << '\n';
+    const auto end =
+        high_resolution_clock::now();
 
-    std::cout << "Duplicate neuron: "
-        << MiaIAClient::AddNeuron(1, 1001, 0.2, 0.3)
-        << '\n';
 
-    std::cout << "Missing neuron connection: "
-        << MiaIAClient::AddConnection(3, 1001, 9999, 0.4)
-        << '\n';
+    const auto elapsed =
+        duration_cast<microseconds>(
+            end - start);
 
-    std::cout << "Duplicate connection: "
-        << MiaIAClient::AddConnection(1, 1001, 2001, 0.8)
-        << '\n';
+
+    const double totalMs =
+        elapsed.count() / 1000.0;
+
+
+    const double average =
+        totalMs / iterations;
+
+
+    std::cout
+        << "Completed\n\n";
+
+    std::cout
+        << "Total time: "
+        << totalMs
+        << " ms\n";
+
+    std::cout
+        << "Average: "
+        << average
+        << " ms\n";
+}
+
+std::string ResolveCommand(
+    const std::string& input)
+{
+    const std::vector<std::string> commands =
+    {
+        "help",
+        "create",
+        "summary",
+        "inspect",
+        "forward",
+        "benchmark",
+        "exit"
+    };
+
+
+    std::string match;
+
+
+    for (const auto& command : commands)
+    {
+        if (command.rfind(input, 0) == 0)
+        {
+            if (!match.empty())
+            {
+                return "";
+            }
+
+            match = command;
+        }
+    }
+
+
+    return match;
+}
+
+int main()
+{
+    std::cout
+        << "MiaIA Console v0.1\n";
+
+
+    std::string command;
+
+
+    while (true)
+    {
+        std::cout << "\n> ";
+
+        std::getline(
+            std::cin,
+            command);
+
+        if (command.empty())
+        {
+            continue;
+        }
+
+        const std::string resolved =
+            ResolveCommand(command);
+
+
+        if (!resolved.empty())
+        {
+            command = resolved;
+        }
+
+
+        if (command == "help")
+        {
+            PrintHelp();
+        }
+        else if (command == "create")
+        {
+            CreateNetwork();
+        }
+        else if (command == "summary")
+        {
+            PrintSummary();
+        }
+        else if (command == "inspect")
+        {
+            InspectNetwork();
+        }
+        else if (command == "forward")
+        {
+            RunForward();
+        }
+        else if (command == "benchmark")
+        {
+            RunBenchmark();
+        }
+        else if (command == "exit")
+        {
+            break;
+        }
+        else
+        {
+            std::cout
+                << "Unknown command\n";
+        }
+    }
+
 
     return 0;
 }
