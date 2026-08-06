@@ -222,4 +222,145 @@ namespace MiaIA::SDK
             weight);
     }
 
+    bool MiaIAClient::CreateDenseNetwork(
+        int inputCount,
+        int hiddenCount,
+        int hiddenLayers,
+        int outputCount)
+    {
+        if (inputCount <= 0 ||
+            hiddenCount <= 0 ||
+            hiddenLayers < 0 ||
+            outputCount <= 0)
+        {
+            return false;
+        }
+
+
+        ClearNetwork();
+
+
+        std::uint64_t nextNeuronId = 1000;
+        std::uint64_t nextConnectionId = 1;
+
+
+        std::vector<std::uint64_t> previousLayer;
+
+
+        // Input
+
+        AddLayer(
+            0,
+            "Input",
+            0);
+
+
+        std::vector<std::uint64_t> currentLayer;
+
+
+        for (int i = 0; i < inputCount; i++)
+        {
+            const auto id = ++nextNeuronId;
+
+            AddNeuron(
+                0,
+                id,
+                0.0,
+                0.0);
+
+            currentLayer.push_back(id);
+        }
+
+
+        previousLayer = currentLayer;
+
+
+        int layerOrder = 1;
+
+
+        // Hidden
+
+        for (int h = 0; h < hiddenLayers; h++)
+        {
+            currentLayer.clear();
+
+            AddLayer(
+                layerOrder,
+                "Hidden",
+                layerOrder);
+
+
+            for (int i = 0; i < hiddenCount; i++)
+            {
+                const auto id = ++nextNeuronId;
+
+                AddNeuron(
+                    layerOrder,
+                    id,
+                    0.0,
+                    0.0);
+
+                currentLayer.push_back(id);
+            }
+
+
+            for (auto from : previousLayer)
+            {
+                for (auto to : currentLayer)
+                {
+                    AddConnection(
+                        nextConnectionId++,
+                        from,
+                        to,
+                        0.1);
+                }
+            }
+
+
+            previousLayer = currentLayer;
+            layerOrder++;
+        }
+
+
+        // Output
+
+        currentLayer.clear();
+
+
+        AddLayer(
+            layerOrder,
+            "Output",
+            layerOrder);
+
+
+        for (int i = 0; i < outputCount; i++)
+        {
+            const auto id = ++nextNeuronId;
+
+            AddNeuron(
+                layerOrder,
+                id,
+                0.0,
+                0.0);
+
+            currentLayer.push_back(id);
+        }
+
+
+        for (auto from : previousLayer)
+        {
+            for (auto to : currentLayer)
+            {
+                AddConnection(
+                    nextConnectionId++,
+                    from,
+                    to,
+                    0.1);
+            }
+        }
+
+
+        return true;
+    }
+
 }

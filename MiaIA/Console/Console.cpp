@@ -2,6 +2,7 @@
 #include <string>
 #include <chrono>
 #include <vector>
+#include <sstream>
 
 #include "../SDK/Include/MiaIAClient.h"
 
@@ -15,8 +16,10 @@ void PrintHelp()
         << "  help\n"
         << "      Show available commands\n\n"
 
-        << "  create\n"
-        << "      Create a neural network\n\n"
+        << "  create [input hidden layers output]\n"
+        << "      Create a dense neural network\n\n"
+        << "      Example:\n"
+        << "        create 784 256 3 10\n\n"
 
         << "  summary\n"
         << "      Show network overview\n\n"
@@ -35,49 +38,46 @@ void PrintHelp()
 }
 
 
-void CreateNetwork()
+void CreateNetwork(const std::string& command)
 {
     using MiaIA::SDK::MiaIAClient;
 
-    MiaIAClient::ClearNetwork();
 
-    MiaIAClient::AddLayer(0, "Input", 0);
-    MiaIAClient::AddLayer(1, "Hidden", 1);
-    MiaIAClient::AddLayer(2, "Output", 2);
-
-    MiaIAClient::AddNeuron(
-        0,
-        1001,
-        0.75,
-        0.25);
-
-    MiaIAClient::AddNeuron(
-        1,
-        2001,
-        0.60,
-        0.30);
-
-    MiaIAClient::AddNeuron(
-        2,
-        3001,
-        0.0,
-        0.0);
-
-    MiaIAClient::AddConnection(
-        1,
-        1001,
-        2001,
-        0.8);
-
-    MiaIAClient::AddConnection(
-        2,
-        2001,
-        3001,
-        0.5);
+    int inputCount = 10;
+    int hiddenCount = 32;
+    int hiddenLayers = 2;
+    int outputCount = 3;
 
 
-    std::cout
-        << "Network created.\n";
+    std::stringstream ss(command);
+
+    std::string token;
+
+    ss >> token; // elimina "create"
+
+
+    if (ss >> inputCount
+        >> hiddenCount
+        >> hiddenLayers
+        >> outputCount)
+    {
+        // parametri ricevuti
+    }
+
+    if (MiaIAClient::CreateDenseNetwork(
+        inputCount,
+        hiddenCount,
+        hiddenLayers,
+        outputCount))
+    {
+        std::cout
+            << "Dense network created.\n";
+    }
+    else
+    {
+        std::cout
+            << "Network creation failed.\n";
+    }
 }
 
 
@@ -350,23 +350,24 @@ int main()
             continue;
         }
 
+       
+
         const std::string resolved =
             ResolveCommand(command);
-
 
         if (!resolved.empty())
         {
             command = resolved;
         }
 
-
         if (command == "help")
         {
             PrintHelp();
         }
-        else if (command == "create")
+        else if (command.rfind("create", 0) == 0)
         {
-            CreateNetwork();
+            CreateNetwork(command);
+            continue;
         }
         else if (command == "summary")
         {

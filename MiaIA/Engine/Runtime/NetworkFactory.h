@@ -9,5 +9,11 @@ namespace MiaIA::Engine
     public:
 
         static Core::Network Create();
+
+        static Core::Network CreateDense(
+            int inputCount,
+            int hiddenCount,
+            int hiddenLayers,
+            int outputCount);
     };
 }
