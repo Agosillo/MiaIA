@@ -427,3 +427,6 @@ FodyWeavers.xsd
 *.msix
 *.msm
 *.msp
+
+# vcpkg manifest dependencies
+**/vcpkg_installed/

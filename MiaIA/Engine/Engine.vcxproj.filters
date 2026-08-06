@@ -51,6 +51,9 @@
     <ClInclude Include="Inspection\NetworkInspector.h">
       <Filter>File di intestazione</Filter>
     </ClInclude>
+    <ClInclude Include="Interchange\OnnxExporter.h">
+      <Filter>File di intestazione</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Engine.cpp">
@@ -87,6 +90,9 @@
       <Filter>File di origine</Filter>
     </ClCompile>
     <ClCompile Include="Inspection\NetworkInspector.cpp">
+      <Filter>File di origine</Filter>
+    </ClCompile>
+    <ClCompile Include="Interchange\OnnxExporter.cpp">
       <Filter>File di origine</Filter>
     </ClCompile>
   </ItemGroup>

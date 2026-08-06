@@ -1,4 +1,5 @@
 #include "../Include/MiaIAClient.h"
+#include "MiaIAClientState.h"
 #include "../../Engine/Runtime/NetworkRuntime.h"
 #include "../../Engine/Runtime/NetworkFactory.h"
 #include "../../Engine/Inspection/NetworkInspector.h"
@@ -11,6 +12,11 @@
 namespace
 {
     MiaIA::Core::Network CurrentNetwork;
+}
+
+MiaIA::Core::Network& MiaIA::SDK::Detail::ClientNetwork()
+{
+    return CurrentNetwork;
 }
 
 namespace MiaIA::SDK

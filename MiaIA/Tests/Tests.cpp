@@ -1,6 +1,11 @@
 #include <cmath>
+#include <filesystem>
+#include <fstream>
 #include <limits>
+#include <string>
 #include <vector>
+#include <onnx/checker.h>
+#include <onnx/onnx_pb.h>
 #include "TestHarness.h"
 #include "../SDK/Include/MiaIAClient.h"
 #include "../Core/Execution/Activation.h"
@@ -11,6 +16,24 @@
 #undef assert
 #endif
 #define assert(expression) MIAIA_CHECK(expression)
+
+namespace
+{
+    const onnx::TensorProto* FindInitializer(
+        const onnx::GraphProto& graph,
+        const std::string& name)
+    {
+        for (const onnx::TensorProto& tensor : graph.initializer())
+        {
+            if (tensor.name() == name)
+            {
+                return &tensor;
+            }
+        }
+
+        return nullptr;
+    }
+}
 
 int main()
 {
@@ -761,6 +784,124 @@ int main()
     const auto afterWeightChangeSnapshot = MiaIAClient::GetSnapshot();
 
     assert(afterWeightChangeSnapshot.Connections[0].Weight == 0.8);
+
+    });
+
+    runner.Run("ONNX export", [&]()
+    {
+    const std::filesystem::path exportPath =
+        std::filesystem::temp_directory_path() /
+        "miaia_export_test.onnx";
+    const std::filesystem::path invalidExportPath =
+        std::filesystem::temp_directory_path() /
+        "miaia_invalid_export_test.onnx";
+
+    std::filesystem::remove(exportPath);
+    std::filesystem::remove(invalidExportPath);
+
+    MiaIAClient::ClearNetwork();
+
+    assert(MiaIAClient::CreateDenseNetwork(2, 2, 1, 1));
+    assert(MiaIAClient::SetLayerActivation(
+        1,
+        MiaIA::Core::ActivationType::ReLU));
+    assert(MiaIAClient::SetLayerActivation(
+        2,
+        MiaIA::Core::ActivationType::Tanh));
+
+    assert(MiaIAClient::SetNeuronBias(1003, 0.3));
+    assert(MiaIAClient::SetNeuronBias(1004, -0.2));
+    assert(MiaIAClient::SetNeuronBias(1005, 0.7));
+
+    assert(MiaIAClient::SetConnectionWeight(1, 0.1));
+    assert(MiaIAClient::SetConnectionWeight(2, 0.2));
+    assert(MiaIAClient::SetConnectionWeight(3, 0.3));
+    assert(MiaIAClient::SetConnectionWeight(4, 0.4));
+    assert(MiaIAClient::SetConnectionWeight(5, 0.5));
+    assert(MiaIAClient::SetConnectionWeight(6, 0.6));
+
+    assert(MiaIAClient::ExportOnnx(exportPath.string()));
+    assert(std::filesystem::exists(exportPath));
+    assert(std::filesystem::file_size(exportPath) > 0);
+
+    onnx::ModelProto model;
+    std::ifstream input(exportPath, std::ios::binary);
+
+    assert(input.good());
+    assert(model.ParseFromIstream(&input));
+
+    onnx::checker::check_model(model);
+
+    assert(model.ir_version() == 8);
+    assert(model.producer_name() == "MiaIA");
+    assert(model.opset_import_size() == 1);
+    assert(model.opset_import(0).version() == 18);
+
+    const onnx::GraphProto& graph = model.graph();
+
+    assert(graph.input_size() == 1);
+    assert(graph.output_size() == 1);
+    assert(graph.node_size() == 4);
+    assert(graph.initializer_size() == 4);
+    assert(graph.node(0).op_type() == "Gemm");
+    assert(graph.node(1).op_type() == "Relu");
+    assert(graph.node(2).op_type() == "Gemm");
+    assert(graph.node(3).op_type() == "Tanh");
+
+    const onnx::TensorProto* hiddenWeights =
+        FindInitializer(graph, "layer_1_weights");
+    const onnx::TensorProto* hiddenBiases =
+        FindInitializer(graph, "layer_1_biases");
+    const onnx::TensorProto* outputWeights =
+        FindInitializer(graph, "layer_2_weights");
+    const onnx::TensorProto* outputBiases =
+        FindInitializer(graph, "layer_2_biases");
+
+    assert(hiddenWeights != nullptr);
+    assert(hiddenBiases != nullptr);
+    assert(outputWeights != nullptr);
+    assert(outputBiases != nullptr);
+
+    assert(hiddenWeights->dims_size() == 2);
+    assert(hiddenWeights->dims(0) == 2);
+    assert(hiddenWeights->dims(1) == 2);
+    assert(hiddenWeights->double_data_size() == 4);
+    assert(hiddenWeights->double_data(0) == 0.1);
+    assert(hiddenWeights->double_data(1) == 0.2);
+    assert(hiddenWeights->double_data(2) == 0.3);
+    assert(hiddenWeights->double_data(3) == 0.4);
+
+    assert(hiddenBiases->double_data_size() == 2);
+    assert(hiddenBiases->double_data(0) == 0.3);
+    assert(hiddenBiases->double_data(1) == -0.2);
+    assert(outputWeights->double_data_size() == 2);
+    assert(outputWeights->double_data(0) == 0.5);
+    assert(outputWeights->double_data(1) == 0.6);
+    assert(outputBiases->double_data_size() == 1);
+    assert(outputBiases->double_data(0) == 0.7);
+
+    assert(model.metadata_props_size() == 10);
+
+    input.close();
+
+    MiaIAClient::ClearNetwork();
+
+    assert(MiaIAClient::AddLayer(0, "Input", 0));
+    assert(MiaIAClient::AddLayer(1, "Hidden", 1));
+    assert(MiaIAClient::AddLayer(2, "Output", 2));
+    assert(MiaIAClient::AddNeuron(0, 1001, 0.0, 0.0));
+    assert(MiaIAClient::AddNeuron(1, 2001, 0.0, 0.0));
+    assert(MiaIAClient::AddNeuron(2, 3001, 0.0, 0.0));
+    assert(MiaIAClient::AddConnection(1, 1001, 2001, 0.5));
+    assert(MiaIAClient::AddConnection(2, 2001, 3001, 0.5));
+    assert(MiaIAClient::AddConnection(3, 1001, 3001, 0.5));
+
+    assert(!MiaIAClient::ExportOnnx(invalidExportPath.string()));
+    assert(!std::filesystem::exists(invalidExportPath));
+    assert(!MiaIAClient::ExportOnnx(""));
+
+    std::filesystem::remove(exportPath);
+    std::filesystem::remove(invalidExportPath);
 
     });
 
