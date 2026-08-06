@@ -1,13 +1,23 @@
-#include <cassert>
 #include <cmath>
+#include "TestHarness.h"
 #include "../SDK/Include/MiaIAClient.h"
 #include "../Core/Execution/Activation.h"
 #include "../Engine/Validation/NetworkValidator.h"
+
+// Keep the existing checks active in every build configuration.
+#ifdef assert
+#undef assert
+#endif
+#define assert(expression) MIAIA_CHECK(expression)
 
 int main()
 {
     using MiaIA::SDK::MiaIAClient;
 
+    MiaIA::Tests::TestRunner runner;
+
+    runner.Run("Network editing and snapshots", [&]()
+    {
     MiaIAClient::ClearNetwork();
 
     assert(MiaIAClient::AddLayer(0, "Input", 0));
@@ -98,6 +108,10 @@ int main()
 
     assert(afterConnectionRemoval.Connections.empty());
 
+    });
+
+    runner.Run("Forward propagation and activations", [&]()
+    {
 
     MiaIAClient::ClearNetwork();
 
@@ -289,6 +303,10 @@ int main()
     assert(orderedSnapshot.Layers[1].Name == "Hidden");
     assert(orderedSnapshot.Layers[2].Name == "Output");
 
+    });
+
+    runner.Run("Topology editing and layer ordering", [&]()
+    {
 
     MiaIAClient::ClearNetwork();
 
@@ -340,6 +358,10 @@ int main()
         rewiredExpected
     ) < 0.000001);
 
+    });
+
+    runner.Run("Network validation", [&]()
+    {
     MiaIAClient::ClearNetwork();
 
     assert(MiaIAClient::AddLayer(0, "Input", 0));
@@ -537,6 +559,10 @@ int main()
         !MiaIA::Engine::NetworkValidator::ValidateForForward(
             duplicateNeuronNetwork));
 
+    });
+
+    runner.Run("Connection weights", [&]()
+    {
     MiaIAClient::ClearNetwork();
 
     assert(MiaIAClient::AddLayer(0, "Input", 0));
@@ -595,5 +621,7 @@ int main()
 
     assert(afterWeightChangeSnapshot.Connections[0].Weight == 0.8);
 
-    return 0;
+    });
+
+    return runner.Finish();
 }

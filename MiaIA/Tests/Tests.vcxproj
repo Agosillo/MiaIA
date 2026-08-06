@@ -130,6 +130,9 @@
     <ClCompile Include="Tests.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="TestHarness.h" />
+  </ItemGroup>
+  <ItemGroup>
     <ProjectReference Include="..\SDK\SDK.vcxproj">
       <Project>{e71364b4-ee83-4bfe-8dfb-a620701873cf}</Project>
     </ProjectReference>
