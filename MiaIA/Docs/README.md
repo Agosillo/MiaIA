@@ -27,7 +27,7 @@ The project is currently in its foundation stage. The C++ engine, public SDK fac
 | Datasets | Numeric CSV import with explicit input and target column counts |
 | Evaluation | Per-sample details and fixed-model mean squared error across a complete dataset |
 | Differentiation | Per-neuron, per-bias, and per-connection gradients without parameter updates |
-| Optimization | Phase-by-phase and atomic SGD steps, ordered epochs, retained session history, bounded runs, and background pause/resume |
+| Optimization | Standalone and session-attached phase debugging, atomic SGD, ordered epochs, history, bounded runs, and background control |
 | Clients | Interactive console and an initial Unreal Engine integration through `MiaIAClient` |
 | Verification | Named Debug- and Release-capable C++ test harness, including numerical gradient checks |
 

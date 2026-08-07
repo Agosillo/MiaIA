@@ -17,6 +17,7 @@ namespace MiaIA::Core
         OptimizerType Optimizer{
             OptimizerType::StochasticGradientDescent
         };
+        bool AttachedToTrainingSession{};
         Network CandidateNetwork;
         TrainingStepSnapshot Step;
     };

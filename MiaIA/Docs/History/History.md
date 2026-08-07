@@ -100,6 +100,8 @@ Every phase exposes a stable snapshot containing the candidate network and the r
 
 Focused inspector snapshots subsequently made individual neurons and connections queryable without traversing the complete transaction. They compare public and candidate values and expose gradients and optimizer updates only after the corresponding phase, using availability flags so a client never confuses missing data with a mathematical zero.
 
+The phase transaction was then attached to controlled sessions. A session can open its current sample in the debugger, inspect or cancel it without moving progress, and promote a verified commit into network state, history, and the next cursor exactly once. Ordinary and debugged steps share the same guarded recording operation.
+
 ## Current position
 
 MiaIA can now represent, execute, interchange, inspect, evaluate, differentiate, debug one training step phase by phase, train through controlled foreground or background sessions, and navigate the complete history of successful steps. It cannot yet persist a `.mia` workspace or deliver the planned complete graphical debugging experience.

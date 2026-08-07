@@ -3,6 +3,7 @@
 
 #include "../../Engine/Training/TrainingDebugController.h"
 #include "../../Engine/Training/TrainingDebugInspector.h"
+#include "../../Engine/Training/TrainingSessionDebugController.h"
 #include "../../Core/Model/TrainingDebugSession.h"
 #include "../../Core/Model/TrainingSession.h"
 
@@ -44,14 +45,38 @@ namespace MiaIA::SDK
             Detail::ClientTrainingDebugSession());
     }
 
+    bool MiaIAClient::StartTrainingSessionDebug(
+        Core::TrainingDebugSnapshot& result)
+    {
+        const std::scoped_lock lock(Detail::ClientMutex());
+        return Engine::TrainingSessionDebugController::Start(
+            Detail::ClientDataset(),
+            Detail::ClientNetwork(),
+            Detail::ClientTrainingSession(),
+            Detail::ClientTrainingDebugSession(),
+            result);
+    }
+
     bool MiaIAClient::AdvanceTrainingDebug(
         Core::TrainingDebugSnapshot& result)
     {
         const std::scoped_lock lock(Detail::ClientMutex());
+        auto& debugSession = Detail::ClientTrainingDebugSession();
+
+        if (debugSession.AttachedToTrainingSession)
+        {
+            return Engine::TrainingSessionDebugController::Next(
+                Detail::ClientDataset(),
+                Detail::ClientNetwork(),
+                Detail::ClientTrainingSession(),
+                debugSession,
+                result);
+        }
+
         return Engine::TrainingDebugController::Next(
             Detail::ClientDataset(),
             Detail::ClientNetwork(),
-            Detail::ClientTrainingDebugSession(),
+            debugSession,
             result);
     }
 

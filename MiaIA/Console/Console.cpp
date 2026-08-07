@@ -117,6 +117,9 @@ void PrintHelp()
         << "  train session status\n"
         << "      Show controlled training progress\n\n"
 
+        << "  train session debug\n"
+        << "      Debug the session's next sample phase by phase\n\n"
+
         << "  train session history\n"
         << "      List every completed session step\n\n"
 
@@ -866,6 +869,7 @@ void PrintTrainingSessionUsage()
     std::cout
         << "Usage: train session start <epochs> <learning-rate> mse\n"
         << "       train session status\n"
+        << "       train session debug\n"
         << "       train session history\n"
         << "       train session inspect <step-index>\n"
         << "       train session next\n"
@@ -1384,6 +1388,23 @@ void HandleTrainCommand(const std::string& command)
         if (sessionAction == "status")
         {
             PrintTrainingSession(MiaIAClient::GetTrainingSession());
+            return;
+        }
+
+        if (sessionAction == "debug")
+        {
+            MiaIA::Core::TrainingDebugSnapshot debug;
+
+            if (!MiaIAClient::StartTrainingSessionDebug(debug))
+            {
+                std::cout
+                    << "Training session debug could not start. "
+                    << "The session must be Active at a coherent "
+                    << "sample boundary.\n";
+                return;
+            }
+
+            PrintTrainingDebug(debug);
             return;
         }
 

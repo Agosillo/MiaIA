@@ -111,6 +111,8 @@ namespace MiaIA::SDK
             Core::LossType lossType,
             Core::OptimizerType optimizerType,
             Core::TrainingDebugSnapshot& result);
+        static bool StartTrainingSessionDebug(
+            Core::TrainingDebugSnapshot& result);
         [[nodiscard]]
         static Core::TrainingDebugSnapshot GetTrainingDebug();
         static bool AdvanceTrainingDebug(

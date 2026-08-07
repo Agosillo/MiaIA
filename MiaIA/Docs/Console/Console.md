@@ -41,6 +41,9 @@ train epoch 0.01 mse
 dataset evaluate all mse
 train session start 2 0.01 mse
 train session next
+train session debug
+train debug next
+train debug cancel
 train session status
 train session run 1
 train session history
@@ -491,6 +494,28 @@ Executes exactly one atomic SGD step at the current session position, prints its
 
 The command is the debugger-style pause boundary: nothing trains between two `next` commands. Compatible parameter edits and inspections may be performed between steps. If the current dataset size or network topology is no longer compatible, the operation fails without advancing the cursor or changing the network.
 
+### `train session debug`
+
+```text
+train session debug
+```
+
+Opens the session's next sample as a phase-by-phase training transaction. The sample index, learning rate, loss, and optimizer come directly from the Active session, so they cannot drift from its configured schedule.
+
+Continue with the regular debug commands:
+
+```text
+train debug next
+train debug neuron <neuron-id>
+train debug connection <connection-id>
+train debug status
+train debug cancel
+```
+
+Until the transition from `Verified` to `Committed`, the public network, session cursor, progress, and history remain unchanged. Commit publishes the candidate, appends exactly one `TrainingStepSnapshot`, and advances the session cursor using the same recording operation as `train session next`. If the step completes the final sample, the epoch advances; if it completes the final epoch, the session becomes Completed.
+
+Cancelling discards the candidate and leaves the session on the same sample. While the transaction is active, session `next`, `run`, `resume`, and `cancel` are rejected. This prevents the same scheduled sample from being executed twice or by the background worker while it is open in the mathematical debugger.
+
 ### `train session history`
 
 ```text
@@ -579,6 +604,10 @@ dataset evaluate 0 mse
 dataset evaluate all mse
 train session start 2 0.01 mse
 train session next
+train session debug
+train debug next
+train debug neuron 1003
+train debug cancel
 train session status
 train session run 1
 train session history

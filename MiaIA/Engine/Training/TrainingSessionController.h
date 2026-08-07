@@ -45,6 +45,14 @@ namespace MiaIA::Engine
 
         static bool Cancel(Core::TrainingSession& session);
 
+        static bool CanRecordStep(
+            const Core::TrainingSession& session,
+            std::size_t sampleIndex);
+
+        static bool RecordStep(
+            Core::TrainingSession& session,
+            const Core::TrainingStepSnapshot& step);
+
         [[nodiscard]]
         static Core::TrainingSessionSnapshot Snapshot(
             const Core::TrainingSession& session);

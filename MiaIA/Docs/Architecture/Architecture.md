@@ -205,6 +205,8 @@ A bounded run composes repeated `next` operations synchronously. It can stop bec
 
 `TrainingDebugInspector` provides focused read-only views of a neuron or connection without requiring a client to search the complete debug snapshot. Each result compares public and candidate values and exposes phase-dependent gradients and updates with explicit availability flags. This is the intended query boundary for Console selection, Unreal navigation, and future Blueprint nodes.
 
+`TrainingSessionDebugController` attaches the same phase transaction to the session's current cursor and configuration. The session remains unchanged until candidate commit. A shared `TrainingSessionController::RecordStep` operation then records both ordinary and debugged steps, enforcing the expected sample and history position before advancing the cursor. SDK guards prevent synchronous or background session execution while an attached transaction is active.
+
 ## Snapshot boundary
 
 Clients receive snapshots rather than references to mutable engine storage. A snapshot is a value object suitable for inspection, display, logging, comparison, or transport across an integration boundary.

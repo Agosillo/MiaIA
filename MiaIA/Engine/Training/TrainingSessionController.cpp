@@ -112,6 +112,7 @@ namespace MiaIA::Engine
             dataset.Samples.size() != session.SampleCount ||
             session.NextSampleIndex >= session.SampleCount ||
             session.CurrentEpoch >= session.EpochCount ||
+            !CanRecordStep(session, session.NextSampleIndex) ||
             !IsCompatible(dataset, network))
         {
             return false;
@@ -131,19 +132,9 @@ namespace MiaIA::Engine
             return false;
         }
 
-        session.Steps.push_back(step);
-        session.WorkerStopReason = Core::TrainingWorkerStopReason::None;
-        ++session.NextSampleIndex;
-
-        if (session.NextSampleIndex == session.SampleCount)
+        if (!RecordStep(session, step))
         {
-            session.NextSampleIndex = 0;
-            ++session.CurrentEpoch;
-
-            if (session.CurrentEpoch == session.EpochCount)
-            {
-                session.Status = Core::TrainingSessionStatus::Completed;
-            }
+            return false;
         }
 
         result = std::move(step);
@@ -160,6 +151,54 @@ namespace MiaIA::Engine
         }
 
         session.Status = Core::TrainingSessionStatus::Cancelled;
+        return true;
+    }
+
+    bool TrainingSessionController::CanRecordStep(
+        const Core::TrainingSession& session,
+        std::size_t sampleIndex)
+    {
+        if ((session.Status != Core::TrainingSessionStatus::Active &&
+                session.Status != Core::TrainingSessionStatus::Running) ||
+            session.SampleCount == 0 ||
+            session.NextSampleIndex >= session.SampleCount ||
+            session.CurrentEpoch >= session.EpochCount ||
+            sampleIndex != session.NextSampleIndex)
+        {
+            return false;
+        }
+
+        const std::size_t expectedStepCount =
+            session.CurrentEpoch * session.SampleCount +
+            session.NextSampleIndex;
+
+        return session.Steps.size() == expectedStepCount;
+    }
+
+    bool TrainingSessionController::RecordStep(
+        Core::TrainingSession& session,
+        const Core::TrainingStepSnapshot& step)
+    {
+        if (!CanRecordStep(session, step.SampleIndex))
+        {
+            return false;
+        }
+
+        session.Steps.push_back(step);
+        session.WorkerStopReason = Core::TrainingWorkerStopReason::None;
+        ++session.NextSampleIndex;
+
+        if (session.NextSampleIndex == session.SampleCount)
+        {
+            session.NextSampleIndex = 0;
+            ++session.CurrentEpoch;
+
+            if (session.CurrentEpoch == session.EpochCount)
+            {
+                session.Status = Core::TrainingSessionStatus::Completed;
+            }
+        }
+
         return true;
     }
 

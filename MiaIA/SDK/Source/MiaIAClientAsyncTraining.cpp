@@ -90,7 +90,8 @@ namespace MiaIA::SDK
         {
             const std::scoped_lock clientLock(Detail::ClientMutex());
 
-            if (Detail::ClientTrainingSession().Status !=
+            if (Detail::IsTrainingDebugActive() ||
+                Detail::ClientTrainingSession().Status !=
                 Core::TrainingSessionStatus::Active)
             {
                 return false;
@@ -145,6 +146,11 @@ namespace MiaIA::SDK
 
         {
             const std::scoped_lock clientLock(Detail::ClientMutex());
+
+            if (Detail::IsTrainingDebugActive())
+            {
+                return false;
+            }
 
             if (Detail::ClientTrainingSession().Status ==
                 Core::TrainingSessionStatus::Running &&

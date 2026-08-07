@@ -43,6 +43,8 @@ The roadmap is organized by dependency rather than by a fixed release date. Math
 - true candidate rollback before commit.
 - focused neuron and connection inspection at every debug phase;
 - explicit public-versus-candidate values and phase availability flags.
+- phase debugging attached to the current controlled-session sample;
+- atomic promotion of a committed debug step into session history and progress.
 
 ## Implemented optimizer foundation
 
