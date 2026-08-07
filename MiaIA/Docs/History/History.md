@@ -20,6 +20,12 @@ An initial Unreal Engine project linked against the SDK and retrieved a dense-ne
 
 Release configuration and linkage issues were corrected so the foundation could be consumed consistently by the native and Unreal solutions.
 
+### Unreal Blueprint training debug slice
+
+The Unreal client progressed from a native `BeginPlay` linkage proof to a reflected Blueprint function library. Unreal structures now represent training sessions, debug phases, selected neurons, and selected connections without exposing STL types to Unreal Header Tool.
+
+Blueprint nodes can create a dense network, import a CSV dataset, start a controlled session, advance its current sample through mathematical debug phases, cancel the candidate, and inspect focused gradient and update data. All nodes delegate to `MiaIAClient`; no training mathematics moved into the IDE module.
+
 ### Test harness and facade completion
 
 A named test harness replaced ad hoc checks and remained active in both Debug and Release configurations. Network creation, editing, queries, parameters, topology, validation, input assignment, execution, and snapshots were progressively moved behind focused Engine classes and the `MiaIAClient` facade.

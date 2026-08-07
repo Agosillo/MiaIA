@@ -67,7 +67,7 @@ The current SDK owns one process-local network and one process-local dataset thr
 
 The Console translates text commands into SDK calls. It is both a usable diagnostic client and a reference for other integrations.
 
-The Unreal Engine project is the first graphical integration. Its intended role is to expose SDK operations to C++ and Blueprint, provide an IDE-style command surface, and visualize the state returned by snapshots. The current Unreal work is an initial integration rather than the complete MiaIA editor experience.
+The Unreal Engine project is the first graphical integration. Its runtime Blueprint function library converts native session, phase, neuron, and connection snapshots into Unreal-reflected types while keeping every operation behind `MiaIAClient`. It provides the first end-to-end Blueprint debug flow, but it is not yet the complete MiaIA editor experience.
 
 ## Network representation
 

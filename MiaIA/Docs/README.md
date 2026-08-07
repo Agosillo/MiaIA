@@ -8,6 +8,7 @@ The project is currently in its foundation stage. The C++ engine, public SDK fac
 
 - [Architecture](Architecture/Architecture.md) describes module boundaries, supported data flows, and current technical constraints.
 - [Console guide](Console/Console.md) documents every interactive command and introduces the neural-network concepts behind them.
+- [Unreal integration](Unreal/Unreal.md) documents the current Blueprint-facing SDK adapter and build workflow.
 - [Coding guidelines](Coding/Coding.md) records the conventions used by the C++ codebase.
 - [Architectural decisions](ADR/ADR.md) summarizes the decisions that currently shape the project.
 - [History](History/History.md) tracks the implemented foundation in chronological order.
@@ -28,7 +29,7 @@ The project is currently in its foundation stage. The C++ engine, public SDK fac
 | Evaluation | Per-sample details and fixed-model mean squared error across a complete dataset |
 | Differentiation | Per-neuron, per-bias, and per-connection gradients without parameter updates |
 | Optimization | Standalone and session-attached phase debugging, atomic SGD, ordered epochs, history, bounded runs, and background control |
-| Clients | Interactive console and an initial Unreal Engine integration through `MiaIAClient` |
+| Clients | Interactive Console plus Unreal Blueprint nodes for session-based phase debugging |
 | Verification | Named Debug- and Release-capable C++ test harness, including numerical gradient checks |
 
 ## Solution structure

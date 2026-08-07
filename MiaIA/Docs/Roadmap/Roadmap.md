@@ -112,8 +112,10 @@ The `.mia` format is planned and does not exist in the current implementation.
 
 ## Unreal Engine IDE
 
+- implemented the first Blueprint runtime adapter for dense creation, CSV import, controlled sessions, phase advancement, cancellation, and focused debug inspection;
+- added Unreal-reflected phase, session, neuron, and connection snapshots without leaking STL types;
 - expose reusable SDK operations through Unreal C++ wrappers;
-- expose appropriate operations to Blueprint nodes;
+- broaden Blueprint coverage to the remaining appropriate SDK operations;
 - provide an IDE command console;
 - visualize layers, neurons, and weighted connections;
 - color neurons using activation and debug state;
