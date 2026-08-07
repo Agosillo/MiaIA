@@ -84,6 +84,9 @@
     <ClInclude Include="Evaluation\DatasetEvaluator.h">
       <Filter>File di intestazione</Filter>
     </ClInclude>
+    <ClInclude Include="Training\TrainingSessionController.h">
+      <Filter>File di intestazione</Filter>
+    </ClInclude>
     <ClInclude Include="Differentiation\BackwardEngine.h">
       <Filter>File di intestazione</Filter>
     </ClInclude>
@@ -153,6 +156,9 @@
       <Filter>File di origine</Filter>
     </ClCompile>
     <ClCompile Include="Evaluation\DatasetEvaluator.cpp">
+      <Filter>File di origine</Filter>
+    </ClCompile>
+    <ClCompile Include="Training\TrainingSessionController.cpp">
       <Filter>File di origine</Filter>
     </ClCompile>
     <ClCompile Include="Differentiation\BackwardEngine.cpp">

@@ -68,8 +68,14 @@ Single-sample training was composed into one ordered pass over the loaded datase
 
 The full epoch uses a candidate network and is published only after all samples succeed. Failure on a later sample therefore rolls back earlier candidate updates and preserves both the public network and the caller result.
 
+### Controlled multi-epoch training session
+
+The ordered training primitives were composed into a synchronous session with explicit Start, Status, Next, and Cancel operations. A session remains paused between commands, and each Next call executes exactly one previously verified atomic sample step.
+
+Session snapshots expose state, epoch and sample cursors, progress, optimizer configuration, and the complete step history. Completion and cancellation are distinct terminal states; cancellation preserves successful updates, while a rejected step leaves both network and session position unchanged.
+
 ## Current position
 
-MiaIA can now represent, execute, interchange, inspect, evaluate individual samples or a complete fixed-model dataset, differentiate, apply an atomic SGD step, and execute one ordered atomic dataset epoch on a supported feed-forward network. It cannot yet run a controlled multi-epoch training session, persist a `.mia` workspace, or deliver the planned complete graphical debugging experience.
+MiaIA can now represent, execute, interchange, inspect, evaluate individual samples or a complete fixed-model dataset, differentiate, apply atomic SGD steps and epochs, and manually advance a controlled multi-epoch session. It cannot yet run an automatic pausable training worker, persist a `.mia` workspace, or deliver the planned complete graphical debugging experience.
 
 Those next steps are tracked in the [Roadmap](../Roadmap/Roadmap.md).

@@ -66,6 +66,15 @@
     <ClInclude Include="Public\DatasetEvaluationSnapshot.h">
       <Filter>File di intestazione</Filter>
     </ClInclude>
+    <ClInclude Include="Model\TrainingSession.h">
+      <Filter>File di intestazione</Filter>
+    </ClInclude>
+    <ClInclude Include="Public\TrainingSessionSnapshot.h">
+      <Filter>File di intestazione</Filter>
+    </ClInclude>
+    <ClInclude Include="Public\TrainingSessionStatus.h">
+      <Filter>File di intestazione</Filter>
+    </ClInclude>
     <ClInclude Include="Public\ConnectionGradientSnapshot.h">
       <Filter>File di intestazione</Filter>
     </ClInclude>

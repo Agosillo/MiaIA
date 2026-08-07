@@ -25,6 +25,10 @@ The roadmap is organized by dependency rather than by a fixed release date. Math
 - complete epoch rollback when any sample fails.
 - fixed-model full-dataset evaluation with per-sample results and mean loss;
 - non-mutating public network state during complete dataset evaluation.
+- synchronous multi-epoch training sessions;
+- explicit session start, status, single-step advance, and cancel operations;
+- session epoch/sample cursors and complete step history;
+- state preservation when a controlled step is rejected.
 
 ## Implemented optimizer foundation
 
@@ -40,16 +44,23 @@ Gradient evaluation remains a separate non-mutating operation, so a client can i
 
 One explicit full-dataset pass is also available through `train epoch`. It reuses the observable single-sample steps in CSV order and preserves the whole public network if any step fails.
 
-## Next milestone: controlled training sessions
+## Implemented controlled training foundation
 
-Building on trustworthy single steps and one explicit epoch:
+Building on trustworthy single steps and one explicit epoch, the current session layer provides:
 
-- define multi-epoch session lifetime and configurable sample ordering;
-- expose current epoch and sample index;
-- pause, resume, cancel, and advance one step;
-- retain loss history;
-- expose parameter deltas for each step;
+- a multi-epoch session lifetime with ordered sample traversal;
+- current epoch and next sample indexes;
+- explicit cancellation and one-step advancement;
+- retained loss and parameter-delta history through full step snapshots;
+- a natural pause boundary between synchronous commands.
+
+## Next milestone: automatic session control
+
+- run a session automatically without blocking client interaction;
+- pause and resume the automatic worker safely;
+- expose structured stop reasons and diagnostics;
 - add deterministic seeding where randomness is introduced;
+- add configurable sample ordering;
 - introduce mini-batches only after single-sample behavior remains transparent.
 
 ## Debugging experience

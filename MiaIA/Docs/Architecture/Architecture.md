@@ -180,6 +180,21 @@ An epoch currently means exactly one ordered pass over the loaded dataset using 
 
 `MeanLossBeforeUpdate` is the mean of each sample's loss immediately before that sample's update. `MeanLossAfterUpdate` is the mean immediately after each update. Because the network changes between samples, these values are execution-trace summaries; they are not full-dataset evaluations of one fixed pre-epoch and post-epoch model.
 
+### Controlled training session
+
+```text
+Start session with epoch count and optimizer configuration
+    -> remain paused before the first sample
+    -> next: execute one atomic TrainingStepExecutor operation
+    -> publish the updated network and append the step history
+    -> advance sample and epoch cursors
+    -> remain paused before the following sample
+```
+
+A session is synchronous and command-driven; it has no background training thread. `next` is therefore the control boundary and executes exactly one sample. Clients can inspect snapshots or intentionally edit compatible network parameters between steps. Dataset size and network compatibility are checked again before every advance. A rejected step preserves the network, session cursor, history, and caller result.
+
+Session states are Idle, Active, Completed, and Cancelled. Completion occurs after the configured number of ordered epochs. Cancellation stops future steps but does not roll back parameter updates already published by successful steps. Starting a new session is rejected while another session is Active.
+
 ## Snapshot boundary
 
 Clients receive snapshots rather than references to mutable engine storage. A snapshot is a value object suitable for inspection, display, logging, comparison, or transport across an integration boundary.
@@ -191,6 +206,7 @@ Current public snapshots include:
 - predictions, targets, errors, sample loss, and fixed-model dataset mean loss;
 - activation, pre-activation, bias, and weight gradients;
 - individual SGD parameter updates and ordered epoch step histories.
+- controlled session configuration, progress, status, and complete step history.
 
 This boundary is important for future graphical debugging: visual components can consume a stable description without becoming owners of engine internals.
 

@@ -93,6 +93,18 @@ void PrintHelp()
         << "  train epoch <learning-rate> mse\n"
         << "      Train all dataset samples in order as one atomic epoch\n\n"
 
+        << "  train session start <epochs> <learning-rate> mse\n"
+        << "      Start a manually controlled training session\n\n"
+
+        << "  train session status\n"
+        << "      Show controlled training progress\n\n"
+
+        << "  train session next\n"
+        << "      Execute exactly one sample training step\n\n"
+
+        << "  train session cancel\n"
+        << "      Stop the session without reverting completed steps\n\n"
+
         << "  summary\n"
         << "      Show network overview\n\n"
 
@@ -738,6 +750,56 @@ void HandleDatasetCommand(const std::string& command)
         << "Unknown dataset command.\n";
 }
 
+const char* TrainingSessionStatusName(
+    MiaIA::Core::TrainingSessionStatus status)
+{
+    switch (status)
+    {
+    case MiaIA::Core::TrainingSessionStatus::Idle:
+        return "Idle";
+    case MiaIA::Core::TrainingSessionStatus::Active:
+        return "Active";
+    case MiaIA::Core::TrainingSessionStatus::Completed:
+        return "Completed";
+    case MiaIA::Core::TrainingSessionStatus::Cancelled:
+        return "Cancelled";
+    }
+
+    return "Unknown";
+}
+
+void PrintTrainingSession(
+    const MiaIA::Core::TrainingSessionSnapshot& session)
+{
+    std::cout
+        << "\nTraining Session"
+        << "\nStatus: " << TrainingSessionStatusName(session.Status)
+        << "\nEpochs: " << session.CurrentEpoch
+        << " / " << session.EpochCount
+        << "\nSteps: " << session.CompletedSteps
+        << " / " << session.TotalSteps;
+
+    if (session.Status == MiaIA::Core::TrainingSessionStatus::Active)
+    {
+        std::cout
+            << "\nCurrent epoch: " << session.CurrentEpoch + 1
+            << "\nNext sample: " << session.NextSampleIndex
+            << "\nLearning rate: " << session.LearningRate
+            << "\nOptimizer: SGD";
+    }
+
+    std::cout << "\n";
+}
+
+void PrintTrainingSessionUsage()
+{
+    std::cout
+        << "Usage: train session start <epochs> <learning-rate> mse\n"
+        << "       train session status\n"
+        << "       train session next\n"
+        << "       train session cancel\n";
+}
+
 void HandleTrainCommand(const std::string& command)
 {
     using MiaIA::SDK::MiaIAClient;
@@ -749,8 +811,114 @@ void HandleTrainCommand(const std::string& command)
     {
         std::cout
             << "Usage: train step <sample-index> <learning-rate> mse\n"
-            << "       train epoch <learning-rate> mse\n";
+            << "       train epoch <learning-rate> mse\n"
+            << "       train session <start|status|next|cancel> ...\n";
 
+        return;
+    }
+
+    if (action == "session")
+    {
+        std::string sessionAction;
+
+        if (!(stream >> sessionAction))
+        {
+            PrintTrainingSessionUsage();
+            return;
+        }
+
+        if (sessionAction == "start")
+        {
+            std::size_t epochCount{};
+            double learningRate{};
+            std::string lossName;
+
+            if (!(stream >> epochCount >> learningRate >> lossName) ||
+                lossName != "mse")
+            {
+                PrintTrainingSessionUsage();
+                return;
+            }
+
+            stream >> std::ws;
+
+            if (!stream.eof())
+            {
+                PrintTrainingSessionUsage();
+                return;
+            }
+
+            MiaIA::Core::TrainingSessionSnapshot session;
+
+            if (!MiaIAClient::StartTrainingSession(
+                epochCount,
+                learningRate,
+                MiaIA::Core::LossType::MeanSquaredError,
+                MiaIA::Core::OptimizerType::StochasticGradientDescent,
+                session))
+            {
+                std::cout
+                    << "Training session could not be started. "
+                    << "Check its configuration, dataset, network, "
+                    << "or active session state.\n";
+
+                return;
+            }
+
+            PrintTrainingSession(session);
+            return;
+        }
+
+        stream >> std::ws;
+
+        if (!stream.eof())
+        {
+            PrintTrainingSessionUsage();
+            return;
+        }
+
+        if (sessionAction == "status")
+        {
+            PrintTrainingSession(MiaIAClient::GetTrainingSession());
+            return;
+        }
+
+        if (sessionAction == "next")
+        {
+            MiaIA::Core::TrainingStepSnapshot step;
+
+            if (!MiaIAClient::AdvanceTrainingSession(step))
+            {
+                std::cout
+                    << "Training session step failed. "
+                    << "The network and session position were not changed.\n";
+
+                return;
+            }
+
+            std::cout
+                << "\nSession Step"
+                << "\nSample: " << step.SampleIndex
+                << "\nLoss before: " << step.Before.Evaluation.Loss
+                << "\nLoss after: " << step.After.Loss
+                << "\n";
+            PrintTrainingSession(MiaIAClient::GetTrainingSession());
+            return;
+        }
+
+        if (sessionAction == "cancel")
+        {
+            if (!MiaIAClient::CancelTrainingSession())
+            {
+                std::cout << "No active training session to cancel.\n";
+                return;
+            }
+
+            PrintTrainingSession(MiaIAClient::GetTrainingSession());
+            return;
+        }
+
+        PrintTrainingSessionUsage();
         return;
     }
 
@@ -826,7 +994,8 @@ void HandleTrainCommand(const std::string& command)
     {
         std::cout
             << "Usage: train step <sample-index> <learning-rate> mse\n"
-            << "       train epoch <learning-rate> mse\n";
+            << "       train epoch <learning-rate> mse\n"
+            << "       train session <start|status|next|cancel> ...\n";
 
         return;
     }

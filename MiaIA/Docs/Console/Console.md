@@ -32,6 +32,10 @@ dataset gradients 0 mse
 train step 0 0.01 mse
 train epoch 0.01 mse
 dataset evaluate all mse
+train session start 2 0.01 mse
+train session next
+train session status
+train session cancel
 ```
 
 `dataset evaluate` and `dataset gradients` require a current network whose input and output dimensions match the dataset.
@@ -410,6 +414,40 @@ The Console prints the number of processed samples, the learning rate, the mean 
 
 The entire epoch is transactional. MiaIA publishes the trained candidate only if every sample succeeds. An invalid sample, incompatible dimension, unsafe update, or non-finite calculation leaves the original network unchanged. The current implementation uses CSV order and does not shuffle samples.
 
+### `train session start`
+
+```text
+train session start <epochs> <learning-rate> mse
+```
+
+Creates a manually controlled multi-epoch session. The dataset must be non-empty, the network dimensions must match it, the epoch count and learning rate must be positive, and no other session may be Active. Starting does not train a sample: the session waits before its first step.
+
+### `train session status`
+
+```text
+train session status
+```
+
+Prints the session state, completed and configured epochs, completed and total steps, and—while Active—the current epoch and next sample index. Status inspection never changes the network or session.
+
+### `train session next`
+
+```text
+train session next
+```
+
+Executes exactly one atomic SGD step at the current session position, prints its before/after loss, appends the complete `TrainingStepSnapshot` to session history, and advances the sample cursor. Reaching the dataset end advances the epoch; reaching the configured epoch count marks the session Completed.
+
+The command is the debugger-style pause boundary: nothing trains between two `next` commands. Compatible parameter edits and inspections may be performed between steps. If the current dataset size or network topology is no longer compatible, the operation fails without advancing the cursor or changing the network.
+
+### `train session cancel`
+
+```text
+train session cancel
+```
+
+Marks an Active session as Cancelled. Successful steps already changed the public network and are not rolled back. A Completed, Cancelled, or Idle session cannot advance or be cancelled again, but a new session may be started.
+
 ### `dataset clear`
 
 ```text
@@ -433,6 +471,10 @@ forward
 inspect
 dataset evaluate 0 mse
 dataset evaluate all mse
+train session start 2 0.01 mse
+train session next
+train session status
+train session cancel
 dataset gradients 0 mse
 train step 0 0.01 mse
 train epoch 0.01 mse
@@ -449,7 +491,11 @@ This sequence demonstrates the difference between stages:
 6. `dataset gradients` performs evaluation plus backward differentiation;
 7. `train step` updates weights and non-input biases for one selected sample;
 8. `train epoch` performs the same update once for every sample in dataset order;
-9. the final `dataset evaluate all` measures the trained fixed model for comparison.
+9. the final `dataset evaluate all` measures the trained fixed model for comparison;
+10. `train session start` creates a paused multi-epoch schedule;
+11. `train session next` performs one inspectable update;
+12. `train session status` reports the unchanged cursor;
+13. `train session cancel` stops future steps without reverting completed updates.
 
 ## Common failures
 
@@ -481,7 +527,7 @@ Check the path, header option, column counts, row widths, and numeric values. `n
 
 ## Current limitations
 
-- SGD is the only optimizer; training supports explicit sample steps and one ordered dataset epoch, but not controlled multi-epoch sessions;
+- SGD is the only optimizer; controlled sessions are manually advanced and do not yet run, pause, or resume an automatic worker;
 - state is not persisted as a MiaIA workspace;
 - MSE is the only loss;
 - dataset preprocessing and categorical values are not supported;

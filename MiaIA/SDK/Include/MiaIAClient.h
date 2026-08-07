@@ -16,6 +16,7 @@
 #include "../../Core/Public/SampleSnapshot.h"
 #include "../../Core/Public/TrainingStepSnapshot.h"
 #include "../../Core/Public/TrainingEpochSnapshot.h"
+#include "../../Core/Public/TrainingSessionSnapshot.h"
 
 namespace MiaIA::SDK
 {
@@ -77,6 +78,17 @@ namespace MiaIA::SDK
             Core::LossType lossType,
             Core::OptimizerType optimizerType,
             Core::TrainingEpochSnapshot& result);
+        static bool StartTrainingSession(
+            std::size_t epochCount,
+            double learningRate,
+            Core::LossType lossType,
+            Core::OptimizerType optimizerType,
+            Core::TrainingSessionSnapshot& result);
+        [[nodiscard]]
+        static Core::TrainingSessionSnapshot GetTrainingSession();
+        static bool AdvanceTrainingSession(
+            Core::TrainingStepSnapshot& result);
+        static bool CancelTrainingSession();
         static bool Predict(
             const std::vector<double>& inputs,
             Core::PredictionSnapshot& result);

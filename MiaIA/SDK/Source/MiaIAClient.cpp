@@ -9,11 +9,13 @@
 #include "../../Engine/Weights/NetworkWeights.h"
 #include "../../Core/Model/Network.h"
 #include "../../Core/Model/Dataset.h"
+#include "../../Core/Model/TrainingSession.h"
 
 namespace
 {
     MiaIA::Core::Dataset CurrentDataset;
     MiaIA::Core::Network CurrentNetwork;
+    MiaIA::Core::TrainingSession CurrentTrainingSession;
 }
 
 MiaIA::Core::Dataset& MiaIA::SDK::Detail::ClientDataset()
@@ -24,6 +26,12 @@ MiaIA::Core::Dataset& MiaIA::SDK::Detail::ClientDataset()
 MiaIA::Core::Network& MiaIA::SDK::Detail::ClientNetwork()
 {
     return CurrentNetwork;
+}
+
+MiaIA::Core::TrainingSession&
+MiaIA::SDK::Detail::ClientTrainingSession()
+{
+    return CurrentTrainingSession;
 }
 
 namespace MiaIA::SDK

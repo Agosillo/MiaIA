@@ -3,7 +3,9 @@
 
 #include "../../Engine/Training/TrainingStepExecutor.h"
 #include "../../Engine/Training/TrainingEpochExecutor.h"
+#include "../../Engine/Training/TrainingSessionController.h"
 #include "../../Core/Model/Dataset.h"
+#include "../../Core/Model/TrainingSession.h"
 
 namespace MiaIA::SDK
 {
@@ -37,5 +39,45 @@ namespace MiaIA::SDK
             lossType,
             optimizerType,
             result);
+    }
+
+    bool MiaIAClient::StartTrainingSession(
+        std::size_t epochCount,
+        double learningRate,
+        Core::LossType lossType,
+        Core::OptimizerType optimizerType,
+        Core::TrainingSessionSnapshot& result)
+    {
+        return Engine::TrainingSessionController::Start(
+            Detail::ClientDataset(),
+            Detail::ClientNetwork(),
+            epochCount,
+            learningRate,
+            lossType,
+            optimizerType,
+            Detail::ClientTrainingSession(),
+            result);
+    }
+
+    Core::TrainingSessionSnapshot MiaIAClient::GetTrainingSession()
+    {
+        return Engine::TrainingSessionController::Snapshot(
+            Detail::ClientTrainingSession());
+    }
+
+    bool MiaIAClient::AdvanceTrainingSession(
+        Core::TrainingStepSnapshot& result)
+    {
+        return Engine::TrainingSessionController::Next(
+            Detail::ClientDataset(),
+            Detail::ClientNetwork(),
+            Detail::ClientTrainingSession(),
+            result);
+    }
+
+    bool MiaIAClient::CancelTrainingSession()
+    {
+        return Engine::TrainingSessionController::Cancel(
+            Detail::ClientTrainingSession());
     }
 }

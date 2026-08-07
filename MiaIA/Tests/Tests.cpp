@@ -1270,6 +1270,240 @@ int main()
 
     });
 
+    runner.Run("Controlled training session", [&]()
+    {
+    const std::filesystem::path sessionPath =
+        std::filesystem::temp_directory_path() /
+        "miaia_controlled_training_session_test.csv";
+
+    {
+        std::ofstream output(sessionPath);
+        assert(output.good());
+        output
+            << "x,target\n"
+            << "1,1\n"
+            << "2,0\n";
+    }
+
+    MiaIAClient::ClearDataset();
+    MiaIAClient::ClearNetwork();
+
+    assert(MiaIAClient::ImportCsvDataset(
+        sessionPath.string(),
+        1,
+        1));
+    assert(MiaIAClient::CreateDenseNetwork(1, 1, 0, 1));
+    assert(MiaIAClient::SetLayerActivation(
+        1,
+        MiaIA::Core::ActivationType::Linear));
+    assert(MiaIAClient::SetConnectionWeight(1, 0.0));
+    assert(MiaIAClient::SetNeuronBias(1002, 0.0));
+
+    MiaIA::Core::TrainingSessionSnapshot session;
+
+    assert(MiaIAClient::StartTrainingSession(
+        2,
+        0.1,
+        MiaIA::Core::LossType::MeanSquaredError,
+        MiaIA::Core::OptimizerType::StochasticGradientDescent,
+        session));
+
+    assert(session.Status == MiaIA::Core::TrainingSessionStatus::Active);
+    assert(session.EpochCount == 2);
+    assert(session.CurrentEpoch == 0);
+    assert(session.NextSampleIndex == 0);
+    assert(session.SampleCount == 2);
+    assert(session.CompletedSteps == 0);
+    assert(session.TotalSteps == 4);
+    assert(std::abs(session.LearningRate - 0.1) < 1e-12);
+    assert(session.Steps.empty());
+
+    MiaIA::Core::TrainingSessionSnapshot rejectedSession;
+    rejectedSession.EpochCount = 999;
+    rejectedSession.LearningRate = 42.0;
+
+    assert(!MiaIAClient::StartTrainingSession(
+        1,
+        0.1,
+        MiaIA::Core::LossType::MeanSquaredError,
+        MiaIA::Core::OptimizerType::StochasticGradientDescent,
+        rejectedSession));
+    assert(rejectedSession.EpochCount == 999);
+    assert(rejectedSession.LearningRate == 42.0);
+
+    MiaIA::Core::TrainingStepSnapshot step;
+
+    assert(MiaIAClient::AdvanceTrainingSession(step));
+    assert(step.SampleIndex == 0);
+    assert(std::abs(step.Before.Evaluation.Loss - 1.0) < 1e-12);
+    assert(std::abs(step.After.Loss - 0.36) < 1e-12);
+
+    session = MiaIAClient::GetTrainingSession();
+    assert(session.Status == MiaIA::Core::TrainingSessionStatus::Active);
+    assert(session.CurrentEpoch == 0);
+    assert(session.NextSampleIndex == 1);
+    assert(session.CompletedSteps == 1);
+    assert(session.Steps.size() == 1);
+
+    assert(MiaIAClient::AdvanceTrainingSession(step));
+    assert(step.SampleIndex == 1);
+    assert(std::abs(step.Before.Evaluation.Loss - 0.36) < 1e-12);
+    assert(std::abs(step.After.Loss) < 1e-12);
+
+    session = MiaIAClient::GetTrainingSession();
+    assert(session.Status == MiaIA::Core::TrainingSessionStatus::Active);
+    assert(session.CurrentEpoch == 1);
+    assert(session.NextSampleIndex == 0);
+    assert(session.CompletedSteps == 2);
+
+    assert(MiaIAClient::AdvanceTrainingSession(step));
+    assert(step.SampleIndex == 0);
+    assert(std::abs(step.Before.Evaluation.Loss - 0.9216) < 1e-12);
+    assert(std::abs(step.After.Loss - 0.331776) < 1e-12);
+
+    assert(MiaIAClient::AdvanceTrainingSession(step));
+    assert(step.SampleIndex == 1);
+    assert(std::abs(step.Before.Evaluation.Loss - 0.331776) < 1e-12);
+    assert(std::abs(step.After.Loss) < 1e-12);
+
+    session = MiaIAClient::GetTrainingSession();
+    assert(session.Status ==
+        MiaIA::Core::TrainingSessionStatus::Completed);
+    assert(session.CurrentEpoch == 2);
+    assert(session.NextSampleIndex == 0);
+    assert(session.CompletedSteps == 4);
+    assert(session.TotalSteps == 4);
+    assert(session.Steps.size() == 4);
+    assert(session.Steps[0].SampleIndex == 0);
+    assert(session.Steps[1].SampleIndex == 1);
+    assert(session.Steps[2].SampleIndex == 0);
+    assert(session.Steps[3].SampleIndex == 1);
+
+    const auto afterCompletedSession = MiaIAClient::GetSnapshot();
+    assert(std::abs(
+        afterCompletedSession.Connections[0].Weight - (-0.0784)) <
+        1e-12);
+    assert(std::abs(
+        afterCompletedSession.Layers[1].Neurons[0].Bias - 0.1568) <
+        1e-12);
+
+    MiaIA::Core::TrainingStepSnapshot rejectedStep;
+    rejectedStep.SampleIndex = 999;
+    rejectedStep.LearningRate = 42.0;
+
+    assert(!MiaIAClient::AdvanceTrainingSession(rejectedStep));
+    assert(rejectedStep.SampleIndex == 999);
+    assert(rejectedStep.LearningRate == 42.0);
+    assert(!MiaIAClient::CancelTrainingSession());
+
+    assert(MiaIAClient::StartTrainingSession(
+        2,
+        0.1,
+        MiaIA::Core::LossType::MeanSquaredError,
+        MiaIA::Core::OptimizerType::StochasticGradientDescent,
+        session));
+    assert(MiaIAClient::AdvanceTrainingSession(step));
+
+    const auto beforeCancellation = MiaIAClient::GetSnapshot();
+    assert(MiaIAClient::CancelTrainingSession());
+
+    session = MiaIAClient::GetTrainingSession();
+    assert(session.Status ==
+        MiaIA::Core::TrainingSessionStatus::Cancelled);
+    assert(session.CompletedSteps == 1);
+    assert(session.CurrentEpoch == 0);
+    assert(session.NextSampleIndex == 1);
+    assert(!MiaIAClient::AdvanceTrainingSession(rejectedStep));
+
+    const auto afterCancellation = MiaIAClient::GetSnapshot();
+    assert(afterCancellation.Connections[0].Weight ==
+        beforeCancellation.Connections[0].Weight);
+    assert(afterCancellation.Layers[1].Neurons[0].Bias ==
+        beforeCancellation.Layers[1].Neurons[0].Bias);
+
+    assert(MiaIAClient::StartTrainingSession(
+        1,
+        0.1,
+        MiaIA::Core::LossType::MeanSquaredError,
+        MiaIA::Core::OptimizerType::StochasticGradientDescent,
+        session));
+
+    MiaIAClient::ClearNetwork();
+    const auto beforeIncompatibleStep = MiaIAClient::GetTrainingSession();
+
+    assert(!MiaIAClient::AdvanceTrainingSession(rejectedStep));
+    assert(rejectedStep.SampleIndex == 999);
+    assert(rejectedStep.LearningRate == 42.0);
+
+    const auto afterIncompatibleStep = MiaIAClient::GetTrainingSession();
+    assert(afterIncompatibleStep.Status ==
+        MiaIA::Core::TrainingSessionStatus::Active);
+    assert(afterIncompatibleStep.CurrentEpoch ==
+        beforeIncompatibleStep.CurrentEpoch);
+    assert(afterIncompatibleStep.NextSampleIndex ==
+        beforeIncompatibleStep.NextSampleIndex);
+    assert(afterIncompatibleStep.CompletedSteps ==
+        beforeIncompatibleStep.CompletedSteps);
+    assert(MiaIAClient::CancelTrainingSession());
+
+    assert(MiaIAClient::CreateDenseNetwork(1, 1, 0, 1));
+    assert(MiaIAClient::SetLayerActivation(
+        1,
+        MiaIA::Core::ActivationType::Linear));
+
+    for (const double invalidLearningRate :
+        std::vector<double>{
+            0.0,
+            -0.1,
+            std::numeric_limits<double>::quiet_NaN(),
+            std::numeric_limits<double>::infinity()
+        })
+    {
+        assert(!MiaIAClient::StartTrainingSession(
+            1,
+            invalidLearningRate,
+            MiaIA::Core::LossType::MeanSquaredError,
+            MiaIA::Core::OptimizerType::StochasticGradientDescent,
+            rejectedSession));
+        assert(rejectedSession.EpochCount == 999);
+        assert(rejectedSession.LearningRate == 42.0);
+    }
+
+    assert(!MiaIAClient::StartTrainingSession(
+        0,
+        0.1,
+        MiaIA::Core::LossType::MeanSquaredError,
+        MiaIA::Core::OptimizerType::StochasticGradientDescent,
+        rejectedSession));
+    assert(!MiaIAClient::StartTrainingSession(
+        1,
+        0.1,
+        static_cast<MiaIA::Core::LossType>(999),
+        MiaIA::Core::OptimizerType::StochasticGradientDescent,
+        rejectedSession));
+    assert(!MiaIAClient::StartTrainingSession(
+        1,
+        0.1,
+        MiaIA::Core::LossType::MeanSquaredError,
+        static_cast<MiaIA::Core::OptimizerType>(999),
+        rejectedSession));
+    assert(rejectedSession.EpochCount == 999);
+    assert(rejectedSession.LearningRate == 42.0);
+
+    MiaIAClient::ClearDataset();
+
+    assert(!MiaIAClient::StartTrainingSession(
+        1,
+        0.1,
+        MiaIA::Core::LossType::MeanSquaredError,
+        MiaIA::Core::OptimizerType::StochasticGradientDescent,
+        rejectedSession));
+
+    MiaIAClient::ClearNetwork();
+    std::filesystem::remove(sessionPath);
+
+    });
+
     runner.Run("Prediction pipeline", [&]()
     {
     MiaIAClient::ClearNetwork();
