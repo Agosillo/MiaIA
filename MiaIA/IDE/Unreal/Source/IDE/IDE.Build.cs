@@ -14,7 +14,13 @@ public class IDE : ModuleRules
 		PrivateDependencyModuleNames.AddRange(new string[] {  });
 
 
-        string MiaIARoot = Path.GetFullPath(Path.Combine(ModuleDirectory, "..", "..", ".."));
+        string MiaIARoot = Path.GetFullPath(Path.Combine(
+            ModuleDirectory,
+            "..",
+            "..",
+            "..",
+            ".."
+        ));
 
         PublicIncludePaths.Add(
               Path.Combine(MiaIARoot, "SDK", "Include")

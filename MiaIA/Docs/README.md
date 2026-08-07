@@ -42,7 +42,8 @@ MiaIA/
 |-- CLI/        Reusable textual command parser and SDK dispatcher
 |-- Console/    Thin terminal host for the shared command processor
 |-- Tests/      Named integration and mathematical correctness tests
-|-- IDE/        Initial Unreal Engine client integration
+|-- IDE/        Graphical IDE client implementations
+|   `-- Unreal/ Current Unreal Engine client and editor integration
 `-- Docs/       Project documentation
 ```
 

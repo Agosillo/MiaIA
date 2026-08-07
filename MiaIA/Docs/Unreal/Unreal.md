@@ -6,6 +6,8 @@ The Unreal project is a client of the same `MiaIAClient` facade used by the Cons
 
 The current integration includes a runtime Blueprint function library, the shared CLI command processor, and the first custom Unreal editor panel. The panel is an initial functional shell for the MiaIA IDE, not the final visualization or interaction design.
 
+The complete Unreal project lives under `MiaIA/IDE/Unreal`. Future graphical IDE implementations can be added beside it, for example under `MiaIA/IDE/Unity`, without changing Core, Engine, SDK, CLI, or the native Console.
+
 ## Blueprint types
 
 The IDE module converts SDK snapshots into Unreal-reflected types:
@@ -79,7 +81,7 @@ The captured foundation panel shows a network created directly from its embedded
 ### Opening and running the demonstration
 
 1. Build the native solution in `Release | x64`, then build `IDEEditor | Win64 | Development`.
-2. Open `IDE.uproject` and load the `MiaIAMain` level.
+2. Open `MiaIA/IDE/Unreal/IDE.uproject` and load the `MiaIAMain` level.
 3. Select `Window > MiaIA` from the main Unreal Editor menu.
 4. Dock the MiaIA tab or keep it as a separate window. Keeping it separate makes the state transitions easier to record or inspect.
 5. Start Play in Editor from the main toolbar or press `Alt+P`.
@@ -190,8 +192,9 @@ The Unreal module currently links the native Release libraries directly. After c
 
 1. build the MiaIA native solution in `Release | x64`;
 2. confirm `x64/Release/Engine.lib`, `SDK.lib`, and `CLI.lib` are current;
-3. build `IDEEditor | Win64 | Development`;
-4. open the project and locate the nodes under the `MiaIA` categories.
+3. open or regenerate the Unreal solution from `MiaIA/IDE/Unreal/IDE.uproject`;
+4. build `IDEEditor | Win64 | Development`;
+5. open the project and locate the nodes under the `MiaIA` categories.
 
 ## Planned Unreal work
 
