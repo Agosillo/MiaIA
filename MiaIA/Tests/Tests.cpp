@@ -752,6 +752,213 @@ int main()
 
     });
 
+    runner.Run("Atomic SGD training step", [&]()
+    {
+    const std::filesystem::path trainingPath =
+        std::filesystem::temp_directory_path() /
+        "miaia_dataset_training_step_test.csv";
+
+    {
+        std::ofstream output(trainingPath);
+        assert(output.good());
+        output
+            << "x1,x2,target1,target2\n"
+            << "0.5,-1,1,2\n";
+    }
+
+    MiaIAClient::ClearDataset();
+    MiaIAClient::ClearNetwork();
+
+    assert(MiaIAClient::ImportCsvDataset(
+        trainingPath.string(),
+        2,
+        2));
+    assert(MiaIAClient::CreateDenseNetwork(2, 2, 0, 2));
+    assert(MiaIAClient::SetLayerActivation(
+        1,
+        MiaIA::Core::ActivationType::Linear));
+    assert(MiaIAClient::SetConnectionWeight(1, 2.0));
+    assert(MiaIAClient::SetConnectionWeight(2, -1.0));
+    assert(MiaIAClient::SetConnectionWeight(3, 3.0));
+    assert(MiaIAClient::SetConnectionWeight(4, 0.5));
+    assert(MiaIAClient::SetNeuronBias(1003, 0.25));
+    assert(MiaIAClient::SetNeuronBias(1004, -0.5));
+
+    MiaIA::Core::TrainingStepSnapshot step;
+
+    assert(MiaIAClient::TrainDatasetSample(
+        0,
+        0.1,
+        MiaIA::Core::LossType::MeanSquaredError,
+        MiaIA::Core::OptimizerType::StochasticGradientDescent,
+        step));
+
+    assert(step.SampleIndex == 0);
+    assert(std::abs(step.LearningRate - 0.1) < 1e-12);
+    assert(step.Optimizer ==
+        MiaIA::Core::OptimizerType::StochasticGradientDescent);
+    assert(std::abs(step.Before.Evaluation.Loss - 9.90625) < 1e-12);
+    assert(step.After.Loss < step.Before.Evaluation.Loss);
+    assert(step.ConnectionUpdates.size() == 4);
+    assert(step.NeuronUpdates.size() == 2);
+
+    const std::vector<double> expectedWeightGradients{
+        -1.375,
+        -1.75,
+        2.75,
+        3.5
+    };
+
+    const std::vector<double> expectedWeightDeltas{
+        0.1375,
+        0.175,
+        -0.275,
+        -0.35
+    };
+
+    const std::vector<double> expectedUpdatedWeights{
+        2.1375,
+        -0.825,
+        2.725,
+        0.15
+    };
+
+    for (std::size_t index = 0;
+        index < step.ConnectionUpdates.size();
+        ++index)
+    {
+        const auto& update = step.ConnectionUpdates[index];
+
+        assert(update.Id == index + 1);
+        assert(std::abs(
+            update.Gradient - expectedWeightGradients[index]) < 1e-12);
+        assert(std::abs(
+            update.Delta - expectedWeightDeltas[index]) < 1e-12);
+        assert(std::abs(
+            update.UpdatedWeight - expectedUpdatedWeights[index]) < 1e-12);
+        assert(std::abs(
+            update.UpdatedWeight -
+            (update.PreviousWeight + update.Delta)) < 1e-12);
+    }
+
+    assert(step.NeuronUpdates[0].Id == 1003);
+    assert(std::abs(step.NeuronUpdates[0].PreviousBias - 0.25) < 1e-12);
+    assert(std::abs(step.NeuronUpdates[0].Gradient - (-2.75)) < 1e-12);
+    assert(std::abs(step.NeuronUpdates[0].Delta - 0.275) < 1e-12);
+    assert(std::abs(step.NeuronUpdates[0].UpdatedBias - 0.525) < 1e-12);
+
+    assert(step.NeuronUpdates[1].Id == 1004);
+    assert(std::abs(step.NeuronUpdates[1].PreviousBias - (-0.5)) < 1e-12);
+    assert(std::abs(step.NeuronUpdates[1].Gradient - (-3.5)) < 1e-12);
+    assert(std::abs(step.NeuronUpdates[1].Delta - 0.35) < 1e-12);
+    assert(std::abs(step.NeuronUpdates[1].UpdatedBias - (-0.15)) < 1e-12);
+
+    assert(std::abs(step.After.Predictions[0] - (-1.13125)) < 1e-12);
+    assert(std::abs(step.After.Predictions[1] - (-0.7125)) < 1e-12);
+
+    const auto afterStep = MiaIAClient::GetSnapshot();
+
+    assert(afterStep.Layers[0].Neurons[0].Bias == 0.0);
+    assert(afterStep.Layers[0].Neurons[1].Bias == 0.0);
+
+    for (std::size_t index = 0;
+        index < afterStep.Connections.size();
+        ++index)
+    {
+        assert(std::abs(
+            afterStep.Connections[index].Weight -
+            expectedUpdatedWeights[index]) < 1e-12);
+    }
+
+    assert(std::abs(
+        afterStep.Layers[1].Neurons[0].Bias - 0.525) < 1e-12);
+    assert(std::abs(
+        afterStep.Layers[1].Neurons[1].Bias - (-0.15)) < 1e-12);
+
+    MiaIA::Core::TrainingStepSnapshot rejectedStep;
+    rejectedStep.SampleIndex = 999;
+    rejectedStep.LearningRate = 42.0;
+
+    const auto assertRejectedStepPreserved = [&]()
+    {
+        assert(rejectedStep.SampleIndex == 999);
+        assert(rejectedStep.LearningRate == 42.0);
+    };
+
+    assert(!MiaIAClient::TrainDatasetSample(
+        1,
+        0.1,
+        MiaIA::Core::LossType::MeanSquaredError,
+        MiaIA::Core::OptimizerType::StochasticGradientDescent,
+        rejectedStep));
+    assertRejectedStepPreserved();
+
+    for (const double invalidLearningRate :
+        std::vector<double>{
+            0.0,
+            -0.1,
+            std::numeric_limits<double>::quiet_NaN(),
+            std::numeric_limits<double>::infinity(),
+            (std::numeric_limits<double>::max)()
+        })
+    {
+        assert(!MiaIAClient::TrainDatasetSample(
+            0,
+            invalidLearningRate,
+            MiaIA::Core::LossType::MeanSquaredError,
+            MiaIA::Core::OptimizerType::StochasticGradientDescent,
+            rejectedStep));
+        assertRejectedStepPreserved();
+    }
+
+    assert(!MiaIAClient::TrainDatasetSample(
+        0,
+        0.1,
+        static_cast<MiaIA::Core::LossType>(999),
+        MiaIA::Core::OptimizerType::StochasticGradientDescent,
+        rejectedStep));
+    assertRejectedStepPreserved();
+
+    assert(!MiaIAClient::TrainDatasetSample(
+        0,
+        0.1,
+        MiaIA::Core::LossType::MeanSquaredError,
+        static_cast<MiaIA::Core::OptimizerType>(999),
+        rejectedStep));
+    assertRejectedStepPreserved();
+
+    const auto afterRejectedSteps = MiaIAClient::GetSnapshot();
+
+    for (std::size_t index = 0;
+        index < afterStep.Connections.size();
+        ++index)
+    {
+        assert(afterRejectedSteps.Connections[index].Weight ==
+            afterStep.Connections[index].Weight);
+    }
+
+    for (std::size_t layerIndex = 0;
+        layerIndex < afterStep.Layers.size();
+        ++layerIndex)
+    {
+        for (std::size_t neuronIndex = 0;
+            neuronIndex < afterStep.Layers[layerIndex].Neurons.size();
+            ++neuronIndex)
+        {
+            assert(
+                afterRejectedSteps.Layers[layerIndex]
+                    .Neurons[neuronIndex].Bias ==
+                afterStep.Layers[layerIndex]
+                    .Neurons[neuronIndex].Bias);
+        }
+    }
+
+    MiaIAClient::ClearDataset();
+    MiaIAClient::ClearNetwork();
+    std::filesystem::remove(trainingPath);
+
+    });
+
     runner.Run("Network input", [&]()
     {
     MiaIAClient::ClearNetwork();

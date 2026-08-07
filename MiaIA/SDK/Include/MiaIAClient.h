@@ -8,9 +8,11 @@
 #include "../../Core/Public/NetworkSnapshot.h"
 #include "../../Core/Public/DatasetSummary.h"
 #include "../../Core/Public/LossType.h"
+#include "../../Core/Public/OptimizerType.h"
 #include "../../Core/Public/SampleEvaluationSnapshot.h"
 #include "../../Core/Public/SampleGradientSnapshot.h"
 #include "../../Core/Public/SampleSnapshot.h"
+#include "../../Core/Public/TrainingStepSnapshot.h"
 
 namespace MiaIA::SDK
 {
@@ -58,6 +60,12 @@ namespace MiaIA::SDK
             std::size_t index,
             Core::LossType type,
             Core::SampleGradientSnapshot& result);
+        static bool TrainDatasetSample(
+            std::size_t index,
+            double learningRate,
+            Core::LossType lossType,
+            Core::OptimizerType optimizerType,
+            Core::TrainingStepSnapshot& result);
         static bool Forward();
     };
 }

@@ -16,25 +16,23 @@ The roadmap is organized by dependency rather than by a fixed release date. Math
 - observable backward propagation;
 - neuron, bias, and connection gradient snapshots;
 - analytical and numerical gradient verification.
+- atomic single-sample SGD training step;
+- before/after loss and parameter update snapshots;
+- transactional rejection of invalid or non-finite updates.
 
-## Next milestone: explicit training step
+## Implemented optimizer foundation
 
-The next engine milestone should turn an inspected gradient into an explicit, controlled parameter update.
+The engine can turn an inspected gradient into one explicit SGD parameter update:
 
-Planned work:
+- `train step` is available through SDK and Console;
+- learning rate and all calculated parameters are validated;
+- the operation is atomic at the public network boundary;
+- before/after loss and every weight and bias delta are observable;
+- tests verify exact updates, loss reduction, and state preservation on failure.
 
-- optimizer abstraction;
-- stochastic gradient descent as the first optimizer;
-- learning-rate validation;
-- apply-gradient operation separated from gradient calculation;
-- before/after parameter snapshots;
-- one-sample `train step` SDK and Console operation;
-- tests proving the expected weight and bias update;
-- tests proving that a suitable step can reduce loss.
+Gradient evaluation remains a separate non-mutating operation, so a client can inspect the mathematical result before choosing to execute a training step.
 
-This milestone should preserve the ability to stop between backward propagation and parameter application.
-
-## Controlled training sessions
+## Next milestone: controlled training sessions
 
 After a trustworthy single step exists:
 

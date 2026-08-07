@@ -46,8 +46,14 @@ Backward propagation was added as a separate differentiation subsystem. It expos
 
 Known analytical cases and numerical finite-difference checks verify the gradient implementation. This is the present edge of the implemented training foundation.
 
+### Atomic SGD training step
+
+The first explicit optimizer operation connected observed gradients to parameter updates. A single sample can now perform forward propagation, MSE evaluation, backward propagation, SGD weight and bias updates, and a second evaluation.
+
+The operation runs against a candidate network and publishes it only after every stage succeeds. Its snapshot records the loss before and after the step and every applied parameter delta. Invalid learning rates, numerical overflow, unsupported options, and incompatible samples leave both the network and caller result unchanged.
+
 ## Current position
 
-MiaIA can now represent, execute, interchange, inspect, evaluate, and differentiate a supported feed-forward network. It cannot yet apply an optimizer, run a controlled training session, persist a `.mia` workspace, or deliver the planned complete graphical debugging experience.
+MiaIA can now represent, execute, interchange, inspect, evaluate, differentiate, and apply one atomic SGD step to a supported feed-forward network. It cannot yet run a multi-step controlled training session, persist a `.mia` workspace, or deliver the planned complete graphical debugging experience.
 
 Those next steps are tracked in the [Roadmap](../Roadmap/Roadmap.md).

@@ -27,6 +27,7 @@ dataset summary
 dataset inspect 0
 dataset evaluate 0 mse
 dataset gradients 0 mse
+train step 0 0.01 mse
 ```
 
 `dataset evaluate` and `dataset gradients` require a current network whose input and output dimensions match the dataset.
@@ -313,6 +314,46 @@ It also prints `dLoss/dWeight` for every connection.
 
 This command does **not** train the network. Weights and biases remain unchanged. The separation is intentional: MiaIA treats gradients as inspectable debugging data before an optimizer is allowed to apply them.
 
+## Training
+
+### `train step`
+
+```text
+train step <sample-index> <learning-rate> mse
+```
+
+Executes one atomic stochastic gradient descent step on the selected sample.
+
+Example:
+
+```text
+train step 0 0.01 mse
+```
+
+The operation performs:
+
+```text
+sample inputs
+    -> forward propagation
+    -> MSE before update
+    -> backward propagation
+    -> SGD parameter update
+    -> forward propagation again
+    -> MSE after update
+```
+
+SGD applies:
+
+```text
+updated parameter = previous parameter - learning rate * gradient
+```
+
+The Console prints the loss before and after the step and, for every trainable weight and bias, the previous value, gradient, applied delta, and updated value. Input-layer biases are not updated.
+
+The step is transactional. MiaIA performs it on a candidate network and publishes the candidate only after every calculation and the final evaluation succeed. A zero, negative, non-finite, or numerically unsafe learning rate fails without changing network parameters.
+
+A suitable learning rate often reduces loss for the selected sample, but reduction is not guaranteed for every positive value. This command performs one step only; it does not start an epoch or an automatic loop.
+
 ### `dataset clear`
 
 ```text
@@ -335,6 +376,7 @@ forward
 inspect
 dataset evaluate 0 mse
 dataset gradients 0 mse
+train step 0 0.01 mse
 ```
 
 This sequence demonstrates the difference between stages:
@@ -344,7 +386,7 @@ This sequence demonstrates the difference between stages:
 3. `forward` changes downstream activations;
 4. `dataset evaluate` performs apply plus forward and calculates loss;
 5. `dataset gradients` performs evaluation plus backward differentiation;
-6. none of these commands updates weights or biases.
+6. `train step` is the first command in the sequence that updates weights and non-input biases.
 
 ## Common failures
 
@@ -376,7 +418,7 @@ Check the path, header option, column counts, row widths, and numeric values. `n
 
 ## Current limitations
 
-- there is no optimizer or `train` command yet;
+- SGD is the only optimizer and training is limited to one explicit sample step;
 - state is not persisted as a MiaIA workspace;
 - MSE is the only loss;
 - dataset preprocessing and categorical values are not supported;

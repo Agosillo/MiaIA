@@ -87,6 +87,12 @@
     <ClInclude Include="Differentiation\SampleGradientEvaluator.h">
       <Filter>File di intestazione</Filter>
     </ClInclude>
+    <ClInclude Include="Optimization\SgdOptimizer.h">
+      <Filter>File di intestazione</Filter>
+    </ClInclude>
+    <ClInclude Include="Training\TrainingStepExecutor.h">
+      <Filter>File di intestazione</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Engine.cpp">
@@ -141,6 +147,12 @@
       <Filter>File di origine</Filter>
     </ClCompile>
     <ClCompile Include="Differentiation\SampleGradientEvaluator.cpp">
+      <Filter>File di origine</Filter>
+    </ClCompile>
+    <ClCompile Include="Optimization\SgdOptimizer.cpp">
+      <Filter>File di origine</Filter>
+    </ClCompile>
+    <ClCompile Include="Training\TrainingStepExecutor.cpp">
       <Filter>File di origine</Filter>
     </ClCompile>
   </ItemGroup>

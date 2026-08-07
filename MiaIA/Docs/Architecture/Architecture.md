@@ -51,12 +51,14 @@ Engine owns operations and mathematical behavior. Its current responsibilities a
 | `Data` | Import, inspect, and apply CSV dataset samples |
 | `Evaluation` | Calculate predictions, errors, loss, and loss derivatives |
 | `Differentiation` | Run backward propagation and produce gradient snapshots |
+| `Optimization` | Validate and apply explicit optimizer updates |
+| `Training` | Coordinate an atomic sample training step |
 
 This separation allows a mathematical subsystem to evolve without requiring client code to manipulate its internal data structures directly.
 
 ### SDK
 
-`MiaIAClient` is the public facade used by clients. It exposes network creation and editing, snapshots, ONNX interchange, datasets, forward execution, sample evaluation, and gradient evaluation.
+`MiaIAClient` is the public facade used by clients. It exposes network creation and editing, snapshots, ONNX interchange, datasets, forward execution, sample evaluation, gradient evaluation, and an atomic sample training step.
 
 The current SDK owns one process-local network and one process-local dataset through its internal client state. This is sufficient for the present console and integration tests. Multiple sessions, explicit contexts, concurrency, and persisted workspace state are future concerns and should not be assumed to exist today.
 
@@ -123,6 +125,20 @@ Sample evaluation
 
 Backward propagation currently calculates gradients only. It deliberately does not apply them. This keeps observation separate from optimization and makes gradients available to Console, Unreal, Blueprint wrappers, and future debugging tools.
 
+### Atomic SGD training step
+
+```text
+Copy current network
+    -> evaluate sample and calculate gradients on the copy
+    -> validate every proposed SGD weight and bias update
+    -> apply updates to the copy
+    -> evaluate the same sample again
+    -> publish before/after TrainingStepSnapshot
+    -> replace the current network only after complete success
+```
+
+Stochastic gradient descent applies `parameter - learningRate * gradient`. Input-layer biases are not trainable parameters in the current feed-forward model and are not updated. Copying the candidate network prioritizes transactional correctness in this foundation implementation; a future training-session design may replace the copy with a versioned parameter transaction after equivalent guarantees are tested.
+
 ## Snapshot boundary
 
 Clients receive snapshots rather than references to mutable engine storage. A snapshot is a value object suitable for inspection, display, logging, comparison, or transport across an integration boundary.
@@ -166,8 +182,8 @@ Clients should treat a `false` result as a rejected operation and should not inf
 - feed-forward execution only;
 - dense factory and a limited ONNX graph subset;
 - MSE is the only loss type;
-- gradients are observable but no optimizer applies them yet;
-- no batch training loop, checkpoint, pause, resume, or step controller yet;
+- SGD is the only optimizer and can apply one sample step at a time;
+- no batch or epoch loop, checkpoint, pause, resume, or training-session controller yet;
 - no `.mia` persistence yet;
 - Unreal visualization and Blueprint coverage are incomplete.
 

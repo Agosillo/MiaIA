@@ -160,6 +160,7 @@
     <ClCompile Include="Source\MiaIAClient.cpp" />
     <ClCompile Include="Source\MiaIAClientDataset.cpp" />
     <ClCompile Include="Source\MiaIAClientOnnx.cpp" />
+    <ClCompile Include="Source\MiaIAClientTraining.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Core\Core.vcxproj">

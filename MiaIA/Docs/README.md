@@ -2,7 +2,7 @@
 
 MiaIA is an Interactive Development Environment for Artificial Intelligence. Its purpose is not to compete with large training frameworks on throughput. Its purpose is to make a neural network observable: users should be able to build a model, execute it, inspect its state, evaluate samples, follow gradients, and eventually control training step by step.
 
-The project is currently in its foundation stage. The C++ engine, public SDK facade, interactive console, test harness, ONNX interchange, CSV dataset pipeline, sample evaluation, and non-mutating gradient inspection are implemented. Controlled parameter updates, training sessions, persistent MiaIA project files, and the complete Unreal visualization experience are planned work.
+The project is currently in its foundation stage. The C++ engine, public SDK facade, interactive console, test harness, ONNX interchange, CSV dataset pipeline, sample evaluation, non-mutating gradient inspection, and one atomic SGD training step are implemented. Multi-step training sessions, persistent MiaIA project files, and the complete Unreal visualization experience are planned work.
 
 ## Documentation map
 
@@ -26,6 +26,7 @@ The project is currently in its foundation stage. The C++ engine, public SDK fac
 | Datasets | Numeric CSV import with explicit input and target column counts |
 | Evaluation | Predictions, target errors, and mean squared error for a selected sample |
 | Differentiation | Per-neuron, per-bias, and per-connection gradients without parameter updates |
+| Optimization | One atomic stochastic gradient descent update with before/after snapshots |
 | Clients | Interactive console and an initial Unreal Engine integration through `MiaIAClient` |
 | Verification | Named Debug- and Release-capable C++ test harness, including numerical gradient checks |
 
@@ -34,7 +35,7 @@ The project is currently in its foundation stage. The C++ engine, public SDK fac
 ```text
 MiaIA/
 |-- Core/       Stable data structures, activation primitives, and public snapshots
-|-- Engine/     Validation, editing, execution, interchange, evaluation, and differentiation
+|-- Engine/     Validation, execution, evaluation, differentiation, optimization, and training
 |-- SDK/        Client-facing MiaIAClient facade and process-local state
 |-- Console/    Interactive command-line client
 |-- Tests/      Named integration and mathematical correctness tests

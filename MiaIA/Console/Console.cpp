@@ -78,6 +78,9 @@ void PrintHelp()
         << "  dataset clear\n"
         << "      Clear the current dataset\n\n"
 
+        << "  train step <sample-index> <learning-rate> mse\n"
+        << "      Apply one atomic SGD training step\n\n"
+
         << "  summary\n"
         << "      Show network overview\n\n"
 
@@ -619,6 +622,92 @@ void HandleDatasetCommand(const std::string& command)
         << "Unknown dataset command.\n";
 }
 
+void HandleTrainCommand(const std::string& command)
+{
+    using MiaIA::SDK::MiaIAClient;
+
+    std::stringstream stream(command);
+    std::string trainToken;
+    std::string action;
+    std::size_t sampleIndex{};
+    double learningRate{};
+    std::string lossName;
+
+    if (!(stream
+        >> trainToken
+        >> action
+        >> sampleIndex
+        >> learningRate
+        >> lossName) ||
+        trainToken != "train" ||
+        action != "step" ||
+        lossName != "mse")
+    {
+        std::cout
+            << "Usage: train step <sample-index> <learning-rate> mse\n";
+
+        return;
+    }
+
+    stream >> std::ws;
+
+    if (!stream.eof())
+    {
+        std::cout
+            << "Usage: train step <sample-index> <learning-rate> mse\n";
+
+        return;
+    }
+
+    MiaIA::Core::TrainingStepSnapshot step;
+
+    if (!MiaIAClient::TrainDatasetSample(
+        sampleIndex,
+        learningRate,
+        MiaIA::Core::LossType::MeanSquaredError,
+        MiaIA::Core::OptimizerType::StochasticGradientDescent,
+        step))
+    {
+        std::cout
+            << "Training step failed. "
+            << "The network parameters were not changed.\n";
+
+        return;
+    }
+
+    std::cout
+        << "\nTraining Step " << step.SampleIndex
+        << "\nOptimizer: SGD"
+        << "\nLearning rate: " << step.LearningRate
+        << "\nLoss before: " << step.Before.Evaluation.Loss
+        << "\nLoss after: " << step.After.Loss
+        << "\n\nConnection Updates\n";
+
+    for (const auto& update : step.ConnectionUpdates)
+    {
+        std::cout
+            << "Connection " << update.Id
+            << " Weight " << update.PreviousWeight
+            << " Gradient " << update.Gradient
+            << " Delta " << update.Delta
+            << " Updated " << update.UpdatedWeight
+            << "\n";
+    }
+
+    std::cout << "\nBias Updates\n";
+
+    for (const auto& update : step.NeuronUpdates)
+    {
+        std::cout
+            << "Neuron " << update.Id
+            << " Bias " << update.PreviousBias
+            << " Gradient " << update.Gradient
+            << " Delta " << update.Delta
+            << " Updated " << update.UpdatedBias
+            << "\n";
+    }
+}
+
 
 void PrintSummary()
 {
@@ -843,6 +932,7 @@ std::string ResolveCommand(
         "import",
         "export",
         "dataset",
+        "train",
         "summary",
         "inspect",
         "forward",
@@ -932,6 +1022,11 @@ int main()
         else if (command.rfind("dataset", 0) == 0)
         {
             HandleDatasetCommand(command);
+            continue;
+        }
+        else if (command.rfind("train", 0) == 0)
+        {
+            HandleTrainCommand(command);
             continue;
         }
         else if (command == "summary")
