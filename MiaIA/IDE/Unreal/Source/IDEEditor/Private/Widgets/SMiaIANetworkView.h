@@ -2,6 +2,7 @@
 
 #include "Brushes/SlateRoundedBoxBrush.h"
 #include "MiaIABlueprintTypes.h"
+#include "Styling/MiaIAEditorTheme.h"
 #include "Widgets/SLeafWidget.h"
 
 DECLARE_DELEGATE_OneParam(FOnMiaIANeuronSelected, int64)
@@ -23,6 +24,7 @@ public:
     void SetSnapshot(const FMiaIANetworkSnapshot& InSnapshot);
     void SetSelectedNeuron(int64 InNeuronId);
     void SetSelectedConnection(int64 InConnectionId);
+    void SetTheme(EMiaIAEditorTheme InTheme);
 
     virtual FVector2D ComputeDesiredSize(float) const override;
     virtual int32 OnPaint(
@@ -47,6 +49,7 @@ private:
     FMiaIANetworkSnapshot Snapshot;
     int64 SelectedNeuronId{-1};
     int64 SelectedConnectionId{-1};
+    EMiaIAEditorTheme Theme{EMiaIAEditorTheme::FollowUnreal};
     mutable TMap<int64, FVector2D> NeuronPositions;
     FOnMiaIANeuronSelected OnNeuronSelected;
     FOnMiaIAConnectionSelected OnConnectionSelected;

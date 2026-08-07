@@ -6,6 +6,7 @@
 #include "InputCoreTypes.h"
 #include "Styling/AppStyle.h"
 #include "Widgets/Input/SButton.h"
+#include "Widgets/Input/SComboButton.h"
 #include "Widgets/Input/SEditableTextBox.h"
 #include "Widgets/Text/SMultiLineEditableText.h"
 #include "Widgets/Layout/SBorder.h"
@@ -115,13 +116,16 @@ namespace
 
 void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
 {
-    const auto panelBorder = FAppStyle::GetBrush(TEXT("ToolPanel.GroupBorder"));
+    const auto panelBorder = FAppStyle::GetBrush(TEXT("WhiteBrush"));
+    Theme = FMiaIAEditorTheme::Load();
+    RefreshWidgetStyles();
     ConsoleHistory = TEXT(
-        "MiaIA IDE Console\n"
+        "MiaIA Studio Console\n"
         "Type 'help' to list the shared CLI commands. "
         "Use Up/Down for history and Tab for completion.\n");
     ConsoleHistoryIndex = 0;
     SAssignNew(ConsoleOutputScrollBar, SScrollBar)
+        .Style(&ScrollBarStyle)
         .Orientation(Orient_Vertical)
         .AlwaysShowScrollbar(true)
         .AlwaysShowScrollbarTrack(true)
@@ -131,12 +135,19 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
 
     ChildSlot
     [
+        SNew(SBorder)
+        .BorderImage(panelBorder)
+        .BorderBackgroundColor(this, &SMiaIAEditorPanel::BackgroundColor)
+        .ForegroundColor(this, &SMiaIAEditorPanel::TextColor)
+        .Padding(0.0f)
+        [
         SNew(SVerticalBox)
         + SVerticalBox::Slot()
         .AutoHeight()
         [
             SNew(SBorder)
             .BorderImage(panelBorder)
+            .BorderBackgroundColor(this, &SMiaIAEditorPanel::PanelColor)
             .Padding(FMargin(6.0f, 4.0f))
             [
                 SNew(SHorizontalBox)
@@ -145,6 +156,7 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
                 .Padding(2.0f)
                 [
                     SNew(SButton)
+                    .ButtonStyle(&ButtonStyle)
                     .Text(LOCTEXT("Refresh", "Refresh"))
                     .OnClicked(this, &SMiaIAEditorPanel::HandleRefresh)
                 ]
@@ -153,6 +165,7 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
                 .Padding(2.0f)
                 [
                     SNew(SButton)
+                    .ButtonStyle(&ButtonStyle)
                     .Text(LOCTEXT("Resume", "Continue"))
                     .IsEnabled(this, &SMiaIAEditorPanel::CanResume)
                     .OnClicked(this, &SMiaIAEditorPanel::HandleResume)
@@ -162,6 +175,7 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
                 .Padding(2.0f)
                 [
                     SNew(SButton)
+                    .ButtonStyle(&ButtonStyle)
                     .Text(LOCTEXT("Pause", "Pause"))
                     .IsEnabled(this, &SMiaIAEditorPanel::CanPause)
                     .OnClicked(this, &SMiaIAEditorPanel::HandlePause)
@@ -171,6 +185,7 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
                 .Padding(2.0f)
                 [
                     SNew(SButton)
+                    .ButtonStyle(&ButtonStyle)
                     .Text(LOCTEXT("StartDebug", "Start debug"))
                     .IsEnabled(this, &SMiaIAEditorPanel::CanStartDebug)
                     .OnClicked(this, &SMiaIAEditorPanel::HandleStartDebug)
@@ -180,6 +195,7 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
                 .Padding(2.0f)
                 [
                     SNew(SButton)
+                    .ButtonStyle(&ButtonStyle)
                     .Text(LOCTEXT("Advance", "Step phase"))
                     .IsEnabled(this, &SMiaIAEditorPanel::CanAdvanceDebug)
                     .OnClicked(this, &SMiaIAEditorPanel::HandleAdvanceDebug)
@@ -189,9 +205,34 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
                 .Padding(2.0f)
                 [
                     SNew(SButton)
+                    .ButtonStyle(&ButtonStyle)
                     .Text(LOCTEXT("CancelDebug", "Cancel debug"))
                     .IsEnabled(this, &SMiaIAEditorPanel::CanCancelDebug)
                     .OnClicked(this, &SMiaIAEditorPanel::HandleCancelDebug)
+                ]
+                + SHorizontalBox::Slot()
+                .AutoWidth()
+                .VAlign(VAlign_Center)
+                .Padding(10.0f, 0.0f, 2.0f, 0.0f)
+                [
+                    SNew(STextBlock)
+                    .Text(LOCTEXT("ThemeLabel", "Theme"))
+                ]
+                + SHorizontalBox::Slot()
+                .AutoWidth()
+                .VAlign(VAlign_Center)
+                .Padding(2.0f)
+                [
+                    SNew(SComboButton)
+                    .ComboButtonStyle(&ComboButtonStyle)
+                    .ButtonContent()
+                    [
+                        SNew(STextBlock)
+                        .Text(this, &SMiaIAEditorPanel::ThemeText)
+                    ]
+                    .OnGetMenuContent(
+                        this,
+                        &SMiaIAEditorPanel::BuildThemeMenu)
                 ]
                 + SHorizontalBox::Slot()
                 .FillWidth(1.0f)
@@ -213,7 +254,11 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
                 [
                     SNew(STextBlock)
                     .Text(this, &SMiaIAEditorPanel::DebugPhaseText)
-                    .ColorAndOpacity(FLinearColor(0.35f, 0.68f, 1.0f))
+                    .ColorAndOpacity_Lambda([this]()
+                    {
+                        return FSlateColor(
+                            FMiaIAEditorTheme::Palette(Theme).Debug);
+                    })
                 ]
             ]
         ]
@@ -221,20 +266,24 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
         .FillHeight(1.0f)
         [
             SNew(SSplitter)
+            .Style(&SplitterStyle)
             .Orientation(Orient_Vertical)
             + SSplitter::Slot()
             .Value(0.72f)
             [
                 SNew(SSplitter)
+                .Style(&SplitterStyle)
                 .Orientation(Orient_Horizontal)
                 + SSplitter::Slot()
                 .Value(0.20f)
                 [
                     SNew(SBorder)
                     .BorderImage(panelBorder)
+                    .BorderBackgroundColor(this, &SMiaIAEditorPanel::PanelColor)
                     .Padding(6.0f)
                     [
                         SNew(SScrollBox)
+                        .ScrollBarStyle(&ScrollBarStyle)
                         + SScrollBox::Slot()
                         [
                             SAssignNew(ExplorerContent, SVerticalBox)
@@ -246,6 +295,7 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
                 [
                     SNew(SBorder)
                     .BorderImage(panelBorder)
+                    .BorderBackgroundColor(this, &SMiaIAEditorPanel::PanelColor)
                     .Padding(2.0f)
                     [
                         SNew(SVerticalBox)
@@ -279,7 +329,12 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
                             [
                                 SNew(STextBlock)
                                 .Text(LOCTEXT("InactiveLegend", "Inactive neuron"))
-                                .ColorAndOpacity(FLinearColor(0.45f, 0.47f, 0.51f))
+                                .ColorAndOpacity_Lambda([this]()
+                                {
+                                    return FSlateColor(
+                                        FMiaIAEditorTheme::Palette(Theme)
+                                            .InactiveNeuron);
+                                })
                             ]
                             + SHorizontalBox::Slot()
                             .AutoWidth()
@@ -287,7 +342,12 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
                             [
                                 SNew(STextBlock)
                                 .Text(LOCTEXT("ActiveLegend", "Active neuron"))
-                                .ColorAndOpacity(FLinearColor(0.12f, 0.72f, 0.31f))
+                                .ColorAndOpacity_Lambda([this]()
+                                {
+                                    return FSlateColor(
+                                        FMiaIAEditorTheme::Palette(Theme)
+                                            .ActiveNeuron);
+                                })
                             ]
                             + SHorizontalBox::Slot()
                             .AutoWidth()
@@ -295,7 +355,12 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
                             [
                                 SNew(STextBlock)
                                 .Text(LOCTEXT("PositiveLegend", "Positive weight"))
-                                .ColorAndOpacity(FLinearColor(0.24f, 0.52f, 0.86f))
+                                .ColorAndOpacity_Lambda([this]()
+                                {
+                                    return FSlateColor(
+                                        FMiaIAEditorTheme::Palette(Theme)
+                                            .PositiveWeight);
+                                })
                             ]
                             + SHorizontalBox::Slot()
                             .AutoWidth()
@@ -303,14 +368,24 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
                             [
                                 SNew(STextBlock)
                                 .Text(LOCTEXT("NegativeLegend", "Negative weight"))
-                                .ColorAndOpacity(FLinearColor(0.86f, 0.30f, 0.28f))
+                                .ColorAndOpacity_Lambda([this]()
+                                {
+                                    return FSlateColor(
+                                        FMiaIAEditorTheme::Palette(Theme)
+                                            .NegativeWeight);
+                                })
                             ]
                             + SHorizontalBox::Slot()
                             .AutoWidth()
                             [
                                 SNew(STextBlock)
                                 .Text(LOCTEXT("SelectedLegend", "Selected"))
-                                .ColorAndOpacity(FLinearColor(1.0f, 0.76f, 0.16f))
+                                .ColorAndOpacity_Lambda([this]()
+                                {
+                                    return FSlateColor(
+                                        FMiaIAEditorTheme::Palette(Theme)
+                                            .Selection);
+                                })
                             ]
                         ]
                     ]
@@ -320,6 +395,7 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
                 [
                     SNew(SBorder)
                     .BorderImage(panelBorder)
+                    .BorderBackgroundColor(this, &SMiaIAEditorPanel::PanelColor)
                     .Padding(10.0f)
                     [
                         SNew(SVerticalBox)
@@ -381,6 +457,7 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
             [
                 SNew(SBorder)
                 .BorderImage(panelBorder)
+                .BorderBackgroundColor(this, &SMiaIAEditorPanel::PanelColor)
                 .Padding(6.0f)
                 [
                     SNew(SVerticalBox)
@@ -393,17 +470,7 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
                         .Padding(2.0f)
                         [
                             SNew(SButton)
-                            .Text(LOCTEXT("TimelineTab", "Training timeline"))
-                            .OnClicked(
-                                this,
-                                &SMiaIAEditorPanel::SelectBottomTab,
-                                0)
-                        ]
-                        + SHorizontalBox::Slot()
-                        .AutoWidth()
-                        .Padding(2.0f)
-                        [
-                            SNew(SButton)
+                            .ButtonStyle(&ButtonStyle)
                             .Text(LOCTEXT("ConsoleTab", "Console"))
                             .OnClicked(
                                 this,
@@ -415,6 +482,19 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
                         .Padding(2.0f)
                         [
                             SNew(SButton)
+                            .ButtonStyle(&ButtonStyle)
+                            .Text(LOCTEXT("TimelineTab", "Training timeline"))
+                            .OnClicked(
+                                this,
+                                &SMiaIAEditorPanel::SelectBottomTab,
+                                0)
+                        ]
+                        + SHorizontalBox::Slot()
+                        .AutoWidth()
+                        .Padding(2.0f)
+                        [
+                            SNew(SButton)
+                            .ButtonStyle(&ButtonStyle)
                             .Text(LOCTEXT("BreakpointsTab", "Breakpoints"))
                             .OnClicked(
                                 this,
@@ -495,12 +575,16 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
                         + SWidgetSwitcher::Slot()
                         [
                             SNew(SSplitter)
+                            .Style(&SplitterStyle)
                             .Orientation(Orient_Horizontal)
                             + SSplitter::Slot()
                             .Value(0.24f)
                             [
                                 SNew(SBorder)
                                 .BorderImage(panelBorder)
+                                .BorderBackgroundColor(
+                                    this,
+                                    &SMiaIAEditorPanel::PanelColor)
                                 .Padding(FMargin(4.0f, 2.0f))
                                 [
                                     SNew(SVerticalBox)
@@ -519,6 +603,7 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
                                     .FillHeight(1.0f)
                                     [
                                         SNew(SScrollBox)
+                                        .ScrollBarStyle(&ScrollBarStyle)
                                         + SScrollBox::Slot()
                                         [
                                             SAssignNew(
@@ -564,6 +649,7 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
                                         SAssignNew(
                                             ConsoleInput,
                                             SEditableTextBox)
+                                        .Style(&InputStyle)
                                         .HintText(LOCTEXT(
                                             "ConsoleInputHint",
                                             "Enter a MiaIA command and press Enter"))
@@ -582,6 +668,7 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
                                     .Padding(6.0f, 0.0f, 0.0f, 0.0f)
                                     [
                                         SNew(SButton)
+                                        .ButtonStyle(&ButtonStyle)
                                         .Text(LOCTEXT(
                                             "ConsoleSend",
                                             "Send"))
@@ -603,8 +690,11 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
                 ]
             ]
         ]
+        ]
     ];
 
+    BottomSwitcher->SetActiveWidgetIndex(1);
+    NetworkView->SetTheme(Theme);
     RebuildConsoleSuggestions(FString());
     RefreshData();
     RegisterActiveTimer(
@@ -730,7 +820,7 @@ void SMiaIAEditorPanel::RebuildExplorer()
             .Padding(12.0f, 1.0f, 2.0f, 1.0f)
             [
                 SNew(SButton)
-                .ButtonStyle(FAppStyle::Get(), TEXT("SimpleButton"))
+                .ButtonStyle(&ExplorerButtonStyle)
                 .ContentPadding(FMargin(4.0f, 2.0f))
                 .OnClicked_Lambda([this, neuronId]()
                 {
@@ -770,7 +860,7 @@ void SMiaIAEditorPanel::RebuildExplorer()
             .Padding(12.0f, 1.0f, 2.0f, 1.0f)
             [
                 SNew(SButton)
-                .ButtonStyle(FAppStyle::Get(), TEXT("SimpleButton"))
+                .ButtonStyle(&ExplorerButtonStyle)
                 .ContentPadding(FMargin(4.0f, 2.0f))
                 .OnClicked_Lambda([this, connectionId]()
                 {
@@ -894,6 +984,74 @@ FReply SMiaIAEditorPanel::SelectBottomTab(int32 TabIndex)
     }
 
     return FReply::Handled();
+}
+
+TSharedRef<SWidget> SMiaIAEditorPanel::BuildThemeMenu()
+{
+    return SNew(SVerticalBox)
+        + SVerticalBox::Slot()
+        .AutoHeight()
+        [
+            SNew(SButton)
+            .ButtonStyle(&ButtonStyle)
+            .Text(FMiaIAEditorTheme::DisplayName(
+                EMiaIAEditorTheme::FollowUnreal))
+            .OnClicked(
+                this,
+                &SMiaIAEditorPanel::SelectTheme,
+                EMiaIAEditorTheme::FollowUnreal)
+        ]
+        + SVerticalBox::Slot()
+        .AutoHeight()
+        [
+            SNew(SButton)
+            .ButtonStyle(&ButtonStyle)
+            .Text(FMiaIAEditorTheme::DisplayName(
+                EMiaIAEditorTheme::Dark))
+            .OnClicked(
+                this,
+                &SMiaIAEditorPanel::SelectTheme,
+                EMiaIAEditorTheme::Dark)
+        ]
+        + SVerticalBox::Slot()
+        .AutoHeight()
+        [
+            SNew(SButton)
+            .ButtonStyle(&ButtonStyle)
+            .Text(FMiaIAEditorTheme::DisplayName(
+                EMiaIAEditorTheme::Light))
+            .OnClicked(
+                this,
+                &SMiaIAEditorPanel::SelectTheme,
+                EMiaIAEditorTheme::Light)
+        ];
+}
+
+FReply SMiaIAEditorPanel::SelectTheme(EMiaIAEditorTheme InTheme)
+{
+    Theme = InTheme;
+    FMiaIAEditorTheme::Save(Theme);
+    RefreshWidgetStyles();
+
+    if (NetworkView.IsValid())
+    {
+        NetworkView->SetTheme(Theme);
+    }
+
+    FSlateApplication::Get().DismissAllMenus();
+    Invalidate(EInvalidateWidgetReason::Paint);
+    return FReply::Handled();
+}
+
+void SMiaIAEditorPanel::RefreshWidgetStyles()
+{
+    ButtonStyle = FMiaIAEditorTheme::ButtonStyle(Theme);
+    ExplorerButtonStyle =
+        FMiaIAEditorTheme::ExplorerButtonStyle(Theme);
+    ComboButtonStyle = FMiaIAEditorTheme::ComboButtonStyle(Theme);
+    InputStyle = FMiaIAEditorTheme::InputStyle(Theme);
+    ScrollBarStyle = FMiaIAEditorTheme::ScrollBarStyle(Theme);
+    SplitterStyle = FMiaIAEditorTheme::SplitterStyle(Theme);
 }
 
 void SMiaIAEditorPanel::HandleConsoleCommandCommitted(
@@ -1080,6 +1238,7 @@ void SMiaIAEditorPanel::RebuildConsoleSuggestions(
         .Padding(0.0f, 1.0f)
         [
             SNew(SButton)
+            .ButtonStyle(&ButtonStyle)
             .ContentPadding(FMargin(6.0f, 2.0f))
             .ToolTipText(description)
             .OnClicked(
@@ -1317,9 +1476,31 @@ FText SMiaIAEditorPanel::SelectionUpdateText() const
 FSlateColor SMiaIAEditorPanel::PhaseColor(
     EMiaIATrainingDebugPhase Phase) const
 {
+    const FMiaIAEditorPalette palette =
+        FMiaIAEditorTheme::Palette(Theme);
     return static_cast<uint8>(Debug.Phase) >= static_cast<uint8>(Phase)
-        ? FSlateColor(FLinearColor(0.30f, 0.68f, 1.0f))
-        : FSlateColor::UseSubduedForeground();
+        ? FSlateColor(palette.Debug)
+        : FSlateColor(palette.SubduedText);
+}
+
+FSlateColor SMiaIAEditorPanel::BackgroundColor() const
+{
+    return FSlateColor(FMiaIAEditorTheme::Palette(Theme).Background);
+}
+
+FSlateColor SMiaIAEditorPanel::PanelColor() const
+{
+    return FSlateColor(FMiaIAEditorTheme::Palette(Theme).Panel);
+}
+
+FSlateColor SMiaIAEditorPanel::TextColor() const
+{
+    return FSlateColor(FMiaIAEditorTheme::Palette(Theme).Text);
+}
+
+FText SMiaIAEditorPanel::ThemeText() const
+{
+    return FMiaIAEditorTheme::DisplayName(Theme);
 }
 
 #undef LOCTEXT_NAMESPACE

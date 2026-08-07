@@ -29,10 +29,12 @@ public:
         FGlobalTabmanager::Get()->RegisterNomadTabSpawner(
             MiaIATabName,
             FOnSpawnTab::CreateRaw(this, &FIDEEditorModule::SpawnMiaIATab))
-            .SetDisplayName(LOCTEXT("MiaIATabTitle", "MiaIA"))
+            .SetDisplayName(LOCTEXT(
+                "MiaIATabTitle",
+                "MiaIA Studio"))
             .SetTooltipText(LOCTEXT(
                 "MiaIATabTooltip",
-                "Inspect and control the active MiaIA model."));
+                "Inspect and control the active model in MiaIA Studio."));
         bTabRegistered = true;
 
         FEditorDelegates::OnMapOpened.AddRaw(

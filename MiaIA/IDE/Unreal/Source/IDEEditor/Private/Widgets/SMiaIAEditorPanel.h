@@ -1,6 +1,7 @@
 #pragma once
 
 #include "MiaIABlueprintTypes.h"
+#include "Styling/MiaIAEditorTheme.h"
 #include "Widgets/SCompoundWidget.h"
 
 class SMiaIANetworkView;
@@ -39,6 +40,9 @@ private:
     FReply HandleAdvanceDebug();
     FReply HandleCancelDebug();
     FReply SelectBottomTab(int32 TabIndex);
+    TSharedRef<SWidget> BuildThemeMenu();
+    FReply SelectTheme(EMiaIAEditorTheme InTheme);
+    void RefreshWidgetStyles();
     void HandleConsoleCommandCommitted(
         const FText& Text,
         ETextCommit::Type CommitType);
@@ -69,6 +73,10 @@ private:
     FText SelectionGradientText() const;
     FText SelectionUpdateText() const;
     FSlateColor PhaseColor(EMiaIATrainingDebugPhase Phase) const;
+    FSlateColor BackgroundColor() const;
+    FSlateColor PanelColor() const;
+    FSlateColor TextColor() const;
+    FText ThemeText() const;
 
     FMiaIANetworkSnapshot Network;
     FMiaIATrainingSessionSnapshot Session;
@@ -84,6 +92,13 @@ private:
     FString ConsoleHistoryDraft;
     FString FirstConsoleSuggestion;
     int32 ConsoleHistoryIndex{};
+    EMiaIAEditorTheme Theme{EMiaIAEditorTheme::FollowUnreal};
+    FButtonStyle ButtonStyle;
+    FButtonStyle ExplorerButtonStyle;
+    FComboButtonStyle ComboButtonStyle;
+    FEditableTextBoxStyle InputStyle;
+    FScrollBarStyle ScrollBarStyle;
+    FSplitterStyle SplitterStyle;
     bool bHasDebugNeuron{};
     bool bHasDebugConnection{};
     bool bUpdatingConsoleInput{};

@@ -1,10 +1,10 @@
-# MiaIA Unreal Integration
+# MiaIA Studio for Unreal
 
 ## Current scope
 
 The Unreal project is a client of the same `MiaIAClient` facade used by the Console. The first Blueprint integration exposes a complete vertical slice from model and dataset setup to phase-by-phase inspection. Unreal does not own or duplicate Engine mathematics.
 
-The current integration includes a runtime Blueprint function library, the shared CLI command processor, and the first custom Unreal editor panel. The panel is an initial functional shell for the MiaIA IDE, not the final visualization or interaction design.
+The current integration includes a runtime Blueprint function library, the shared CLI command processor, and the first custom Unreal editor panel. **MiaIA Studio** is the product name of the graphical IDE, while this project is its Unreal client implementation. The panel is an initial functional shell, not the final visualization or interaction design.
 
 The complete Unreal project lives under `MiaIA/IDE/Unreal`. Future graphical IDE implementations can be added beside it, for example under `MiaIA/IDE/Unity`, without changing Core, Engine, SDK, CLI, or the native Console.
 
@@ -70,9 +70,9 @@ The previous `NeuronActor` level instance is removed to prevent two demonstratio
 
 The Blueprint asset is generated only after the initial Asset Registry scan and validator registration have completed. Opening `MiaIAMain` is sufficient to install the level instance when it was not the startup map.
 
-## MiaIA editor panel
+## MiaIA Studio editor panel
 
-Open the dockable panel from `Window > MiaIA`. It reads the same shared `MiaIAClient` state used by the Console and Blueprint nodes; it does not create a separate model or duplicate Engine mathematics.
+Open the dockable panel from `Window > MiaIA Studio`. It reads the same shared `MiaIAClient` state used by the Console and Blueprint nodes; it does not create a separate model or duplicate Engine mathematics.
 
 ![MiaIA editor panel](Assets/miaia-editor-panel.png)
 
@@ -82,7 +82,7 @@ The captured foundation panel shows a network created directly from its embedded
 
 1. Build the native solution in `Release | x64`, then build `IDEEditor | Win64 | Development`.
 2. Open `MiaIA/IDE/Unreal/IDE.uproject` and load the `MiaIAMain` level.
-3. Select `Window > MiaIA` from the main Unreal Editor menu.
+3. Select `Window > MiaIA Studio` from the main Unreal Editor menu.
 4. Dock the MiaIA tab or keep it as a separate window. Keeping it separate makes the state transitions easier to record or inspect.
 5. Start Play in Editor from the main toolbar or press `Alt+P`.
 6. Leave the panel controls untouched during the automatic demonstration. `BP_MiaIADemo` creates the network and dataset, starts a session, and advances one debug step automatically at short intervals.
@@ -101,9 +101,15 @@ The animation is slowed down for documentation. The demonstration itself advance
 - **Network topology** renders the current layers, neurons, and weighted connections. Neuron color reflects activation strength; connection color and intensity reflect weight sign and magnitude.
 - **Inspector** shows neuron activation and bias data or connection weight data, including phase-dependent gradients and candidate updates.
 - **Session and debug status** report training progress and the currently inspected phase.
-- **Training timeline** summarizes the forward, backward, update, verification, and commit sequence.
-- **Console** uses a narrow command-suggestion column on the left and a larger output/input workspace on the right. It accepts the same commands as `Console.exe` and operates on the same process-local state displayed by the panel and used by Blueprint nodes.
+- **Console** is the first and initially selected lower tab. It uses a narrow command-suggestion column on the left and a larger output/input workspace on the right. It accepts the same commands as `Console.exe` and operates on the same process-local state displayed by the panel and used by Blueprint nodes.
+- **Training timeline** follows the Console and summarizes the forward, backward, update, verification, and commit sequence.
 - **Breakpoints** reserves the location of the future breakpoint authoring interface.
+
+### Color theme
+
+Use the `Theme` selector in the panel toolbar to choose `Follow Unreal`, `Dark`, or `Light`. `Follow Unreal` is the default and derives its semantic colors from the active Unreal Slate style. The explicit dark and light palettes remain stable independently of the surrounding editor theme.
+
+The selection is stored in the local Unreal `EditorPerProjectUserSettings` configuration and restored when the panel is opened again. It is a per-user preference and does not modify tracked project configuration. The selected palette consistently controls panel surfaces, splitters, buttons, menus, inputs, scrollbars, text, neuron activation, positive and negative weights, selection, and debug-phase emphasis.
 
 ### Panel controls
 
@@ -118,7 +124,7 @@ Buttons are enabled only when their operation is valid for the current session a
 
 ### Interactive command console
 
-Open the `Console` tab at the bottom of the MiaIA panel, enter a command in the text box, then press `Enter` or select `Send`. Both actions use the same execution path. The command, its output, and any diagnostic text are appended to the history. The model explorer, topology, inspector, session status, and controls refresh immediately afterward.
+The `Console` tab opens automatically at the bottom of the MiaIA panel. Enter a command in the text box, then press `Enter` or select `Send`. Both actions use the same execution path. The command, its output, and any diagnostic text are appended to the history. The model explorer, topology, inspector, session status, and controls refresh immediately afterward.
 
 The output view automatically scrolls to the newest result after execution. A persistent external vertical scrollbar is positioned on its left edge and remains available for reviewing earlier output. The horizontal splitter between suggestions and the output workspace can be dragged when more room is needed for either side.
 

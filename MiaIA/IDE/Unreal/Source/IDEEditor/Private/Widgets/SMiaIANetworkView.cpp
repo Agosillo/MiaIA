@@ -16,9 +16,7 @@ namespace
 
 SMiaIANetworkView::SMiaIANetworkView()
     : NeuronBrush(FLinearColor::White, NeuronDiameter * 0.5f)
-    , SelectionBrush(
-        FLinearColor(0.12f, 0.48f, 0.92f, 1.0f),
-        SelectionDiameter * 0.5f)
+    , SelectionBrush(FLinearColor::White, SelectionDiameter * 0.5f)
 {
 }
 
@@ -48,6 +46,12 @@ void SMiaIANetworkView::SetSelectedConnection(int64 InConnectionId)
     Invalidate(EInvalidateWidgetReason::Paint);
 }
 
+void SMiaIANetworkView::SetTheme(EMiaIAEditorTheme InTheme)
+{
+    Theme = InTheme;
+    Invalidate(EInvalidateWidgetReason::Paint);
+}
+
 FVector2D SMiaIANetworkView::ComputeDesiredSize(float) const
 {
     return FVector2D(640.0f, 420.0f);
@@ -55,13 +59,16 @@ FVector2D SMiaIANetworkView::ComputeDesiredSize(float) const
 
 FLinearColor SMiaIANetworkView::ActivationColor(double Activation) const
 {
+    const FMiaIAEditorPalette palette =
+        FMiaIAEditorTheme::Palette(Theme);
     const float strength = FMath::Clamp(
         static_cast<float>(FMath::Abs(Activation)),
         0.0f,
         1.0f);
-    const FLinearColor inactive(0.20f, 0.22f, 0.25f, 1.0f);
-    const FLinearColor active(0.12f, 0.72f, 0.31f, 1.0f);
-    return FLinearColor::LerpUsingHSV(inactive, active, strength);
+    return FLinearColor::LerpUsingHSV(
+        palette.InactiveNeuron,
+        palette.ActiveNeuron,
+        strength);
 }
 
 double SMiaIANetworkView::DistanceToSegment(
@@ -94,6 +101,8 @@ int32 SMiaIANetworkView::OnPaint(
     bool) const
 {
     NeuronPositions.Reset();
+    const FMiaIAEditorPalette palette =
+        FMiaIAEditorTheme::Palette(Theme);
 
     if (Snapshot.Layers.IsEmpty())
     {
@@ -109,7 +118,7 @@ int32 SMiaIANetworkView::OnPaint(
                 "Create or import a network to inspect its topology."),
             FAppStyle::GetFontStyle(TEXT("NormalFont")),
             ESlateDrawEffect::None,
-            FLinearColor(0.55f, 0.57f, 0.62f, 1.0f));
+            palette.SubduedText);
         return LayerId;
     }
 
@@ -166,10 +175,10 @@ int32 SMiaIANetworkView::OnPaint(
             1.0f);
         const bool selected = connection.Id == SelectedConnectionId;
         const FLinearColor connectionColor = selected
-            ? FLinearColor(1.0f, 0.76f, 0.16f, 1.0f)
+            ? palette.Selection
             : connection.Weight >= 0.0
-                ? FLinearColor(0.24f, 0.52f, 0.86f, weightStrength)
-                : FLinearColor(0.86f, 0.30f, 0.28f, weightStrength);
+                ? palette.PositiveWeight.CopyWithNewOpacity(weightStrength)
+                : palette.NegativeWeight.CopyWithNewOpacity(weightStrength);
         const TArray<FVector2D> points{ *from, *to };
         FSlateDrawElement::MakeLines(
             OutDrawElements,
@@ -206,7 +215,9 @@ int32 SMiaIANetworkView::OnPaint(
                             *position - FVector2D(
                                 SelectionDiameter * 0.5f,
                                 SelectionDiameter * 0.5f))),
-                    &SelectionBrush);
+                    &SelectionBrush,
+                    ESlateDrawEffect::None,
+                    palette.Selection);
             }
 
             FSlateDrawElement::MakeBox(
@@ -234,7 +245,7 @@ int32 SMiaIANetworkView::OnPaint(
                     FText::AsNumber(neuron.Id)),
                 FAppStyle::GetFontStyle(TEXT("SmallFont")),
                 ESlateDrawEffect::None,
-                FLinearColor(0.62f, 0.64f, 0.69f, 1.0f));
+                palette.SubduedText);
         }
     }
 
