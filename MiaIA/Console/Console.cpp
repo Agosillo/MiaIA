@@ -90,6 +90,18 @@ void PrintHelp()
         << "  train step <sample-index> <learning-rate> mse\n"
         << "      Apply one atomic SGD training step\n\n"
 
+        << "  train debug start <sample-index> <learning-rate> mse\n"
+        << "      Start a phase-by-phase SGD training transaction\n\n"
+
+        << "  train debug status\n"
+        << "      Inspect the current mathematical debug phase\n\n"
+
+        << "  train debug next\n"
+        << "      Advance exactly one mathematical phase\n\n"
+
+        << "  train debug cancel\n"
+        << "      Discard the candidate network before commit\n\n"
+
         << "  train epoch <learning-rate> mse\n"
         << "      Train all dataset samples in order as one atomic epoch\n\n"
 
@@ -873,6 +885,142 @@ const char* TrainingRunStopReasonName(
     return "Unknown";
 }
 
+const char* TrainingDebugPhaseName(
+    MiaIA::Core::TrainingDebugPhase phase)
+{
+    switch (phase)
+    {
+    case MiaIA::Core::TrainingDebugPhase::Idle:
+        return "Idle";
+    case MiaIA::Core::TrainingDebugPhase::BeforeForward:
+        return "BeforeForward";
+    case MiaIA::Core::TrainingDebugPhase::ForwardComplete:
+        return "ForwardComplete";
+    case MiaIA::Core::TrainingDebugPhase::BackwardComplete:
+        return "BackwardComplete";
+    case MiaIA::Core::TrainingDebugPhase::UpdateComplete:
+        return "UpdateComplete";
+    case MiaIA::Core::TrainingDebugPhase::Verified:
+        return "Verified";
+    case MiaIA::Core::TrainingDebugPhase::Committed:
+        return "Committed";
+    }
+
+    return "Unknown";
+}
+
+void PrintTrainingDebug(
+    const MiaIA::Core::TrainingDebugSnapshot& debug)
+{
+    std::cout
+        << "\nTraining Debug"
+        << "\nPhase: " << TrainingDebugPhaseName(debug.Phase);
+
+    if (debug.Phase == MiaIA::Core::TrainingDebugPhase::Idle)
+    {
+        std::cout << "\n";
+        return;
+    }
+
+    std::cout
+        << "\nSample: " << debug.SampleIndex
+        << "\nLearning rate: " << debug.LearningRate
+        << "\nCandidate layers: "
+        << debug.CandidateNetwork.Layers.size()
+        << "\nCandidate connections: "
+        << debug.CandidateNetwork.Connections.size();
+
+    if (debug.Phase >=
+        MiaIA::Core::TrainingDebugPhase::ForwardComplete)
+    {
+        std::cout
+            << "\nLoss before: " << debug.Step.Before.Evaluation.Loss
+            << "\nTargets: ";
+        PrintValues(debug.Step.Before.Evaluation.Targets);
+        std::cout << "\nPredictions: ";
+        PrintValues(debug.Step.Before.Evaluation.Predictions);
+        std::cout << "\nErrors: ";
+        PrintValues(debug.Step.Before.Evaluation.Errors);
+    }
+
+    if (debug.Phase >=
+        MiaIA::Core::TrainingDebugPhase::BackwardComplete)
+    {
+        std::cout << "\n\nNeuron Gradients\n";
+
+        for (const auto& neuron : debug.Step.Before.Neurons)
+        {
+            std::cout
+                << "Neuron " << neuron.Id
+                << " dLoss/dActivation "
+                << neuron.ActivationGradient
+                << " dLoss/dPreActivation "
+                << neuron.PreActivationGradient
+                << " dLoss/dBias " << neuron.BiasGradient
+                << "\n";
+        }
+
+        std::cout << "\nConnection Gradients\n";
+
+        for (const auto& connection : debug.Step.Before.Connections)
+        {
+            std::cout
+                << "Connection " << connection.Id
+                << " " << connection.FromNeuron
+                << " -> " << connection.ToNeuron
+                << " dLoss/dWeight "
+                << connection.WeightGradient << "\n";
+        }
+    }
+
+    if (debug.Phase >=
+        MiaIA::Core::TrainingDebugPhase::UpdateComplete)
+    {
+        std::cout << "\nConnection Updates\n";
+
+        for (const auto& update : debug.Step.ConnectionUpdates)
+        {
+            std::cout
+                << "Connection " << update.Id
+                << " Weight " << update.PreviousWeight
+                << " Delta " << update.Delta
+                << " Updated " << update.UpdatedWeight
+                << "\n";
+        }
+
+        std::cout << "\nBias Updates\n";
+
+        for (const auto& update : debug.Step.NeuronUpdates)
+        {
+            std::cout
+                << "Neuron " << update.Id
+                << " Bias " << update.PreviousBias
+                << " Delta " << update.Delta
+                << " Updated " << update.UpdatedBias
+                << "\n";
+        }
+    }
+
+    if (debug.Phase >= MiaIA::Core::TrainingDebugPhase::Verified)
+    {
+        std::cout
+            << "\nLoss after: " << debug.Step.After.Loss
+            << "\nPredictions after: ";
+        PrintValues(debug.Step.After.Predictions);
+    }
+
+    std::cout << "\n";
+}
+
+void PrintTrainingDebugUsage()
+{
+    std::cout
+        << "Usage: train debug start <sample-index> <learning-rate> mse\n"
+        << "       train debug status\n"
+        << "       train debug next\n"
+        << "       train debug cancel\n";
+}
+
 void HandleTrainCommand(const std::string& command)
 {
     using MiaIA::SDK::MiaIAClient;
@@ -1241,6 +1389,105 @@ void HandleTrainCommand(const std::string& command)
         }
 
         PrintTrainingSessionUsage();
+        return;
+    }
+
+    if (action == "debug")
+    {
+        std::string debugAction;
+
+        if (!(stream >> debugAction))
+        {
+            PrintTrainingDebugUsage();
+            return;
+        }
+
+        if (debugAction == "start")
+        {
+            std::size_t sampleIndex{};
+            double learningRate{};
+            std::string lossName;
+
+            if (!(stream >> sampleIndex >> learningRate >> lossName) ||
+                lossName != "mse")
+            {
+                PrintTrainingDebugUsage();
+                return;
+            }
+
+            stream >> std::ws;
+
+            if (!stream.eof())
+            {
+                PrintTrainingDebugUsage();
+                return;
+            }
+
+            MiaIA::Core::TrainingDebugSnapshot debug;
+
+            if (!MiaIAClient::StartTrainingDebug(
+                sampleIndex,
+                learningRate,
+                MiaIA::Core::LossType::MeanSquaredError,
+                MiaIA::Core::OptimizerType::StochasticGradientDescent,
+                debug))
+            {
+                std::cout
+                    << "Training debug could not be started. "
+                    << "Check the sample, network, dataset, or active "
+                    << "training state.\n";
+                return;
+            }
+
+            PrintTrainingDebug(debug);
+            return;
+        }
+
+        stream >> std::ws;
+
+        if (!stream.eof())
+        {
+            PrintTrainingDebugUsage();
+            return;
+        }
+
+        if (debugAction == "status")
+        {
+            PrintTrainingDebug(MiaIAClient::GetTrainingDebug());
+            return;
+        }
+
+        if (debugAction == "next")
+        {
+            MiaIA::Core::TrainingDebugSnapshot debug;
+
+            if (!MiaIAClient::AdvanceTrainingDebug(debug))
+            {
+                std::cout
+                    << "Training debug could not advance. "
+                    << "The current phase was preserved.\n";
+                return;
+            }
+
+            PrintTrainingDebug(debug);
+            return;
+        }
+
+        if (debugAction == "cancel")
+        {
+            if (!MiaIAClient::CancelTrainingDebug())
+            {
+                std::cout << "No active training debug to cancel.\n";
+                return;
+            }
+
+            std::cout
+                << "Training debug cancelled. "
+                << "The candidate network was discarded.\n";
+            return;
+        }
+
+        PrintTrainingDebugUsage();
         return;
     }
 

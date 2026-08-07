@@ -11,7 +11,7 @@ namespace MiaIA::SDK
     {
         const std::scoped_lock lock(Detail::ClientMutex());
 
-        if (Detail::IsTrainingSessionRunning())
+        if (Detail::IsClientMutationBlocked())
         {
             return false;
         }

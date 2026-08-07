@@ -149,6 +149,7 @@
     <ClInclude Include="Model\Neuron.h" />
     <ClInclude Include="Model\Sample.h" />
     <ClInclude Include="Model\TrainingSession.h" />
+    <ClInclude Include="Model\TrainingDebugSession.h" />
     <ClInclude Include="pch.h" />
     <ClInclude Include="Public\ConnectionSnapshot.h" />
     <ClInclude Include="Public\ConnectionGradientSnapshot.h" />
@@ -172,6 +173,8 @@
     <ClInclude Include="Public\TrainingSessionSnapshot.h" />
     <ClInclude Include="Public\TrainingSessionStatus.h" />
     <ClInclude Include="Public\TrainingWorkerStopReason.h" />
+    <ClInclude Include="Public\TrainingDebugPhase.h" />
+    <ClInclude Include="Public\TrainingDebugSnapshot.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Core.cpp" />

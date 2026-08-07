@@ -10,6 +10,7 @@
 #include "../../Core/Model/Network.h"
 #include "../../Core/Model/Dataset.h"
 #include "../../Core/Model/TrainingSession.h"
+#include "../../Core/Model/TrainingDebugSession.h"
 
 #include <mutex>
 
@@ -18,6 +19,7 @@ namespace
     MiaIA::Core::Dataset CurrentDataset;
     MiaIA::Core::Network CurrentNetwork;
     MiaIA::Core::TrainingSession CurrentTrainingSession;
+    MiaIA::Core::TrainingDebugSession CurrentTrainingDebugSession;
     std::mutex CurrentClientMutex;
 }
 
@@ -37,6 +39,12 @@ MiaIA::SDK::Detail::ClientTrainingSession()
     return CurrentTrainingSession;
 }
 
+MiaIA::Core::TrainingDebugSession&
+MiaIA::SDK::Detail::ClientTrainingDebugSession()
+{
+    return CurrentTrainingDebugSession;
+}
+
 std::mutex& MiaIA::SDK::Detail::ClientMutex()
 {
     return CurrentClientMutex;
@@ -48,13 +56,26 @@ bool MiaIA::SDK::Detail::IsTrainingSessionRunning()
         MiaIA::Core::TrainingSessionStatus::Running;
 }
 
+bool MiaIA::SDK::Detail::IsTrainingDebugActive()
+{
+    return CurrentTrainingDebugSession.Phase >=
+        MiaIA::Core::TrainingDebugPhase::BeforeForward &&
+        CurrentTrainingDebugSession.Phase <
+        MiaIA::Core::TrainingDebugPhase::Committed;
+}
+
+bool MiaIA::SDK::Detail::IsClientMutationBlocked()
+{
+    return IsTrainingSessionRunning() || IsTrainingDebugActive();
+}
+
 namespace MiaIA::SDK
 {
     bool MiaIAClient::ClearNetwork()
     {
         const std::scoped_lock lock(Detail::ClientMutex());
 
-        if (Detail::IsTrainingSessionRunning())
+        if (Detail::IsClientMutationBlocked())
         {
             return false;
         }
@@ -67,7 +88,7 @@ namespace MiaIA::SDK
     {
         const std::scoped_lock lock(Detail::ClientMutex());
 
-        if (Detail::IsTrainingSessionRunning())
+        if (Detail::IsClientMutationBlocked())
         {
             return false;
         }
@@ -87,7 +108,7 @@ namespace MiaIA::SDK
     {
         const std::scoped_lock lock(Detail::ClientMutex());
 
-        if (Detail::IsTrainingSessionRunning())
+        if (Detail::IsClientMutationBlocked())
         {
             return false;
         }
@@ -108,7 +129,7 @@ namespace MiaIA::SDK
     {
         const std::scoped_lock lock(Detail::ClientMutex());
 
-        if (Detail::IsTrainingSessionRunning())
+        if (Detail::IsClientMutationBlocked())
         {
             return false;
         }
@@ -127,7 +148,7 @@ namespace MiaIA::SDK
     {
         const std::scoped_lock lock(Detail::ClientMutex());
 
-        if (Detail::IsTrainingSessionRunning())
+        if (Detail::IsClientMutationBlocked())
         {
             return false;
         }
@@ -143,7 +164,7 @@ namespace MiaIA::SDK
     {
         const std::scoped_lock lock(Detail::ClientMutex());
 
-        if (Detail::IsTrainingSessionRunning())
+        if (Detail::IsClientMutationBlocked())
         {
             return false;
         }
@@ -159,7 +180,7 @@ namespace MiaIA::SDK
     {
         const std::scoped_lock lock(Detail::ClientMutex());
 
-        if (Detail::IsTrainingSessionRunning())
+        if (Detail::IsClientMutationBlocked())
         {
             return false;
         }
@@ -176,7 +197,7 @@ namespace MiaIA::SDK
     {
         const std::scoped_lock lock(Detail::ClientMutex());
 
-        if (Detail::IsTrainingSessionRunning())
+        if (Detail::IsClientMutationBlocked())
         {
             return false;
         }
@@ -225,7 +246,7 @@ namespace MiaIA::SDK
     {
         const std::scoped_lock lock(Detail::ClientMutex());
 
-        if (Detail::IsTrainingSessionRunning())
+        if (Detail::IsClientMutationBlocked())
         {
             return false;
         }
@@ -240,7 +261,7 @@ namespace MiaIA::SDK
     {
         const std::scoped_lock lock(Detail::ClientMutex());
 
-        if (Detail::IsTrainingSessionRunning())
+        if (Detail::IsClientMutationBlocked())
         {
             return false;
         }
@@ -255,7 +276,7 @@ namespace MiaIA::SDK
     {
         const std::scoped_lock lock(Detail::ClientMutex());
 
-        if (Detail::IsTrainingSessionRunning())
+        if (Detail::IsClientMutationBlocked())
         {
             return false;
         }
@@ -271,7 +292,7 @@ namespace MiaIA::SDK
     {
         const std::scoped_lock lock(Detail::ClientMutex());
 
-        if (Detail::IsTrainingSessionRunning())
+        if (Detail::IsClientMutationBlocked())
         {
             return false;
         }
@@ -286,7 +307,7 @@ namespace MiaIA::SDK
     {
         const std::scoped_lock lock(Detail::ClientMutex());
 
-        if (Detail::IsTrainingSessionRunning())
+        if (Detail::IsClientMutationBlocked())
         {
             return false;
         }
@@ -319,7 +340,7 @@ namespace MiaIA::SDK
     {
         const std::scoped_lock lock(Detail::ClientMutex());
 
-        if (Detail::IsTrainingSessionRunning())
+        if (Detail::IsClientMutationBlocked())
         {
             return false;
         }

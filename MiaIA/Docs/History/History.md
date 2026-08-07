@@ -92,8 +92,14 @@ Retained session steps became directly queryable through a focused Engine inspec
 
 Console history and inspect commands make this information usable without requiring clients to interpret the complete session object themselves.
 
+### Phase-by-phase mathematical training debug
+
+The atomic sample step was decomposed into an explicit transaction controller without duplicating its mathematics. A client can start from a private candidate network and advance separately through forward evaluation, backward differentiation, SGD update, post-update verification, and final commit.
+
+Every phase exposes a stable snapshot containing the candidate network and the results calculated so far. Public weights and biases remain unchanged until the verified candidate is committed; cancellation discards the candidate completely. The ordinary atomic training step now composes the same controller through completion.
+
 ## Current position
 
-MiaIA can now represent, execute, interchange, inspect, evaluate, differentiate, train through controlled foreground or background sessions, and navigate the complete history of successful steps. It cannot yet persist a `.mia` workspace or deliver the planned complete graphical debugging experience.
+MiaIA can now represent, execute, interchange, inspect, evaluate, differentiate, debug one training step phase by phase, train through controlled foreground or background sessions, and navigate the complete history of successful steps. It cannot yet persist a `.mia` workspace or deliver the planned complete graphical debugging experience.
 
 Those next steps are tracked in the [Roadmap](../Roadmap/Roadmap.md).

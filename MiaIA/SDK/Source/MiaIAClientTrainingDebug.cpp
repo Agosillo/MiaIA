@@ -1,0 +1,63 @@
+#include "../Include/MiaIAClient.h"
+#include "MiaIAClientState.h"
+
+#include "../../Engine/Training/TrainingDebugController.h"
+#include "../../Core/Model/TrainingDebugSession.h"
+#include "../../Core/Model/TrainingSession.h"
+
+namespace MiaIA::SDK
+{
+    bool MiaIAClient::StartTrainingDebug(
+        std::size_t sampleIndex,
+        double learningRate,
+        Core::LossType lossType,
+        Core::OptimizerType optimizerType,
+        Core::TrainingDebugSnapshot& result)
+    {
+        const std::scoped_lock lock(Detail::ClientMutex());
+
+        const auto sessionStatus =
+            Detail::ClientTrainingSession().Status;
+
+        if (sessionStatus == Core::TrainingSessionStatus::Active ||
+            sessionStatus == Core::TrainingSessionStatus::Running)
+        {
+            return false;
+        }
+
+        return Engine::TrainingDebugController::Start(
+            Detail::ClientDataset(),
+            Detail::ClientNetwork(),
+            sampleIndex,
+            learningRate,
+            lossType,
+            optimizerType,
+            Detail::ClientTrainingDebugSession(),
+            result);
+    }
+
+    Core::TrainingDebugSnapshot MiaIAClient::GetTrainingDebug()
+    {
+        const std::scoped_lock lock(Detail::ClientMutex());
+        return Engine::TrainingDebugController::Snapshot(
+            Detail::ClientTrainingDebugSession());
+    }
+
+    bool MiaIAClient::AdvanceTrainingDebug(
+        Core::TrainingDebugSnapshot& result)
+    {
+        const std::scoped_lock lock(Detail::ClientMutex());
+        return Engine::TrainingDebugController::Next(
+            Detail::ClientDataset(),
+            Detail::ClientNetwork(),
+            Detail::ClientTrainingDebugSession(),
+            result);
+    }
+
+    bool MiaIAClient::CancelTrainingDebug()
+    {
+        const std::scoped_lock lock(Detail::ClientMutex());
+        return Engine::TrainingDebugController::Cancel(
+            Detail::ClientTrainingDebugSession());
+    }
+}

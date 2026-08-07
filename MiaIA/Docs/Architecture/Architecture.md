@@ -53,7 +53,7 @@ Engine owns operations and mathematical behavior. Its current responsibilities a
 | `Evaluation` | Calculate predictions, errors, loss, and loss derivatives |
 | `Differentiation` | Run backward propagation and produce gradient snapshots |
 | `Optimization` | Validate and apply explicit optimizer updates |
-| `Training` | Coordinate an atomic sample training step |
+| `Training` | Coordinate phased, atomic, epoch, and session training flows |
 
 This separation allows a mathematical subsystem to evolve without requiring client code to manipulate its internal data structures directly.
 
@@ -200,6 +200,8 @@ All SDK access to the process-local network, dataset, and session is serialized 
 A bounded run composes repeated `next` operations synchronously. It can stop because its requested step limit was reached, the session completed, or a step failed. Unlike the separately atomic `train epoch` operation, a session run is progressive: successful steps remain published if a later step fails. The session stays Active at the failed sample so a client can inspect state, intervene, retry, or cancel. `TrainingRunSnapshot` contains the start/end cursors, executed steps, trace means, detailed step snapshots, and an explicit stop reason.
 
 `TrainingSessionInspector` provides two read-only views over retained steps. History entries are lightweight indexes containing epoch, sample, loss transition, and update counts. Detailed lookup returns the original `TrainingStepSnapshot`, including evaluation, gradients, and every parameter update. Both operations use the SDK state lock and are safe at a coherent boundary while background training is Running.
+
+`TrainingDebugController` is the transaction boundary for a single inspectable SGD step. It owns a private candidate copy and advances through `BeforeForward`, `ForwardComplete`, `BackwardComplete`, `UpdateComplete`, `Verified`, and `Committed`. Phase snapshots include the candidate network and all calculations available at that point. The public network is assigned only at commit, while cancellation destroys the candidate. `TrainingStepExecutor` runs this same controller to completion, so atomic and interactive execution share one mathematical implementation.
 
 ## Snapshot boundary
 

@@ -1915,6 +1915,148 @@ int main()
 
     });
 
+    runner.Run("Phase-by-phase training debug", [&]()
+    {
+    const std::filesystem::path debugPath =
+        std::filesystem::temp_directory_path() /
+        "miaia_training_debug_test.csv";
+
+    {
+        std::ofstream output(debugPath);
+        assert(output.good());
+        output
+            << "x,target\n"
+            << "1,1\n";
+    }
+
+    assert(MiaIAClient::ClearDataset());
+    assert(MiaIAClient::ClearNetwork());
+    assert(MiaIAClient::ImportCsvDataset(
+        debugPath.string(),
+        1,
+        1));
+    assert(MiaIAClient::CreateDenseNetwork(1, 1, 0, 1));
+    assert(MiaIAClient::SetLayerActivation(
+        1,
+        MiaIA::Core::ActivationType::Linear));
+    assert(MiaIAClient::SetConnectionWeight(1, 0.0));
+    assert(MiaIAClient::SetNeuronBias(1002, 0.0));
+
+    const auto original = MiaIAClient::GetSnapshot();
+    MiaIA::Core::TrainingDebugSnapshot debug;
+
+    assert(MiaIAClient::StartTrainingDebug(
+        0,
+        0.1,
+        MiaIA::Core::LossType::MeanSquaredError,
+        MiaIA::Core::OptimizerType::StochasticGradientDescent,
+        debug));
+    assert(debug.Phase ==
+        MiaIA::Core::TrainingDebugPhase::BeforeForward);
+    assert(debug.SampleIndex == 0);
+    assert(debug.CandidateNetwork.Connections[0].Weight == 0.0);
+    assert(!MiaIAClient::SetConnectionWeight(1, 42.0));
+
+    MiaIA::Core::TrainingSessionSnapshot rejectedSession;
+    assert(!MiaIAClient::StartTrainingSession(
+        1,
+        0.1,
+        MiaIA::Core::LossType::MeanSquaredError,
+        MiaIA::Core::OptimizerType::StochasticGradientDescent,
+        rejectedSession));
+
+    assert(MiaIAClient::AdvanceTrainingDebug(debug));
+    assert(debug.Phase ==
+        MiaIA::Core::TrainingDebugPhase::ForwardComplete);
+    assert(std::abs(debug.Step.Before.Evaluation.Loss - 1.0) <
+        1e-12);
+    assert(debug.Step.Before.Evaluation.Predictions.size() == 1);
+    assert(debug.Step.Before.Evaluation.Predictions[0] == 0.0);
+    assert(debug.Step.Before.Neurons.empty());
+
+    assert(MiaIAClient::AdvanceTrainingDebug(debug));
+    assert(debug.Phase ==
+        MiaIA::Core::TrainingDebugPhase::BackwardComplete);
+    assert(debug.Step.Before.Neurons.size() == 2);
+    assert(debug.Step.Before.Connections.size() == 1);
+    assert(std::abs(
+        debug.Step.Before.Connections[0].WeightGradient + 2.0) <
+        1e-12);
+
+    assert(MiaIAClient::AdvanceTrainingDebug(debug));
+    assert(debug.Phase ==
+        MiaIA::Core::TrainingDebugPhase::UpdateComplete);
+    assert(debug.Step.ConnectionUpdates.size() == 1);
+    assert(debug.Step.NeuronUpdates.size() == 1);
+    assert(std::abs(
+        debug.CandidateNetwork.Connections[0].Weight - 0.2) <
+        1e-12);
+
+    auto publicNetwork = MiaIAClient::GetSnapshot();
+    assert(publicNetwork.Connections[0].Weight ==
+        original.Connections[0].Weight);
+    assert(publicNetwork.Layers[1].Neurons[0].Bias ==
+        original.Layers[1].Neurons[0].Bias);
+
+    assert(MiaIAClient::AdvanceTrainingDebug(debug));
+    assert(debug.Phase == MiaIA::Core::TrainingDebugPhase::Verified);
+    assert(std::abs(debug.Step.After.Loss - 0.36) < 1e-12);
+
+    publicNetwork = MiaIAClient::GetSnapshot();
+    assert(publicNetwork.Connections[0].Weight == 0.0);
+    assert(publicNetwork.Layers[1].Neurons[0].Bias == 0.0);
+
+    assert(MiaIAClient::AdvanceTrainingDebug(debug));
+    assert(debug.Phase == MiaIA::Core::TrainingDebugPhase::Committed);
+
+    publicNetwork = MiaIAClient::GetSnapshot();
+    assert(std::abs(publicNetwork.Connections[0].Weight - 0.2) <
+        1e-12);
+    assert(std::abs(
+        publicNetwork.Layers[1].Neurons[0].Bias - 0.2) < 1e-12);
+
+    MiaIA::Core::TrainingDebugSnapshot rejectedDebug;
+    rejectedDebug.SampleIndex = 999;
+    rejectedDebug.LearningRate = 42.0;
+    assert(!MiaIAClient::AdvanceTrainingDebug(rejectedDebug));
+    assert(rejectedDebug.SampleIndex == 999);
+    assert(rejectedDebug.LearningRate == 42.0);
+    assert(!MiaIAClient::CancelTrainingDebug());
+
+    assert(MiaIAClient::SetConnectionWeight(1, 0.0));
+    assert(MiaIAClient::SetNeuronBias(1002, 0.0));
+    assert(MiaIAClient::StartTrainingDebug(
+        0,
+        0.1,
+        MiaIA::Core::LossType::MeanSquaredError,
+        MiaIA::Core::OptimizerType::StochasticGradientDescent,
+        debug));
+    assert(MiaIAClient::AdvanceTrainingDebug(debug));
+    assert(MiaIAClient::AdvanceTrainingDebug(debug));
+    assert(MiaIAClient::AdvanceTrainingDebug(debug));
+    assert(MiaIAClient::CancelTrainingDebug());
+    assert(MiaIAClient::GetTrainingDebug().Phase ==
+        MiaIA::Core::TrainingDebugPhase::Idle);
+
+    publicNetwork = MiaIAClient::GetSnapshot();
+    assert(publicNetwork.Connections[0].Weight == 0.0);
+    assert(publicNetwork.Layers[1].Neurons[0].Bias == 0.0);
+
+    assert(!MiaIAClient::StartTrainingDebug(
+        9,
+        0.1,
+        MiaIA::Core::LossType::MeanSquaredError,
+        MiaIA::Core::OptimizerType::StochasticGradientDescent,
+        rejectedDebug));
+    assert(rejectedDebug.SampleIndex == 999);
+    assert(rejectedDebug.LearningRate == 42.0);
+
+    assert(MiaIAClient::ClearDataset());
+    assert(MiaIAClient::ClearNetwork());
+    std::filesystem::remove(debugPath);
+
+    });
+
     runner.Run("Prediction pipeline", [&]()
     {
     MiaIAClient::ClearNetwork();

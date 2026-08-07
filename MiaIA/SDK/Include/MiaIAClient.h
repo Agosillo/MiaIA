@@ -19,6 +19,7 @@
 #include "../../Core/Public/TrainingSessionSnapshot.h"
 #include "../../Core/Public/TrainingRunSnapshot.h"
 #include "../../Core/Public/TrainingHistoryEntrySnapshot.h"
+#include "../../Core/Public/TrainingDebugSnapshot.h"
 
 namespace MiaIA::SDK
 {
@@ -102,6 +103,17 @@ namespace MiaIA::SDK
         static bool ResumeTrainingSession();
         static bool PauseTrainingSession();
         static bool CancelTrainingSession();
+        static bool StartTrainingDebug(
+            std::size_t sampleIndex,
+            double learningRate,
+            Core::LossType lossType,
+            Core::OptimizerType optimizerType,
+            Core::TrainingDebugSnapshot& result);
+        [[nodiscard]]
+        static Core::TrainingDebugSnapshot GetTrainingDebug();
+        static bool AdvanceTrainingDebug(
+            Core::TrainingDebugSnapshot& result);
+        static bool CancelTrainingDebug();
         static bool Predict(
             const std::vector<double>& inputs,
             Core::PredictionSnapshot& result);

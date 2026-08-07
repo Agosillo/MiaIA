@@ -30,6 +30,11 @@ dataset evaluate 0 mse
 dataset evaluate all mse
 dataset gradients 0 mse
 train step 0 0.01 mse
+train debug start 0 0.01 mse
+train debug next
+train debug next
+train debug status
+train debug cancel
 train epoch 0.01 mse
 dataset evaluate all mse
 train session start 2 0.01 mse
@@ -404,6 +409,29 @@ The step is transactional. MiaIA performs it on a candidate network and publishe
 
 A suitable learning rate often reduces loss for the selected sample, but reduction is not guaranteed for every positive value. This command performs one step only; it does not start an automatic loop.
 
+### `train debug`
+
+```text
+train debug start <sample-index> <learning-rate> mse
+train debug status
+train debug next
+train debug cancel
+```
+
+Starts one SGD step as an inspectable mathematical transaction. `start` copies the public network into a private candidate and stops at `BeforeForward`. Every `next` advances exactly one phase:
+
+1. `ForwardComplete`: inputs were applied and predictions, errors, activations, and loss are available;
+2. `BackwardComplete`: neuron, bias, and weight gradients are available;
+3. `UpdateComplete`: SGD deltas were applied only to the candidate network;
+4. `Verified`: a second forward pass measured the candidate after the update;
+5. `Committed`: the verified candidate replaced the public network atomically.
+
+`status` returns the current phase without advancing it. Its snapshot includes the candidate network and every result produced up to that phase, making the same data suitable for Console output, Blueprint nodes, or a graphical signal/gradient visualization.
+
+The public network remains unchanged through `Verified`. While a debug transaction is active, operations that could mutate the public network or dataset are rejected so that the final commit cannot overwrite unrelated edits. `cancel` discards the candidate and returns the debugger to `Idle`; it is a real rollback because no candidate parameter has yet been published.
+
+The ordinary `train step` command uses the same phased controller internally and runs it through `Committed` in one call. This keeps both execution modes mathematically identical.
+
 ### `train epoch`
 
 ```text
@@ -547,6 +575,12 @@ train session status
 train session pause
 train session cancel
 dataset gradients 0 mse
+train debug start 0 0.01 mse
+train debug next
+train debug next
+train debug next
+train debug next
+train debug next
 train step 0 0.01 mse
 train epoch 0.01 mse
 dataset evaluate all mse
@@ -560,18 +594,19 @@ This sequence demonstrates the difference between stages:
 4. `dataset evaluate 0` performs apply plus forward and calculates one sample loss;
 5. `dataset evaluate all` measures the entire dataset without changing public network state;
 6. `dataset gradients` performs evaluation plus backward differentiation;
-7. `train step` updates weights and non-input biases for one selected sample;
-8. `train epoch` performs the same update once for every sample in dataset order;
-9. the final `dataset evaluate all` measures the trained fixed model for comparison;
-10. `train session start` creates a paused multi-epoch schedule;
-11. `train session next` performs one inspectable update;
-12. `train session status` reports the unchanged cursor;
-13. `train session run 1` executes one additional synchronous step;
-14. `train session history` lists the retained updates;
-15. `train session inspect 0` opens one complete mathematical step;
-16. `train session cancel` stops future steps without reverting completed updates;
-17. `train session resume` starts non-blocking background execution;
-18. `train session pause` joins the worker at the next atomic step boundary.
+7. `train debug` exposes the forward, backward, update, verification, and commit phases of one candidate step;
+8. `train step` runs those same phases atomically for one selected sample;
+9. `train epoch` performs the same update once for every sample in dataset order;
+10. the final `dataset evaluate all` measures the trained fixed model for comparison;
+11. `train session start` creates a paused multi-epoch schedule;
+12. `train session next` performs one inspectable update;
+13. `train session status` reports the unchanged cursor;
+14. `train session run 1` executes one additional synchronous step;
+15. `train session history` lists the retained updates;
+16. `train session inspect 0` opens one complete mathematical step;
+17. `train session cancel` stops future steps without reverting completed updates;
+18. `train session resume` starts non-blocking background execution;
+19. `train session pause` joins the worker at the next atomic step boundary.
 
 ## Common failures
 

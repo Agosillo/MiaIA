@@ -170,6 +170,7 @@
     <ClInclude Include="Topology\NetworkTopology.h" />
     <ClInclude Include="Training\TrainingStepExecutor.h" />
     <ClInclude Include="Training\TrainingEpochExecutor.h" />
+    <ClInclude Include="Training\TrainingDebugController.h" />
     <ClInclude Include="Training\TrainingSessionController.h" />
     <ClInclude Include="Training\TrainingSessionInspector.h" />
     <ClInclude Include="Validation\NetworkValidator.h" />
@@ -209,6 +210,7 @@
     <ClCompile Include="Topology\NetworkTopology.cpp" />
     <ClCompile Include="Training\TrainingStepExecutor.cpp" />
     <ClCompile Include="Training\TrainingEpochExecutor.cpp" />
+    <ClCompile Include="Training\TrainingDebugController.cpp" />
     <ClCompile Include="Training\TrainingSessionController.cpp" />
     <ClCompile Include="Training\TrainingSessionInspector.cpp" />
     <ClCompile Include="Validation\NetworkValidator.cpp" />

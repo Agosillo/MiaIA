@@ -38,6 +38,9 @@ The roadmap is organized by dependency rather than by a fixed release date. Math
 - coherent inspection and explicit worker stop reasons while training.
 - lightweight session history summaries;
 - detailed lookup of retained evaluations, gradients, and parameter updates.
+- phase-by-phase single-sample training transactions;
+- candidate-network inspection through forward, backward, update, verification, and atomic commit;
+- true candidate rollback before commit.
 
 ## Implemented optimizer foundation
 
@@ -79,9 +82,11 @@ Building on trustworthy single steps and one explicit epoch, the current session
 
 ## Debugging experience
 
-The engine and SDK should evolve toward a debugger-like training workflow:
+The first debugger-like training workflow is implemented for one sample: clients can stop before forward propagation, advance through forward, backward, candidate update and verification, then commit or cancel without changing the public network prematurely.
 
-- breakpoints before and after forward, backward, and update phases;
+The debugging experience should next evolve toward:
+
+- configurable breakpoints around the implemented mathematical phases;
 - inspect a selected neuron or connection;
 - compare current and previous activations, gradients, weights, and biases;
 - identify inactive or consistently saturated neurons;
