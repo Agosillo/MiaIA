@@ -150,10 +150,13 @@
     <ClInclude Include="Model\Sample.h" />
     <ClInclude Include="pch.h" />
     <ClInclude Include="Public\ConnectionSnapshot.h" />
+    <ClInclude Include="Public\ConnectionGradientSnapshot.h" />
     <ClInclude Include="Public\DatasetSummary.h" />
     <ClInclude Include="Public\LossType.h" />
     <ClInclude Include="Public\NetworkSnapshot.h" />
+    <ClInclude Include="Public\NeuronGradientSnapshot.h" />
     <ClInclude Include="Public\SampleEvaluationSnapshot.h" />
+    <ClInclude Include="Public\SampleGradientSnapshot.h" />
     <ClInclude Include="Public\SampleSnapshot.h" />
   </ItemGroup>
   <ItemGroup>

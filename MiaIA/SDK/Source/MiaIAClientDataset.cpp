@@ -5,6 +5,7 @@
 #include "../../Engine/Data/DatasetInspector.h"
 #include "../../Engine/Data/DatasetRuntime.h"
 #include "../../Engine/Evaluation/SampleEvaluator.h"
+#include "../../Engine/Differentiation/SampleGradientEvaluator.h"
 #include "../../Core/Model/Dataset.h"
 
 namespace MiaIA::SDK
@@ -58,6 +59,19 @@ namespace MiaIA::SDK
         Core::SampleEvaluationSnapshot& result)
     {
         return Engine::SampleEvaluator::Evaluate(
+            Detail::ClientDataset(),
+            index,
+            Detail::ClientNetwork(),
+            type,
+            result);
+    }
+
+    bool MiaIAClient::EvaluateDatasetSampleGradients(
+        std::size_t index,
+        Core::LossType type,
+        Core::SampleGradientSnapshot& result)
+    {
+        return Engine::SampleGradientEvaluator::Evaluate(
             Detail::ClientDataset(),
             index,
             Detail::ClientNetwork(),

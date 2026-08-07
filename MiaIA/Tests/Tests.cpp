@@ -450,6 +450,308 @@ int main()
 
     });
 
+    runner.Run("Dataset sample gradients", [&]()
+    {
+    const std::filesystem::path analyticalPath =
+        std::filesystem::temp_directory_path() /
+        "miaia_dataset_gradient_analytical_test.csv";
+    const std::filesystem::path numericalPath =
+        std::filesystem::temp_directory_path() /
+        "miaia_dataset_gradient_numerical_test.csv";
+
+    {
+        std::ofstream output(analyticalPath);
+        assert(output.good());
+        output
+            << "x1,x2,target1,target2\n"
+            << "0.5,-1,1,2\n";
+    }
+
+    {
+        std::ofstream output(numericalPath);
+        assert(output.good());
+        output
+            << "x1,x2,target\n"
+            << "0.3,-0.2,0.7\n";
+    }
+
+    MiaIAClient::ClearDataset();
+    MiaIAClient::ClearNetwork();
+
+    assert(MiaIAClient::ImportCsvDataset(
+        analyticalPath.string(),
+        2,
+        2));
+    assert(MiaIAClient::CreateDenseNetwork(2, 2, 0, 2));
+    assert(MiaIAClient::SetLayerActivation(
+        1,
+        MiaIA::Core::ActivationType::Linear));
+    assert(MiaIAClient::SetConnectionWeight(1, 2.0));
+    assert(MiaIAClient::SetConnectionWeight(2, -1.0));
+    assert(MiaIAClient::SetConnectionWeight(3, 3.0));
+    assert(MiaIAClient::SetConnectionWeight(4, 0.5));
+    assert(MiaIAClient::SetNeuronBias(1003, 0.25));
+    assert(MiaIAClient::SetNeuronBias(1004, -0.5));
+
+    const auto beforeAnalyticalGradients =
+        MiaIAClient::GetSnapshot();
+
+    MiaIA::Core::SampleGradientSnapshot analyticalGradients;
+
+    assert(MiaIAClient::EvaluateDatasetSampleGradients(
+        0,
+        MiaIA::Core::LossType::MeanSquaredError,
+        analyticalGradients));
+
+    assert(analyticalGradients.Neurons.size() == 4);
+    assert(analyticalGradients.Connections.size() == 4);
+    assert(std::abs(
+        analyticalGradients.Evaluation.Loss - 9.90625) < 1e-12);
+
+    assert(analyticalGradients.Neurons[0].Id == 1001);
+    assert(analyticalGradients.Neurons[0].LayerOrder == 0);
+    assert(std::abs(
+        analyticalGradients.Neurons[0].ActivationGradient - (-2.0)) <
+        1e-12);
+    assert(std::abs(
+        analyticalGradients.Neurons[1].ActivationGradient - (-10.0)) <
+        1e-12);
+    assert(std::abs(
+        analyticalGradients.Neurons[2].BiasGradient - (-2.75)) <
+        1e-12);
+    assert(std::abs(
+        analyticalGradients.Neurons[3].BiasGradient - (-3.5)) <
+        1e-12);
+
+    assert(analyticalGradients.Connections[0].Id == 1);
+    assert(std::abs(
+        analyticalGradients.Connections[0].WeightGradient - (-1.375)) <
+        1e-12);
+    assert(std::abs(
+        analyticalGradients.Connections[1].WeightGradient - (-1.75)) <
+        1e-12);
+    assert(std::abs(
+        analyticalGradients.Connections[2].WeightGradient - 2.75) <
+        1e-12);
+    assert(std::abs(
+        analyticalGradients.Connections[3].WeightGradient - 3.5) <
+        1e-12);
+
+    const auto afterAnalyticalGradients =
+        MiaIAClient::GetSnapshot();
+
+    for (std::size_t index = 0;
+        index < beforeAnalyticalGradients.Connections.size();
+        ++index)
+    {
+        assert(beforeAnalyticalGradients.Connections[index].Weight ==
+            afterAnalyticalGradients.Connections[index].Weight);
+    }
+
+    assert(beforeAnalyticalGradients.Layers[1].Neurons[0].Bias ==
+        afterAnalyticalGradients.Layers[1].Neurons[0].Bias);
+    assert(beforeAnalyticalGradients.Layers[1].Neurons[1].Bias ==
+        afterAnalyticalGradients.Layers[1].Neurons[1].Bias);
+
+    const double analyticalLoss =
+        analyticalGradients.Evaluation.Loss;
+
+    assert(!MiaIAClient::EvaluateDatasetSampleGradients(
+        1,
+        MiaIA::Core::LossType::MeanSquaredError,
+        analyticalGradients));
+    assert(analyticalGradients.Evaluation.Loss == analyticalLoss);
+
+    assert(!MiaIAClient::EvaluateDatasetSampleGradients(
+        0,
+        static_cast<MiaIA::Core::LossType>(999),
+        analyticalGradients));
+    assert(analyticalGradients.Evaluation.Loss == analyticalLoss);
+
+    assert(MiaIAClient::ImportCsvDataset(
+        numericalPath.string(),
+        2,
+        1));
+    assert(MiaIAClient::CreateDenseNetwork(2, 2, 1, 1));
+    assert(MiaIAClient::SetLayerActivation(
+        1,
+        MiaIA::Core::ActivationType::Tanh));
+    assert(MiaIAClient::SetLayerActivation(
+        2,
+        MiaIA::Core::ActivationType::Sigmoid));
+
+    assert(MiaIAClient::SetConnectionWeight(1, 0.4));
+    assert(MiaIAClient::SetConnectionWeight(2, -0.3));
+    assert(MiaIAClient::SetConnectionWeight(3, 0.2));
+    assert(MiaIAClient::SetConnectionWeight(4, 0.1));
+    assert(MiaIAClient::SetConnectionWeight(5, -0.5));
+    assert(MiaIAClient::SetConnectionWeight(6, 0.6));
+    assert(MiaIAClient::SetNeuronBias(1003, 0.05));
+    assert(MiaIAClient::SetNeuronBias(1004, -0.02));
+    assert(MiaIAClient::SetNeuronBias(1005, 0.1));
+
+    const auto beforeNumericalGradients =
+        MiaIAClient::GetSnapshot();
+
+    MiaIA::Core::SampleGradientSnapshot gradients;
+
+    assert(MiaIAClient::EvaluateDatasetSampleGradients(
+        0,
+        MiaIA::Core::LossType::MeanSquaredError,
+        gradients));
+
+    const auto afterNumericalGradients =
+        MiaIAClient::GetSnapshot();
+
+    for (std::size_t index = 0;
+        index < beforeNumericalGradients.Connections.size();
+        ++index)
+    {
+        assert(beforeNumericalGradients.Connections[index].Weight ==
+            afterNumericalGradients.Connections[index].Weight);
+    }
+
+    for (std::size_t layerIndex = 1;
+        layerIndex < beforeNumericalGradients.Layers.size();
+        ++layerIndex)
+    {
+        for (std::size_t neuronIndex = 0;
+            neuronIndex <
+                beforeNumericalGradients.Layers[layerIndex].Neurons.size();
+            ++neuronIndex)
+        {
+            assert(
+                beforeNumericalGradients.Layers[layerIndex]
+                    .Neurons[neuronIndex].Bias ==
+                afterNumericalGradients.Layers[layerIndex]
+                    .Neurons[neuronIndex].Bias);
+        }
+    }
+
+    const auto findConnectionGradient =
+        [&](std::uint64_t id) -> const MiaIA::Core::ConnectionGradientSnapshot*
+        {
+            for (const auto& connection : gradients.Connections)
+            {
+                if (connection.Id == id)
+                {
+                    return &connection;
+                }
+            }
+
+            return nullptr;
+        };
+
+    const auto findNeuronGradient =
+        [&](std::uint64_t id) -> const MiaIA::Core::NeuronGradientSnapshot*
+        {
+            for (const auto& neuron : gradients.Neurons)
+            {
+                if (neuron.Id == id)
+                {
+                    return &neuron;
+                }
+            }
+
+            return nullptr;
+        };
+
+    constexpr double Epsilon = 1e-6;
+    constexpr double GradientTolerance = 1e-6;
+
+    for (std::uint64_t connectionId = 1;
+        connectionId <= 6;
+        ++connectionId)
+    {
+        MiaIA::Core::ConnectionSnapshot connection;
+        assert(MiaIAClient::TryGetConnection(connectionId, connection));
+
+        MiaIA::Core::SampleEvaluationSnapshot plusEvaluation;
+        MiaIA::Core::SampleEvaluationSnapshot minusEvaluation;
+
+        assert(MiaIAClient::SetConnectionWeight(
+            connectionId,
+            connection.Weight + Epsilon));
+        assert(MiaIAClient::EvaluateDatasetSample(
+            0,
+            MiaIA::Core::LossType::MeanSquaredError,
+            plusEvaluation));
+
+        assert(MiaIAClient::SetConnectionWeight(
+            connectionId,
+            connection.Weight - Epsilon));
+        assert(MiaIAClient::EvaluateDatasetSample(
+            0,
+            MiaIA::Core::LossType::MeanSquaredError,
+            minusEvaluation));
+
+        assert(MiaIAClient::SetConnectionWeight(
+            connectionId,
+            connection.Weight));
+
+        const double numericalGradient =
+            (plusEvaluation.Loss - minusEvaluation.Loss) /
+            (2.0 * Epsilon);
+
+        const auto* analyticalGradient =
+            findConnectionGradient(connectionId);
+
+        assert(analyticalGradient != nullptr);
+        assert(std::abs(
+            analyticalGradient->WeightGradient - numericalGradient) <
+            GradientTolerance);
+    }
+
+    for (const std::uint64_t neuronId :
+        std::vector<std::uint64_t>{ 1003, 1004, 1005 })
+    {
+        MiaIA::Core::NeuronSnapshot neuron;
+        assert(MiaIAClient::TryGetNeuron(neuronId, neuron));
+
+        MiaIA::Core::SampleEvaluationSnapshot plusEvaluation;
+        MiaIA::Core::SampleEvaluationSnapshot minusEvaluation;
+
+        assert(MiaIAClient::SetNeuronBias(
+            neuronId,
+            neuron.Bias + Epsilon));
+        assert(MiaIAClient::EvaluateDatasetSample(
+            0,
+            MiaIA::Core::LossType::MeanSquaredError,
+            plusEvaluation));
+
+        assert(MiaIAClient::SetNeuronBias(
+            neuronId,
+            neuron.Bias - Epsilon));
+        assert(MiaIAClient::EvaluateDatasetSample(
+            0,
+            MiaIA::Core::LossType::MeanSquaredError,
+            minusEvaluation));
+
+        assert(MiaIAClient::SetNeuronBias(
+            neuronId,
+            neuron.Bias));
+
+        const double numericalGradient =
+            (plusEvaluation.Loss - minusEvaluation.Loss) /
+            (2.0 * Epsilon);
+
+        const auto* analyticalGradient =
+            findNeuronGradient(neuronId);
+
+        assert(analyticalGradient != nullptr);
+        assert(std::abs(
+            analyticalGradient->BiasGradient - numericalGradient) <
+            GradientTolerance);
+    }
+
+    MiaIAClient::ClearDataset();
+    MiaIAClient::ClearNetwork();
+
+    std::filesystem::remove(analyticalPath);
+    std::filesystem::remove(numericalPath);
+
+    });
+
     runner.Run("Network input", [&]()
     {
     MiaIAClient::ClearNetwork();

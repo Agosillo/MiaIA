@@ -15,5 +15,11 @@ namespace MiaIA::Engine
             Core::LossType type,
             std::vector<double>& errors,
             double& loss);
+
+        static bool EvaluateGradient(
+            const std::vector<double>& predictions,
+            const std::vector<double>& targets,
+            Core::LossType type,
+            std::vector<double>& gradients);
     };
 }

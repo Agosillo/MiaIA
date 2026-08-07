@@ -72,6 +72,9 @@ void PrintHelp()
         << "  dataset evaluate [index] mse\n"
         << "      Apply and evaluate one sample using mean squared error\n\n"
 
+        << "  dataset gradients [index] mse\n"
+        << "      Calculate gradients without changing weights or biases\n\n"
+
         << "  dataset clear\n"
         << "      Clear the current dataset\n\n"
 
@@ -468,6 +471,83 @@ void HandleDatasetCommand(const std::string& command)
             << "\nMean squared error: "
             << evaluation.Loss
             << "\n";
+
+        return;
+    }
+
+    if (command.rfind("dataset gradients", 0) == 0)
+    {
+        std::stringstream stream(command);
+        std::string datasetToken;
+        std::string action;
+        std::size_t index{};
+        std::string lossName;
+
+        if (!(stream >> datasetToken >> action >> index >> lossName) ||
+            datasetToken != "dataset" ||
+            action != "gradients" ||
+            lossName != "mse")
+        {
+            std::cout
+                << "Usage: dataset gradients <index> mse\n";
+
+            return;
+        }
+
+        stream >> std::ws;
+
+        if (!stream.eof())
+        {
+            std::cout
+                << "Usage: dataset gradients <index> mse\n";
+
+            return;
+        }
+
+        MiaIA::Core::SampleGradientSnapshot gradients;
+
+        if (!MiaIAClient::EvaluateDatasetSampleGradients(
+            index,
+            MiaIA::Core::LossType::MeanSquaredError,
+            gradients))
+        {
+            std::cout
+                << "Dataset sample gradient evaluation failed. "
+                << "Check the sample, network and output dimensions.\n";
+
+            return;
+        }
+
+        std::cout
+            << "\nSample Gradients "
+            << gradients.Evaluation.SampleIndex
+            << "\nLoss: "
+            << gradients.Evaluation.Loss
+            << "\n\nNeuron Gradients\n";
+
+        for (const auto& neuron : gradients.Neurons)
+        {
+            std::cout
+                << "Neuron " << neuron.Id
+                << " Layer " << neuron.LayerOrder
+                << " dLoss/dActivation " << neuron.ActivationGradient
+                << " dLoss/dPreActivation "
+                << neuron.PreActivationGradient
+                << " dLoss/dBias " << neuron.BiasGradient
+                << "\n";
+        }
+
+        std::cout << "\nConnection Gradients\n";
+
+        for (const auto& connection : gradients.Connections)
+        {
+            std::cout
+                << "Connection " << connection.Id
+                << " " << connection.FromNeuron
+                << " -> " << connection.ToNeuron
+                << " dLoss/dWeight " << connection.WeightGradient
+                << "\n";
+        }
 
         return;
     }

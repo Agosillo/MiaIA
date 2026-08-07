@@ -9,6 +9,7 @@
 #include "../../Core/Public/DatasetSummary.h"
 #include "../../Core/Public/LossType.h"
 #include "../../Core/Public/SampleEvaluationSnapshot.h"
+#include "../../Core/Public/SampleGradientSnapshot.h"
 #include "../../Core/Public/SampleSnapshot.h"
 
 namespace MiaIA::SDK
@@ -53,6 +54,10 @@ namespace MiaIA::SDK
             std::size_t index,
             Core::LossType type,
             Core::SampleEvaluationSnapshot& result);
+        static bool EvaluateDatasetSampleGradients(
+            std::size_t index,
+            Core::LossType type,
+            Core::SampleGradientSnapshot& result);
         static bool Forward();
     };
 }

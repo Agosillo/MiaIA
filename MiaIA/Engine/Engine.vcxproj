@@ -149,6 +149,8 @@
     <ClInclude Include="Data\CsvDatasetImporter.h" />
     <ClInclude Include="Data\DatasetInspector.h" />
     <ClInclude Include="Data\DatasetRuntime.h" />
+    <ClInclude Include="Differentiation\BackwardEngine.h" />
+    <ClInclude Include="Differentiation\SampleGradientEvaluator.h" />
     <ClInclude Include="Editing\NetworkEditor.h" />
     <ClInclude Include="Evaluation\LossEvaluator.h" />
     <ClInclude Include="Evaluation\SampleEvaluator.h" />
@@ -170,6 +172,8 @@
     <ClCompile Include="Data\CsvDatasetImporter.cpp" />
     <ClCompile Include="Data\DatasetInspector.cpp" />
     <ClCompile Include="Data\DatasetRuntime.cpp" />
+    <ClCompile Include="Differentiation\BackwardEngine.cpp" />
+    <ClCompile Include="Differentiation\SampleGradientEvaluator.cpp" />
     <ClCompile Include="Editing\NetworkEditor.cpp" />
     <ClCompile Include="Engine.cpp" />
     <ClCompile Include="Evaluation\LossEvaluator.cpp" />

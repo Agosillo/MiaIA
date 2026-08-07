@@ -64,4 +64,49 @@ namespace MiaIA::Engine
 
         return true;
     }
+
+    bool LossEvaluator::EvaluateGradient(
+        const std::vector<double>& predictions,
+        const std::vector<double>& targets,
+        Core::LossType type,
+        std::vector<double>& gradients)
+    {
+        if (type != Core::LossType::MeanSquaredError ||
+            predictions.empty() ||
+            predictions.size() != targets.size())
+        {
+            return false;
+        }
+
+        const double scale =
+            2.0 / static_cast<double>(predictions.size());
+
+        std::vector<double> calculatedGradients;
+        calculatedGradients.reserve(predictions.size());
+
+        for (std::size_t index = 0;
+            index < predictions.size();
+            ++index)
+        {
+            if (!std::isfinite(predictions[index]) ||
+                !std::isfinite(targets[index]))
+            {
+                return false;
+            }
+
+            const double gradient =
+                scale * (predictions[index] - targets[index]);
+
+            if (!std::isfinite(gradient))
+            {
+                return false;
+            }
+
+            calculatedGradients.push_back(gradient);
+        }
+
+        gradients = std::move(calculatedGradients);
+
+        return true;
+    }
 }
