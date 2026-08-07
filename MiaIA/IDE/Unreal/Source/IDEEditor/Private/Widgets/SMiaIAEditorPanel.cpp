@@ -166,6 +166,30 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
                 [
                     SNew(SButton)
                     .ButtonStyle(&ButtonStyle)
+                    .Text(LOCTEXT("FitView", "Fit view"))
+                    .ToolTipText(LOCTEXT(
+                        "FitViewTooltip",
+                        "Fit every neuron in the current topology view."))
+                    .OnClicked(this, &SMiaIAEditorPanel::HandleFitView)
+                ]
+                + SHorizontalBox::Slot()
+                .AutoWidth()
+                .Padding(2.0f)
+                [
+                    SNew(SButton)
+                    .ButtonStyle(&ButtonStyle)
+                    .Text(LOCTEXT("ResetLayout", "Reset layout"))
+                    .ToolTipText(LOCTEXT(
+                        "ResetLayoutTooltip",
+                        "Restore the automatic neuron layout and fit the view."))
+                    .OnClicked(this, &SMiaIAEditorPanel::HandleResetLayout)
+                ]
+                + SHorizontalBox::Slot()
+                .AutoWidth()
+                .Padding(2.0f)
+                [
+                    SNew(SButton)
+                    .ButtonStyle(&ButtonStyle)
                     .Text(LOCTEXT("Resume", "Continue"))
                     .IsEnabled(this, &SMiaIAEditorPanel::CanResume)
                     .OnClicked(this, &SMiaIAEditorPanel::HandleResume)
@@ -936,6 +960,26 @@ EActiveTimerReturnType SMiaIAEditorPanel::HandleRefreshTimer(
 FReply SMiaIAEditorPanel::HandleRefresh()
 {
     RefreshData();
+    return FReply::Handled();
+}
+
+FReply SMiaIAEditorPanel::HandleFitView()
+{
+    if (NetworkView.IsValid())
+    {
+        NetworkView->FitView();
+    }
+
+    return FReply::Handled();
+}
+
+FReply SMiaIAEditorPanel::HandleResetLayout()
+{
+    if (NetworkView.IsValid())
+    {
+        NetworkView->ResetLayout();
+    }
+
     return FReply::Handled();
 }
 

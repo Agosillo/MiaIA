@@ -114,6 +114,8 @@ The selection is stored in the local Unreal `EditorPerProjectUserSettings` confi
 ### Panel controls
 
 - `Refresh` immediately reloads all visible snapshots. The panel also refreshes runtime values automatically.
+- `Fit view` adjusts zoom and pan so every neuron in the current layout is visible without changing neuron positions.
+- `Reset layout` discards manual neuron positions, restores the automatic layer layout, and fits the complete network.
 - `Continue` resumes an active paused training session when no phase inspection owns the current step.
 - `Pause` requests a safe pause for a running training session.
 - `Start debug` attaches a new phase inspection to the next pending training sample. It can start from an idle debug state or after the previous step was committed.
@@ -121,6 +123,18 @@ The selection is stored in the local Unreal `EditorPerProjectUserSettings` confi
 - `Cancel debug` discards the active candidate before commit and leaves the public network unchanged.
 
 Buttons are enabled only when their operation is valid for the current session and debug state. During the automatic Blueprint demonstration, phase progression is controlled by `BP_MiaIADemo`; the panel buttons are intended for later manual and Console-driven workflows.
+
+### Topology navigation and layout
+
+The topology view supports direct 2D navigation and layout editing:
+
+- use the mouse wheel to zoom around the pointer;
+- drag with the middle mouse button to pan the view;
+- drag a neuron with the left mouse button to assign a manual position;
+- select `Fit view` to recover the complete topology after zooming, panning, or moving neurons;
+- select `Reset layout` to remove every manual position and restore the original automatic arrangement.
+
+Manual positions use normalized layout coordinates rather than Slate pixel coordinates. They remain stable while the panel is open and can later be reused by another renderer, including a 3D view. They are intentionally not written to ONNX or project configuration. Persistent visualization layouts belong to future MiaIA-specific model metadata.
 
 ### Interactive command console
 

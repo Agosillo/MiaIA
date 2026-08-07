@@ -12,6 +12,9 @@ namespace
     constexpr float NeuronDiameter = 34.0f;
     constexpr float SelectionDiameter = 42.0f;
     constexpr float ConnectionSelectionDistance = 8.0f;
+    constexpr float MinimumZoom = 0.35f;
+    constexpr float MaximumZoom = 4.0f;
+    constexpr float ZoomStep = 1.15f;
 }
 
 SMiaIANetworkView::SMiaIANetworkView()
@@ -24,6 +27,7 @@ void SMiaIANetworkView::Construct(const FArguments& InArgs)
 {
     OnNeuronSelected = InArgs._OnNeuronSelected;
     OnConnectionSelected = InArgs._OnConnectionSelected;
+    SetClipping(EWidgetClipping::ClipToBoundsAlways);
     SetCanTick(false);
 }
 
@@ -31,6 +35,16 @@ void SMiaIANetworkView::SetSnapshot(
     const FMiaIANetworkSnapshot& InSnapshot)
 {
     Snapshot = InSnapshot;
+    const FString newLayoutKey = BuildLayoutKey();
+
+    if (newLayoutKey != LayoutKey)
+    {
+        LayoutKey = newLayoutKey;
+        ManualNeuronPositions.Reset();
+        ViewOffset = FVector2D::ZeroVector;
+        Zoom = 1.0f;
+    }
+
     Invalidate(EInvalidateWidgetReason::Paint);
 }
 
@@ -52,6 +66,78 @@ void SMiaIANetworkView::SetTheme(EMiaIAEditorTheme InTheme)
     Invalidate(EInvalidateWidgetReason::Paint);
 }
 
+void SMiaIANetworkView::FitView()
+{
+    if (ViewportSize.X <= 0.0f || ViewportSize.Y <= 0.0f ||
+        Snapshot.Layers.IsEmpty())
+    {
+        return;
+    }
+
+    FVector2D minimum(FLT_MAX, FLT_MAX);
+    FVector2D maximum(-FLT_MAX, -FLT_MAX);
+    bool hasNeuron = false;
+
+    for (int32 layerIndex = 0;
+        layerIndex < Snapshot.Layers.Num();
+        ++layerIndex)
+    {
+        const FMiaIALayerSnapshot& layer = Snapshot.Layers[layerIndex];
+
+        for (int32 neuronIndex = 0;
+            neuronIndex < layer.Neurons.Num();
+            ++neuronIndex)
+        {
+            const FMiaIANeuronSnapshot& neuron = layer.Neurons[neuronIndex];
+            const FVector2D* manual = ManualNeuronPositions.Find(neuron.Id);
+            const FVector2D normalized = manual
+                ? *manual
+                : AutomaticPosition(layerIndex, neuronIndex);
+            const FVector2D position =
+                LayoutPosition(normalized, ViewportSize);
+            minimum.X = FMath::Min(minimum.X, position.X);
+            minimum.Y = FMath::Min(minimum.Y, position.Y);
+            maximum.X = FMath::Max(maximum.X, position.X);
+            maximum.Y = FMath::Max(maximum.Y, position.Y);
+            hasNeuron = true;
+        }
+    }
+
+    if (!hasNeuron)
+    {
+        return;
+    }
+
+    const FVector2D bounds = maximum - minimum;
+    const float availableWidth = FMath::Max(
+        1.0f,
+        static_cast<float>(ViewportSize.X) - HorizontalPadding * 2.0f);
+    const float availableHeight = FMath::Max(
+        1.0f,
+        static_cast<float>(ViewportSize.Y) - VerticalPadding * 2.0f);
+    const float horizontalZoom = bounds.X > UE_KINDA_SMALL_NUMBER
+        ? availableWidth / static_cast<float>(bounds.X)
+        : 1.0f;
+    const float verticalZoom = bounds.Y > UE_KINDA_SMALL_NUMBER
+        ? availableHeight / static_cast<float>(bounds.Y)
+        : 1.0f;
+    Zoom = FMath::Clamp(
+        FMath::Min(1.0f, FMath::Min(horizontalZoom, verticalZoom)),
+        MinimumZoom,
+        MaximumZoom);
+    ViewOffset = ViewportSize * 0.5f -
+        (minimum + maximum) * 0.5f * Zoom;
+    Invalidate(EInvalidateWidgetReason::Paint);
+}
+
+void SMiaIANetworkView::ResetLayout()
+{
+    ManualNeuronPositions.Reset();
+    ViewOffset = FVector2D::ZeroVector;
+    Zoom = 1.0f;
+    FitView();
+}
+
 FVector2D SMiaIANetworkView::ComputeDesiredSize(float) const
 {
     return FVector2D(640.0f, 420.0f);
@@ -69,6 +155,77 @@ FLinearColor SMiaIANetworkView::ActivationColor(double Activation) const
         palette.InactiveNeuron,
         palette.ActiveNeuron,
         strength);
+}
+
+FVector2D SMiaIANetworkView::AutomaticPosition(
+    int32 LayerIndex,
+    int32 NeuronIndex) const
+{
+    const int32 layerCount = Snapshot.Layers.Num();
+    const int32 neuronCount = Snapshot.Layers.IsValidIndex(LayerIndex)
+        ? Snapshot.Layers[LayerIndex].Neurons.Num()
+        : 0;
+    const float x = layerCount <= 1
+        ? 0.5f
+        : static_cast<float>(LayerIndex) /
+            static_cast<float>(layerCount - 1);
+    const float y = neuronCount <= 1
+        ? 0.5f
+        : static_cast<float>(NeuronIndex) /
+            static_cast<float>(neuronCount - 1);
+    return FVector2D(x, y);
+}
+
+FVector2D SMiaIANetworkView::LayoutPosition(
+    const FVector2D& NormalizedPosition,
+    const FVector2D& Size) const
+{
+    const FVector2D usableSize(
+        FMath::Max(1.0f, static_cast<float>(Size.X) -
+            HorizontalPadding * 2.0f),
+        FMath::Max(1.0f, static_cast<float>(Size.Y) -
+            VerticalPadding * 2.0f));
+    return FVector2D(HorizontalPadding, VerticalPadding) +
+        NormalizedPosition * usableSize;
+}
+
+FVector2D SMiaIANetworkView::ViewPosition(
+    const FVector2D& NormalizedPosition,
+    const FVector2D& Size) const
+{
+    return ViewOffset + LayoutPosition(NormalizedPosition, Size) * Zoom;
+}
+
+FVector2D SMiaIANetworkView::LocalToNormalized(
+    const FVector2D& LocalPosition,
+    const FVector2D& Size) const
+{
+    const FVector2D layoutPosition =
+        (LocalPosition - ViewOffset) / Zoom;
+    const FVector2D usableSize(
+        FMath::Max(1.0f, static_cast<float>(Size.X) -
+            HorizontalPadding * 2.0f),
+        FMath::Max(1.0f, static_cast<float>(Size.Y) -
+            VerticalPadding * 2.0f));
+    return (layoutPosition -
+        FVector2D(HorizontalPadding, VerticalPadding)) / usableSize;
+}
+
+FString SMiaIANetworkView::BuildLayoutKey() const
+{
+    FString key;
+
+    for (const FMiaIALayerSnapshot& layer : Snapshot.Layers)
+    {
+        key += FString::Printf(TEXT("L%lld:"), layer.Id);
+
+        for (const FMiaIANeuronSnapshot& neuron : layer.Neurons)
+        {
+            key += FString::Printf(TEXT("%lld,"), neuron.Id);
+        }
+    }
+
+    return key;
 }
 
 double SMiaIANetworkView::DistanceToSegment(
@@ -101,6 +258,7 @@ int32 SMiaIANetworkView::OnPaint(
     bool) const
 {
     NeuronPositions.Reset();
+    ViewportSize = AllottedGeometry.GetLocalSize();
     const FMiaIAEditorPalette palette =
         FMiaIAEditorTheme::Palette(Theme);
 
@@ -122,37 +280,28 @@ int32 SMiaIANetworkView::OnPaint(
         return LayerId;
     }
 
-    const FVector2D size = AllottedGeometry.GetLocalSize();
-    const float usableWidth = FMath::Max(
-        1.0f,
-        static_cast<float>(size.X) - HorizontalPadding * 2.0f);
-    const float usableHeight = FMath::Max(
-        1.0f,
-        static_cast<float>(size.Y) - VerticalPadding * 2.0f);
+    const FVector2D size = ViewportSize;
     const int32 layerCount = Snapshot.Layers.Num();
 
     for (int32 layerIndex = 0; layerIndex < layerCount; ++layerIndex)
     {
         const FMiaIALayerSnapshot& layer = Snapshot.Layers[layerIndex];
-        const float x = layerCount == 1
-            ? static_cast<float>(size.X) * 0.5f
-            : HorizontalPadding + usableWidth *
-                static_cast<float>(layerIndex) /
-                static_cast<float>(layerCount - 1);
         const int32 neuronCount = layer.Neurons.Num();
 
         for (int32 neuronIndex = 0;
             neuronIndex < neuronCount;
             ++neuronIndex)
         {
-            const float y = neuronCount == 1
-                ? static_cast<float>(size.Y) * 0.5f
-                : VerticalPadding + usableHeight *
-                    static_cast<float>(neuronIndex) /
-                    static_cast<float>(neuronCount - 1);
+            const FMiaIANeuronSnapshot& neuron =
+                layer.Neurons[neuronIndex];
+            const FVector2D* manual =
+                ManualNeuronPositions.Find(neuron.Id);
+            const FVector2D normalized = manual
+                ? *manual
+                : AutomaticPosition(layerIndex, neuronIndex);
             NeuronPositions.Add(
-                layer.Neurons[neuronIndex].Id,
-                FVector2D(x, y));
+                neuron.Id,
+                ViewPosition(normalized, size));
         }
     }
 
@@ -256,13 +405,21 @@ FReply SMiaIANetworkView::OnMouseButtonDown(
     const FGeometry& MyGeometry,
     const FPointerEvent& MouseEvent)
 {
-    if (MouseEvent.GetEffectingButton() != EKeys::LeftMouseButton)
+    const FKey button = MouseEvent.GetEffectingButton();
+    const FVector2D localPosition = MyGeometry.AbsoluteToLocal(
+        MouseEvent.GetScreenSpacePosition());
+
+    if (button == EKeys::MiddleMouseButton)
+    {
+        bPanning = true;
+        LastPointerPosition = localPosition;
+        return FReply::Handled().CaptureMouse(SharedThis(this));
+    }
+
+    if (button != EKeys::LeftMouseButton)
     {
         return FReply::Unhandled();
     }
-
-    const FVector2D localPosition = MyGeometry.AbsoluteToLocal(
-        MouseEvent.GetScreenSpacePosition());
 
     for (const TPair<int64, FVector2D>& entry : NeuronPositions)
     {
@@ -271,9 +428,11 @@ FReply SMiaIANetworkView::OnMouseButtonDown(
         {
             SelectedNeuronId = entry.Key;
             SelectedConnectionId = -1;
+            DraggedNeuronId = entry.Key;
+            LastPointerPosition = localPosition;
             OnNeuronSelected.ExecuteIfBound(entry.Key);
             Invalidate(EInvalidateWidgetReason::Paint);
-            return FReply::Handled();
+            return FReply::Handled().CaptureMouse(SharedThis(this));
         }
     }
 
@@ -315,4 +474,91 @@ FReply SMiaIANetworkView::OnMouseButtonDown(
     }
 
     return FReply::Unhandled();
+}
+
+FReply SMiaIANetworkView::OnMouseButtonUp(
+    const FGeometry&,
+    const FPointerEvent& MouseEvent)
+{
+    const FKey button = MouseEvent.GetEffectingButton();
+    const bool completesNeuronDrag =
+        button == EKeys::LeftMouseButton && DraggedNeuronId >= 0;
+    const bool completesPan =
+        button == EKeys::MiddleMouseButton && bPanning;
+
+    if (!completesNeuronDrag && !completesPan)
+    {
+        return FReply::Unhandled();
+    }
+
+    DraggedNeuronId = -1;
+    bPanning = false;
+    return FReply::Handled().ReleaseMouseCapture();
+}
+
+FReply SMiaIANetworkView::OnMouseMove(
+    const FGeometry& MyGeometry,
+    const FPointerEvent& MouseEvent)
+{
+    if (!HasMouseCapture())
+    {
+        return FReply::Unhandled();
+    }
+
+    const FVector2D localPosition = MyGeometry.AbsoluteToLocal(
+        MouseEvent.GetScreenSpacePosition());
+
+    if (DraggedNeuronId >= 0)
+    {
+        ManualNeuronPositions.Add(
+            DraggedNeuronId,
+            LocalToNormalized(localPosition, MyGeometry.GetLocalSize()));
+        LastPointerPosition = localPosition;
+        Invalidate(EInvalidateWidgetReason::Paint);
+        return FReply::Handled();
+    }
+
+    if (bPanning)
+    {
+        ViewOffset += localPosition - LastPointerPosition;
+        LastPointerPosition = localPosition;
+        Invalidate(EInvalidateWidgetReason::Paint);
+        return FReply::Handled();
+    }
+
+    return FReply::Unhandled();
+}
+
+FReply SMiaIANetworkView::OnMouseWheel(
+    const FGeometry& MyGeometry,
+    const FPointerEvent& MouseEvent)
+{
+    const float previousZoom = Zoom;
+    const float zoomFactor = FMath::Pow(
+        ZoomStep,
+        MouseEvent.GetWheelDelta());
+    Zoom = FMath::Clamp(
+        previousZoom * zoomFactor,
+        MinimumZoom,
+        MaximumZoom);
+
+    if (FMath::IsNearlyEqual(previousZoom, Zoom))
+    {
+        return FReply::Handled();
+    }
+
+    const FVector2D localPosition = MyGeometry.AbsoluteToLocal(
+        MouseEvent.GetScreenSpacePosition());
+    ViewOffset = localPosition -
+        (localPosition - ViewOffset) * (Zoom / previousZoom);
+    Invalidate(EInvalidateWidgetReason::Paint);
+    return FReply::Handled();
+}
+
+void SMiaIANetworkView::OnMouseCaptureLost(
+    const FCaptureLostEvent& CaptureLostEvent)
+{
+    DraggedNeuronId = -1;
+    bPanning = false;
+    SLeafWidget::OnMouseCaptureLost(CaptureLostEvent);
 }

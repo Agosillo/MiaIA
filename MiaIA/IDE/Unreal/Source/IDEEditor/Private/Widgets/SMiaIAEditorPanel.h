@@ -34,6 +34,8 @@ private:
         double CurrentTime,
         float DeltaTime);
     FReply HandleRefresh();
+    FReply HandleFitView();
+    FReply HandleResetLayout();
     FReply HandleResume();
     FReply HandlePause();
     FReply HandleStartDebug();
