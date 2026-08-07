@@ -25,6 +25,83 @@ enum class EMiaIATrainingSessionStatus : uint8
     Cancelled
 };
 
+UENUM(BlueprintType)
+enum class EMiaIAActivationType : uint8
+{
+    Sigmoid,
+    ReLU,
+    Tanh,
+    Linear
+};
+
+USTRUCT(BlueprintType)
+struct IDE_API FMiaIANeuronSnapshot
+{
+    GENERATED_BODY()
+
+    UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
+    int64 Id{};
+
+    UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
+    double Activation{};
+
+    UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
+    double Bias{};
+};
+
+USTRUCT(BlueprintType)
+struct IDE_API FMiaIALayerSnapshot
+{
+    GENERATED_BODY()
+
+    UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
+    int64 Id{};
+
+    UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
+    FString Name;
+
+    UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
+    int64 Order{};
+
+    UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
+    EMiaIAActivationType Activation{
+        EMiaIAActivationType::Sigmoid
+    };
+
+    UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
+    TArray<FMiaIANeuronSnapshot> Neurons;
+};
+
+USTRUCT(BlueprintType)
+struct IDE_API FMiaIAConnectionSnapshot
+{
+    GENERATED_BODY()
+
+    UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
+    int64 Id{};
+
+    UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
+    int64 FromNeuron{};
+
+    UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
+    int64 ToNeuron{};
+
+    UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
+    double Weight{};
+};
+
+USTRUCT(BlueprintType)
+struct IDE_API FMiaIANetworkSnapshot
+{
+    GENERATED_BODY()
+
+    UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
+    TArray<FMiaIALayerSnapshot> Layers;
+
+    UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
+    TArray<FMiaIAConnectionSnapshot> Connections;
+};
+
 USTRUCT(BlueprintType)
 struct IDE_API FMiaIATrainingDebugSnapshot
 {

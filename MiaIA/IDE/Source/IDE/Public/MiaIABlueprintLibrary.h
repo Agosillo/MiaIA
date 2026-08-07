@@ -18,6 +18,9 @@ public:
         int32 HiddenLayers,
         int32 OutputCount);
 
+    UFUNCTION(BlueprintPure, Category = "MiaIA|Network")
+    static FMiaIANetworkSnapshot GetNetworkSnapshot();
+
     UFUNCTION(BlueprintCallable, Category = "MiaIA|Dataset")
     static bool ImportCsvDataset(
         const FString& Path,
@@ -34,6 +37,12 @@ public:
     UFUNCTION(BlueprintPure, Category = "MiaIA|Training")
     static FMiaIATrainingSessionSnapshot GetTrainingSession();
 
+    UFUNCTION(BlueprintCallable, Category = "MiaIA|Training")
+    static bool ResumeTrainingSession();
+
+    UFUNCTION(BlueprintCallable, Category = "MiaIA|Training")
+    static bool PauseTrainingSession();
+
     UFUNCTION(BlueprintCallable, Category = "MiaIA|Training|Debug")
     static bool StartSessionDebug(
         FMiaIATrainingDebugSnapshot& OutDebug);
@@ -47,6 +56,9 @@ public:
 
     UFUNCTION(BlueprintPure, Category = "MiaIA|Training|Debug")
     static FMiaIATrainingDebugSnapshot GetDebugStatus();
+
+    UFUNCTION(BlueprintPure, Category = "MiaIA|Training|Debug")
+    static FMiaIANetworkSnapshot GetDebugNetworkSnapshot();
 
     UFUNCTION(BlueprintCallable, Category = "MiaIA|Training|Debug")
     static bool GetDebugNeuron(

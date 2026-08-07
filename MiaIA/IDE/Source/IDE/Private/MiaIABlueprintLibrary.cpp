@@ -8,6 +8,70 @@
 
 namespace
 {
+    EMiaIAActivationType ToBlueprint(
+        MiaIA::Core::ActivationType activation)
+    {
+        switch (activation)
+        {
+        case MiaIA::Core::ActivationType::Sigmoid:
+            return EMiaIAActivationType::Sigmoid;
+        case MiaIA::Core::ActivationType::ReLU:
+            return EMiaIAActivationType::ReLU;
+        case MiaIA::Core::ActivationType::Tanh:
+            return EMiaIAActivationType::Tanh;
+        case MiaIA::Core::ActivationType::Linear:
+            return EMiaIAActivationType::Linear;
+        }
+
+        return EMiaIAActivationType::Sigmoid;
+    }
+
+    FMiaIANetworkSnapshot ToBlueprint(
+        const MiaIA::Core::NetworkSnapshot& source)
+    {
+        FMiaIANetworkSnapshot result;
+        result.Layers.Reserve(static_cast<int32>(source.Layers.size()));
+
+        for (const auto& sourceLayer : source.Layers)
+        {
+            FMiaIALayerSnapshot layer;
+            layer.Id = static_cast<int64>(sourceLayer.Id);
+            layer.Name = UTF8_TO_TCHAR(sourceLayer.Name.c_str());
+            layer.Order = static_cast<int64>(sourceLayer.Order);
+            layer.Activation = ToBlueprint(sourceLayer.Activation);
+            layer.Neurons.Reserve(
+                static_cast<int32>(sourceLayer.Neurons.size()));
+
+            for (const auto& sourceNeuron : sourceLayer.Neurons)
+            {
+                FMiaIANeuronSnapshot neuron;
+                neuron.Id = static_cast<int64>(sourceNeuron.Id);
+                neuron.Activation = sourceNeuron.Activation;
+                neuron.Bias = sourceNeuron.Bias;
+                layer.Neurons.Add(MoveTemp(neuron));
+            }
+
+            result.Layers.Add(MoveTemp(layer));
+        }
+
+        result.Connections.Reserve(
+            static_cast<int32>(source.Connections.size()));
+
+        for (const auto& sourceConnection : source.Connections)
+        {
+            FMiaIAConnectionSnapshot connection;
+            connection.Id = static_cast<int64>(sourceConnection.Id);
+            connection.FromNeuron =
+                static_cast<int64>(sourceConnection.FromNeuron);
+            connection.ToNeuron =
+                static_cast<int64>(sourceConnection.ToNeuron);
+            connection.Weight = sourceConnection.Weight;
+            result.Connections.Add(MoveTemp(connection));
+        }
+
+        return result;
+    }
+
     EMiaIATrainingDebugPhase ToBlueprint(
         MiaIA::Core::TrainingDebugPhase phase)
     {
@@ -154,6 +218,11 @@ bool UMiaIABlueprintLibrary::CreateDenseNetwork(
         OutputCount);
 }
 
+FMiaIANetworkSnapshot UMiaIABlueprintLibrary::GetNetworkSnapshot()
+{
+    return ToBlueprint(MiaIA::SDK::MiaIAClient::GetSnapshot());
+}
+
 bool UMiaIABlueprintLibrary::ImportCsvDataset(
     const FString& Path,
     int32 InputCount,
@@ -205,6 +274,16 @@ UMiaIABlueprintLibrary::GetTrainingSession()
         MiaIA::SDK::MiaIAClient::GetTrainingSession());
 }
 
+bool UMiaIABlueprintLibrary::ResumeTrainingSession()
+{
+    return MiaIA::SDK::MiaIAClient::ResumeTrainingSession();
+}
+
+bool UMiaIABlueprintLibrary::PauseTrainingSession()
+{
+    return MiaIA::SDK::MiaIAClient::PauseTrainingSession();
+}
+
 bool UMiaIABlueprintLibrary::StartSessionDebug(
     FMiaIATrainingDebugSnapshot& OutDebug)
 {
@@ -241,6 +320,12 @@ bool UMiaIABlueprintLibrary::CancelDebug()
 FMiaIATrainingDebugSnapshot UMiaIABlueprintLibrary::GetDebugStatus()
 {
     return ToBlueprint(MiaIA::SDK::MiaIAClient::GetTrainingDebug());
+}
+
+FMiaIANetworkSnapshot UMiaIABlueprintLibrary::GetDebugNetworkSnapshot()
+{
+    return ToBlueprint(
+        MiaIA::SDK::MiaIAClient::GetTrainingDebug().CandidateNetwork);
 }
 
 bool UMiaIABlueprintLibrary::GetDebugNeuron(

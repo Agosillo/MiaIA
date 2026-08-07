@@ -21,7 +21,10 @@ public class IDEEditor : ModuleRules
             "AssetRegistry",
             "BlueprintEditorLibrary",
             "BlueprintGraph",
+            "InputCore",
             "Kismet",
+            "Slate",
+            "SlateCore",
             "UnrealEd"
         });
     }
