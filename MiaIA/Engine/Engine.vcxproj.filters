@@ -75,6 +75,12 @@
     <ClInclude Include="Interchange\OnnxImporter.h">
       <Filter>File di intestazione</Filter>
     </ClInclude>
+    <ClInclude Include="Evaluation\LossEvaluator.h">
+      <Filter>File di intestazione</Filter>
+    </ClInclude>
+    <ClInclude Include="Evaluation\SampleEvaluator.h">
+      <Filter>File di intestazione</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Engine.cpp">
@@ -117,6 +123,12 @@
       <Filter>File di origine</Filter>
     </ClCompile>
     <ClCompile Include="Interchange\OnnxImporter.cpp">
+      <Filter>File di origine</Filter>
+    </ClCompile>
+    <ClCompile Include="Evaluation\LossEvaluator.cpp">
+      <Filter>File di origine</Filter>
+    </ClCompile>
+    <ClCompile Include="Evaluation\SampleEvaluator.cpp">
       <Filter>File di origine</Filter>
     </ClCompile>
   </ItemGroup>

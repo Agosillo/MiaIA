@@ -150,6 +150,8 @@
     <ClInclude Include="Data\DatasetInspector.h" />
     <ClInclude Include="Data\DatasetRuntime.h" />
     <ClInclude Include="Editing\NetworkEditor.h" />
+    <ClInclude Include="Evaluation\LossEvaluator.h" />
+    <ClInclude Include="Evaluation\SampleEvaluator.h" />
     <ClInclude Include="Execution\ForwardEngine.h" />
     <ClInclude Include="framework.h" />
     <ClInclude Include="Inspection\NetworkInspector.h" />
@@ -170,6 +172,8 @@
     <ClCompile Include="Data\DatasetRuntime.cpp" />
     <ClCompile Include="Editing\NetworkEditor.cpp" />
     <ClCompile Include="Engine.cpp" />
+    <ClCompile Include="Evaluation\LossEvaluator.cpp" />
+    <ClCompile Include="Evaluation\SampleEvaluator.cpp" />
     <ClCompile Include="Execution\ForwardEngine.cpp" />
     <ClCompile Include="Inspection\NetworkInspector.cpp" />
     <ClCompile Include="Input\NetworkInput.cpp" />

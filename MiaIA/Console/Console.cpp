@@ -34,7 +34,7 @@ void PrintHelp()
         << "  help\n"
         << "      Show available commands\n\n"
 
-        << "  create [input hidden layers output]\n"
+        << "  create <inputs> <neurons-per-hidden-layer> <hidden-layers> <outputs>\n"
         << "      Create a dense neural network\n\n"
         << "      Example:\n"
         << "        create 784 256 3 10\n\n"
@@ -68,6 +68,9 @@ void PrintHelp()
 
         << "  dataset apply [index]\n"
         << "      Apply one sample to the network input\n\n"
+
+        << "  dataset evaluate [index] mse\n"
+        << "      Apply and evaluate one sample using mean squared error\n\n"
 
         << "  dataset clear\n"
         << "      Clear the current dataset\n\n"
@@ -406,6 +409,65 @@ void HandleDatasetCommand(const std::string& command)
         MiaIAClient::ClearDataset();
         std::cout
             << "Dataset cleared.\n";
+
+        return;
+    }
+
+    if (command.rfind("dataset evaluate", 0) == 0)
+    {
+        std::stringstream stream(command);
+        std::string datasetToken;
+        std::string action;
+        std::size_t index{};
+        std::string lossName;
+
+        if (!(stream >> datasetToken >> action >> index >> lossName) ||
+            datasetToken != "dataset" ||
+            action != "evaluate" ||
+            lossName != "mse")
+        {
+            std::cout
+                << "Usage: dataset evaluate <index> mse\n";
+
+            return;
+        }
+
+        stream >> std::ws;
+
+        if (!stream.eof())
+        {
+            std::cout
+                << "Usage: dataset evaluate <index> mse\n";
+
+            return;
+        }
+
+        MiaIA::Core::SampleEvaluationSnapshot evaluation;
+
+        if (!MiaIAClient::EvaluateDatasetSample(
+            index,
+            MiaIA::Core::LossType::MeanSquaredError,
+            evaluation))
+        {
+            std::cout
+                << "Dataset sample evaluation failed. "
+                << "Check the sample, network and output dimensions.\n";
+
+            return;
+        }
+
+        std::cout
+            << "\nSample Evaluation " << evaluation.SampleIndex << "\n"
+            << "Targets: ";
+        PrintValues(evaluation.Targets);
+        std::cout << "\nPredictions: ";
+        PrintValues(evaluation.Predictions);
+        std::cout << "\nErrors (prediction - target): ";
+        PrintValues(evaluation.Errors);
+        std::cout
+            << "\nMean squared error: "
+            << evaluation.Loss
+            << "\n";
 
         return;
     }

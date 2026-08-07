@@ -321,6 +321,135 @@ int main()
 
     });
 
+    runner.Run("Dataset sample evaluation", [&]()
+    {
+    const std::filesystem::path evaluationPath =
+        std::filesystem::temp_directory_path() /
+        "miaia_dataset_evaluation_test.csv";
+    const std::filesystem::path incompatiblePath =
+        std::filesystem::temp_directory_path() /
+        "miaia_dataset_evaluation_incompatible_test.csv";
+
+    {
+        std::ofstream output(evaluationPath);
+        assert(output.good());
+        output
+            << "x1,x2,target1,target2\n"
+            << "0.5,-1,1,2\n";
+    }
+
+    {
+        std::ofstream output(incompatiblePath);
+        assert(output.good());
+        output
+            << "x1,x2,target\n"
+            << "0.5,-1,1\n";
+    }
+
+    MiaIAClient::ClearDataset();
+    MiaIAClient::ClearNetwork();
+
+    assert(MiaIAClient::ImportCsvDataset(
+        evaluationPath.string(),
+        2,
+        2));
+    assert(MiaIAClient::CreateDenseNetwork(2, 2, 0, 2));
+    assert(MiaIAClient::SetLayerActivation(
+        1,
+        MiaIA::Core::ActivationType::Linear));
+
+    assert(MiaIAClient::SetConnectionWeight(1, 2.0));
+    assert(MiaIAClient::SetConnectionWeight(2, -1.0));
+    assert(MiaIAClient::SetConnectionWeight(3, 3.0));
+    assert(MiaIAClient::SetConnectionWeight(4, 0.5));
+    assert(MiaIAClient::SetNeuronBias(1003, 0.25));
+    assert(MiaIAClient::SetNeuronBias(1004, -0.5));
+
+    const auto beforeEvaluation = MiaIAClient::GetSnapshot();
+
+    MiaIA::Core::SampleEvaluationSnapshot evaluation;
+
+    assert(MiaIAClient::EvaluateDatasetSample(
+        0,
+        MiaIA::Core::LossType::MeanSquaredError,
+        evaluation));
+
+    assert(evaluation.SampleIndex == 0);
+    assert(evaluation.Type == MiaIA::Core::LossType::MeanSquaredError);
+    assert(evaluation.Targets.size() == 2);
+    assert(evaluation.Predictions.size() == 2);
+    assert(evaluation.Errors.size() == 2);
+    assert(std::abs(evaluation.Targets[0] - 1.0) < 1e-12);
+    assert(std::abs(evaluation.Targets[1] - 2.0) < 1e-12);
+    assert(std::abs(evaluation.Predictions[0] - (-1.75)) < 1e-12);
+    assert(std::abs(evaluation.Predictions[1] - (-1.5)) < 1e-12);
+    assert(std::abs(evaluation.Errors[0] - (-2.75)) < 1e-12);
+    assert(std::abs(evaluation.Errors[1] - (-3.5)) < 1e-12);
+    assert(std::abs(evaluation.Loss - 9.90625) < 1e-12);
+
+    const auto afterEvaluation = MiaIAClient::GetSnapshot();
+
+    assert(afterEvaluation.Connections.size() ==
+        beforeEvaluation.Connections.size());
+
+    for (std::size_t index = 0;
+        index < afterEvaluation.Connections.size();
+        ++index)
+    {
+        assert(afterEvaluation.Connections[index].Weight ==
+            beforeEvaluation.Connections[index].Weight);
+    }
+
+    assert(afterEvaluation.Layers[1].Neurons[0].Bias ==
+        beforeEvaluation.Layers[1].Neurons[0].Bias);
+    assert(afterEvaluation.Layers[1].Neurons[1].Bias ==
+        beforeEvaluation.Layers[1].Neurons[1].Bias);
+
+    const double successfulLoss = evaluation.Loss;
+
+    assert(!MiaIAClient::EvaluateDatasetSample(
+        1,
+        MiaIA::Core::LossType::MeanSquaredError,
+        evaluation));
+    assert(evaluation.Loss == successfulLoss);
+
+    assert(!MiaIAClient::EvaluateDatasetSample(
+        0,
+        static_cast<MiaIA::Core::LossType>(999),
+        evaluation));
+    assert(evaluation.Loss == successfulLoss);
+
+    assert(MiaIAClient::ImportCsvDataset(
+        incompatiblePath.string(),
+        2,
+        1));
+    assert(MiaIAClient::SetInputValues({ 0.25, 0.75 }));
+
+    const auto beforeIncompatibleEvaluation =
+        MiaIAClient::GetSnapshot();
+
+    assert(!MiaIAClient::EvaluateDatasetSample(
+        0,
+        MiaIA::Core::LossType::MeanSquaredError,
+        evaluation));
+    assert(evaluation.Loss == successfulLoss);
+
+    const auto afterIncompatibleEvaluation =
+        MiaIAClient::GetSnapshot();
+
+    assert(afterIncompatibleEvaluation.Layers[0].Neurons[0].Activation ==
+        beforeIncompatibleEvaluation.Layers[0].Neurons[0].Activation);
+    assert(afterIncompatibleEvaluation.Layers[0].Neurons[1].Activation ==
+        beforeIncompatibleEvaluation.Layers[0].Neurons[1].Activation);
+
+    MiaIAClient::ClearDataset();
+    MiaIAClient::ClearNetwork();
+
+    std::filesystem::remove(evaluationPath);
+    std::filesystem::remove(incompatiblePath);
+
+    });
+
     runner.Run("Network input", [&]()
     {
     MiaIAClient::ClearNetwork();

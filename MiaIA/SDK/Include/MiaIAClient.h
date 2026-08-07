@@ -7,6 +7,8 @@
 
 #include "../../Core/Public/NetworkSnapshot.h"
 #include "../../Core/Public/DatasetSummary.h"
+#include "../../Core/Public/LossType.h"
+#include "../../Core/Public/SampleEvaluationSnapshot.h"
 #include "../../Core/Public/SampleSnapshot.h"
 
 namespace MiaIA::SDK
@@ -47,6 +49,10 @@ namespace MiaIA::SDK
             std::size_t index,
             Core::SampleSnapshot& result);
         static bool ApplyDatasetSample(std::size_t index);
+        static bool EvaluateDatasetSample(
+            std::size_t index,
+            Core::LossType type,
+            Core::SampleEvaluationSnapshot& result);
         static bool Forward();
     };
 }

@@ -4,6 +4,7 @@
 #include "../../Engine/Data/CsvDatasetImporter.h"
 #include "../../Engine/Data/DatasetInspector.h"
 #include "../../Engine/Data/DatasetRuntime.h"
+#include "../../Engine/Evaluation/SampleEvaluator.h"
 #include "../../Core/Model/Dataset.h"
 
 namespace MiaIA::SDK
@@ -49,5 +50,18 @@ namespace MiaIA::SDK
             Detail::ClientDataset(),
             index,
             Detail::ClientNetwork());
+    }
+
+    bool MiaIAClient::EvaluateDatasetSample(
+        std::size_t index,
+        Core::LossType type,
+        Core::SampleEvaluationSnapshot& result)
+    {
+        return Engine::SampleEvaluator::Evaluate(
+            Detail::ClientDataset(),
+            index,
+            Detail::ClientNetwork(),
+            type,
+            result);
     }
 }
