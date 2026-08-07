@@ -87,6 +87,9 @@ void PrintHelp()
         << "  train step <sample-index> <learning-rate> mse\n"
         << "      Apply one atomic SGD training step\n\n"
 
+        << "  train epoch <learning-rate> mse\n"
+        << "      Train all dataset samples in order as one atomic epoch\n\n"
+
         << "  summary\n"
         << "      Show network overview\n\n"
 
@@ -683,22 +686,88 @@ void HandleTrainCommand(const std::string& command)
     std::stringstream stream(command);
     std::string trainToken;
     std::string action;
+    if (!(stream >> trainToken >> action) || trainToken != "train")
+    {
+        std::cout
+            << "Usage: train step <sample-index> <learning-rate> mse\n"
+            << "       train epoch <learning-rate> mse\n";
+
+        return;
+    }
+
+    if (action == "epoch")
+    {
+        double learningRate{};
+        std::string lossName;
+
+        if (!(stream >> learningRate >> lossName) || lossName != "mse")
+        {
+            std::cout
+                << "Usage: train epoch <learning-rate> mse\n";
+
+            return;
+        }
+
+        stream >> std::ws;
+
+        if (!stream.eof())
+        {
+            std::cout
+                << "Usage: train epoch <learning-rate> mse\n";
+
+            return;
+        }
+
+        MiaIA::Core::TrainingEpochSnapshot epoch;
+
+        if (!MiaIAClient::TrainDatasetEpoch(
+            learningRate,
+            MiaIA::Core::LossType::MeanSquaredError,
+            MiaIA::Core::OptimizerType::StochasticGradientDescent,
+            epoch))
+        {
+            std::cout
+                << "Training epoch failed. "
+                << "The network parameters were not changed.\n";
+
+            return;
+        }
+
+        std::cout
+            << "\nTraining Epoch"
+            << "\nSamples: " << epoch.SampleCount
+            << "\nOptimizer: SGD"
+            << "\nLearning rate: " << epoch.LearningRate
+            << "\nMean loss before update: "
+            << epoch.MeanLossBeforeUpdate
+            << "\nMean loss after update: "
+            << epoch.MeanLossAfterUpdate
+            << "\n\nSample Losses\n";
+
+        for (const auto& step : epoch.Steps)
+        {
+            std::cout
+                << "Sample " << step.SampleIndex
+                << " Before " << step.Before.Evaluation.Loss
+                << " After " << step.After.Loss
+                << "\n";
+        }
+
+        std::cout << "\n";
+        return;
+    }
+
     std::size_t sampleIndex{};
     double learningRate{};
     std::string lossName;
 
-    if (!(stream
-        >> trainToken
-        >> action
-        >> sampleIndex
-        >> learningRate
-        >> lossName) ||
-        trainToken != "train" ||
-        action != "step" ||
+    if (action != "step" ||
+        !(stream >> sampleIndex >> learningRate >> lossName) ||
         lossName != "mse")
     {
         std::cout
-            << "Usage: train step <sample-index> <learning-rate> mse\n";
+            << "Usage: train step <sample-index> <learning-rate> mse\n"
+            << "       train epoch <learning-rate> mse\n";
 
         return;
     }

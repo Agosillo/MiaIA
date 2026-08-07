@@ -56,8 +56,14 @@ The operation runs against a candidate network and publishes it only after every
 
 A target-free inference operation combined input validation, forward propagation, and structural output-layer discovery behind `MiaIAClient::Predict`. Console users can now submit an input vector with one command and receive the output vector directly, while `input` plus `forward` remain available for phase-by-phase debugging.
 
+### Atomic dataset training epoch
+
+Single-sample training was composed into one ordered pass over the loaded dataset. Every sample retains its complete `TrainingStepSnapshot`, while the epoch reports running mean losses before and after the individual updates.
+
+The full epoch uses a candidate network and is published only after all samples succeed. Failure on a later sample therefore rolls back earlier candidate updates and preserves both the public network and the caller result.
+
 ## Current position
 
-MiaIA can now represent, execute, interchange, inspect, evaluate, differentiate, and apply one atomic SGD step to a supported feed-forward network. It cannot yet run a multi-step controlled training session, persist a `.mia` workspace, or deliver the planned complete graphical debugging experience.
+MiaIA can now represent, execute, interchange, inspect, evaluate, differentiate, apply an atomic SGD step, and execute one ordered atomic dataset epoch on a supported feed-forward network. It cannot yet run a controlled multi-epoch training session, persist a `.mia` workspace, or deliver the planned complete graphical debugging experience.
 
 Those next steps are tracked in the [Roadmap](../Roadmap/Roadmap.md).

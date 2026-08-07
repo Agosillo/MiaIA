@@ -163,6 +163,7 @@
     <ClInclude Include="Public\SampleGradientSnapshot.h" />
     <ClInclude Include="Public\SampleSnapshot.h" />
     <ClInclude Include="Public\TrainingStepSnapshot.h" />
+    <ClInclude Include="Public\TrainingEpochSnapshot.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Core.cpp" />

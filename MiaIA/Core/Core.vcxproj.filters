@@ -87,6 +87,9 @@
     <ClInclude Include="Public\PredictionSnapshot.h">
       <Filter>File di intestazione</Filter>
     </ClInclude>
+    <ClInclude Include="Public\TrainingEpochSnapshot.h">
+      <Filter>File di intestazione</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Core.cpp">

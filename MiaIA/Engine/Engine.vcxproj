@@ -168,6 +168,7 @@
     <ClInclude Include="Runtime\NetworkRuntime.h" />
     <ClInclude Include="Topology\NetworkTopology.h" />
     <ClInclude Include="Training\TrainingStepExecutor.h" />
+    <ClInclude Include="Training\TrainingEpochExecutor.h" />
     <ClInclude Include="Validation\NetworkValidator.h" />
     <ClInclude Include="Weights\NetworkWeights.h" />
   </ItemGroup>
@@ -203,6 +204,7 @@
     <ClCompile Include="Runtime\NetworkRuntime.cpp" />
     <ClCompile Include="Topology\NetworkTopology.cpp" />
     <ClCompile Include="Training\TrainingStepExecutor.cpp" />
+    <ClCompile Include="Training\TrainingEpochExecutor.cpp" />
     <ClCompile Include="Validation\NetworkValidator.cpp" />
     <ClCompile Include="Weights\NetworkWeights.cpp" />
   </ItemGroup>

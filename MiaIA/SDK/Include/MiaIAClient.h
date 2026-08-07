@@ -14,6 +14,7 @@
 #include "../../Core/Public/SampleGradientSnapshot.h"
 #include "../../Core/Public/SampleSnapshot.h"
 #include "../../Core/Public/TrainingStepSnapshot.h"
+#include "../../Core/Public/TrainingEpochSnapshot.h"
 
 namespace MiaIA::SDK
 {
@@ -67,6 +68,11 @@ namespace MiaIA::SDK
             Core::LossType lossType,
             Core::OptimizerType optimizerType,
             Core::TrainingStepSnapshot& result);
+        static bool TrainDatasetEpoch(
+            double learningRate,
+            Core::LossType lossType,
+            Core::OptimizerType optimizerType,
+            Core::TrainingEpochSnapshot& result);
         static bool Predict(
             const std::vector<double>& inputs,
             Core::PredictionSnapshot& result);

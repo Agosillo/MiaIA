@@ -959,6 +959,184 @@ int main()
 
     });
 
+    runner.Run("Atomic dataset training epoch", [&]()
+    {
+    const std::filesystem::path epochPath =
+        std::filesystem::temp_directory_path() /
+        "miaia_dataset_training_epoch_test.csv";
+
+    {
+        std::ofstream output(epochPath);
+        assert(output.good());
+        output
+            << "x,target\n"
+            << "1,1\n"
+            << "2,0\n";
+    }
+
+    MiaIAClient::ClearDataset();
+    MiaIAClient::ClearNetwork();
+
+    assert(MiaIAClient::ImportCsvDataset(
+        epochPath.string(),
+        1,
+        1));
+    assert(MiaIAClient::CreateDenseNetwork(1, 1, 0, 1));
+    assert(MiaIAClient::SetLayerActivation(
+        1,
+        MiaIA::Core::ActivationType::Linear));
+    assert(MiaIAClient::SetConnectionWeight(1, 0.0));
+    assert(MiaIAClient::SetNeuronBias(1002, 0.0));
+
+    MiaIA::Core::TrainingEpochSnapshot epoch;
+
+    assert(MiaIAClient::TrainDatasetEpoch(
+        0.1,
+        MiaIA::Core::LossType::MeanSquaredError,
+        MiaIA::Core::OptimizerType::StochasticGradientDescent,
+        epoch));
+
+    assert(epoch.SampleCount == 2);
+    assert(std::abs(epoch.LearningRate - 0.1) < 1e-12);
+    assert(epoch.Loss == MiaIA::Core::LossType::MeanSquaredError);
+    assert(epoch.Optimizer ==
+        MiaIA::Core::OptimizerType::StochasticGradientDescent);
+    assert(epoch.Steps.size() == 2);
+    assert(std::abs(epoch.MeanLossBeforeUpdate - 0.68) < 1e-12);
+    assert(std::abs(epoch.MeanLossAfterUpdate - 0.18) < 1e-12);
+
+    assert(epoch.Steps[0].SampleIndex == 0);
+    assert(std::abs(
+        epoch.Steps[0].Before.Evaluation.Loss - 1.0) < 1e-12);
+    assert(std::abs(epoch.Steps[0].After.Loss - 0.36) < 1e-12);
+    assert(std::abs(
+        epoch.Steps[0].ConnectionUpdates[0].UpdatedWeight - 0.2) <
+        1e-12);
+    assert(std::abs(
+        epoch.Steps[0].NeuronUpdates[0].UpdatedBias - 0.2) <
+        1e-12);
+
+    assert(epoch.Steps[1].SampleIndex == 1);
+    assert(std::abs(
+        epoch.Steps[1].Before.Evaluation.Loss - 0.36) < 1e-12);
+    assert(std::abs(epoch.Steps[1].After.Loss) < 1e-12);
+    assert(std::abs(
+        epoch.Steps[1].ConnectionUpdates[0].UpdatedWeight - (-0.04)) <
+        1e-12);
+    assert(std::abs(
+        epoch.Steps[1].NeuronUpdates[0].UpdatedBias - 0.08) <
+        1e-12);
+
+    const auto afterEpoch = MiaIAClient::GetSnapshot();
+
+    assert(afterEpoch.Layers[0].Neurons[0].Bias == 0.0);
+    assert(std::abs(afterEpoch.Connections[0].Weight - (-0.04)) < 1e-12);
+    assert(std::abs(afterEpoch.Layers[1].Neurons[0].Bias - 0.08) < 1e-12);
+
+    MiaIA::Core::TrainingEpochSnapshot rejectedEpoch;
+    rejectedEpoch.SampleCount = 999;
+    rejectedEpoch.LearningRate = 42.0;
+    rejectedEpoch.MeanLossBeforeUpdate = 12.0;
+    rejectedEpoch.MeanLossAfterUpdate = 10.0;
+
+    const auto assertRejectedEpochPreserved = [&]()
+    {
+        assert(rejectedEpoch.SampleCount == 999);
+        assert(rejectedEpoch.LearningRate == 42.0);
+        assert(rejectedEpoch.MeanLossBeforeUpdate == 12.0);
+        assert(rejectedEpoch.MeanLossAfterUpdate == 10.0);
+        assert(rejectedEpoch.Steps.empty());
+    };
+
+    for (const double invalidLearningRate :
+        std::vector<double>{
+            0.0,
+            -0.1,
+            std::numeric_limits<double>::quiet_NaN(),
+            std::numeric_limits<double>::infinity(),
+            (std::numeric_limits<double>::max)()
+        })
+    {
+        assert(!MiaIAClient::TrainDatasetEpoch(
+            invalidLearningRate,
+            MiaIA::Core::LossType::MeanSquaredError,
+            MiaIA::Core::OptimizerType::StochasticGradientDescent,
+            rejectedEpoch));
+        assertRejectedEpochPreserved();
+    }
+
+    assert(!MiaIAClient::TrainDatasetEpoch(
+        0.1,
+        static_cast<MiaIA::Core::LossType>(999),
+        MiaIA::Core::OptimizerType::StochasticGradientDescent,
+        rejectedEpoch));
+    assertRejectedEpochPreserved();
+
+    assert(!MiaIAClient::TrainDatasetEpoch(
+        0.1,
+        MiaIA::Core::LossType::MeanSquaredError,
+        static_cast<MiaIA::Core::OptimizerType>(999),
+        rejectedEpoch));
+    assertRejectedEpochPreserved();
+
+    MiaIAClient::ClearDataset();
+
+    assert(!MiaIAClient::TrainDatasetEpoch(
+        0.1,
+        MiaIA::Core::LossType::MeanSquaredError,
+        MiaIA::Core::OptimizerType::StochasticGradientDescent,
+        rejectedEpoch));
+    assertRejectedEpochPreserved();
+
+    const std::filesystem::path failingEpochPath =
+        std::filesystem::temp_directory_path() /
+        "miaia_dataset_training_epoch_rollback_test.csv";
+
+    {
+        std::ofstream output(failingEpochPath);
+        assert(output.good());
+        output
+            << "x,target\n"
+            << "1,1\n"
+            << "1e308,-1e308\n";
+    }
+
+    assert(MiaIAClient::ImportCsvDataset(
+        failingEpochPath.string(),
+        1,
+        1));
+    assert(MiaIAClient::SetConnectionWeight(1, 0.0));
+    assert(MiaIAClient::SetNeuronBias(1002, 0.0));
+
+    const auto beforeRejectedEpoch = MiaIAClient::GetSnapshot();
+
+    assert(!MiaIAClient::TrainDatasetEpoch(
+        0.1,
+        MiaIA::Core::LossType::MeanSquaredError,
+        MiaIA::Core::OptimizerType::StochasticGradientDescent,
+        rejectedEpoch));
+    assertRejectedEpochPreserved();
+
+    const auto afterRejectedEpoch = MiaIAClient::GetSnapshot();
+
+    assert(afterRejectedEpoch.Connections[0].Weight ==
+        beforeRejectedEpoch.Connections[0].Weight);
+    assert(afterRejectedEpoch.Layers[0].Neurons[0].Bias ==
+        beforeRejectedEpoch.Layers[0].Neurons[0].Bias);
+    assert(afterRejectedEpoch.Layers[0].Neurons[0].Activation ==
+        beforeRejectedEpoch.Layers[0].Neurons[0].Activation);
+    assert(afterRejectedEpoch.Layers[1].Neurons[0].Bias ==
+        beforeRejectedEpoch.Layers[1].Neurons[0].Bias);
+    assert(afterRejectedEpoch.Layers[1].Neurons[0].Activation ==
+        beforeRejectedEpoch.Layers[1].Neurons[0].Activation);
+
+    MiaIAClient::ClearDataset();
+    MiaIAClient::ClearNetwork();
+    std::filesystem::remove(epochPath);
+    std::filesystem::remove(failingEpochPath);
+
+    });
+
     runner.Run("Prediction pipeline", [&]()
     {
     MiaIAClient::ClearNetwork();

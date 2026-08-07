@@ -153,6 +153,21 @@ Copy current network
 
 Stochastic gradient descent applies `parameter - learningRate * gradient`. Input-layer biases are not trainable parameters in the current feed-forward model and are not updated. Copying the candidate network prioritizes transactional correctness in this foundation implementation; a future training-session design may replace the copy with a versioned parameter transaction after equivalent guarantees are tested.
 
+### Atomic dataset epoch
+
+```text
+Copy current network
+    -> visit dataset samples in CSV order
+    -> execute one atomic TrainingStepExecutor operation per sample
+    -> retain every TrainingStepSnapshot
+    -> calculate running before/after loss means
+    -> publish TrainingEpochSnapshot and candidate network after complete success
+```
+
+An epoch currently means exactly one ordered pass over the loaded dataset using single-sample SGD. The entire epoch is transactional at the public network boundary: if any sample fails, the original network and the caller-provided result remain unchanged.
+
+`MeanLossBeforeUpdate` is the mean of each sample's loss immediately before that sample's update. `MeanLossAfterUpdate` is the mean immediately after each update. Because the network changes between samples, these values are execution-trace summaries; they are not full-dataset evaluations of one fixed pre-epoch and post-epoch model.
+
 ## Snapshot boundary
 
 Clients receive snapshots rather than references to mutable engine storage. A snapshot is a value object suitable for inspection, display, logging, comparison, or transport across an integration boundary.
@@ -163,6 +178,7 @@ Current public snapshots include:
 - dataset summary and individual samples;
 - predictions, targets, errors, and loss;
 - activation, pre-activation, bias, and weight gradients.
+- individual SGD parameter updates and ordered epoch step histories.
 
 This boundary is important for future graphical debugging: visual components can consume a stable description without becoming owners of engine internals.
 

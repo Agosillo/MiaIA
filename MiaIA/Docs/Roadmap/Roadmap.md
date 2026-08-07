@@ -20,6 +20,9 @@ The roadmap is organized by dependency rather than by a fixed release date. Math
 - before/after loss and parameter update snapshots;
 - transactional rejection of invalid or non-finite updates.
 - direct SDK and Console prediction for single- and multi-output networks.
+- one ordered, atomic full-dataset SGD epoch;
+- per-sample step snapshots and running epoch loss means;
+- complete epoch rollback when any sample fails.
 
 ## Implemented optimizer foundation
 
@@ -33,12 +36,13 @@ The engine can turn an inspected gradient into one explicit SGD parameter update
 
 Gradient evaluation remains a separate non-mutating operation, so a client can inspect the mathematical result before choosing to execute a training step.
 
+One explicit full-dataset pass is also available through `train epoch`. It reuses the observable single-sample steps in CSV order and preserves the whole public network if any step fails.
+
 ## Next milestone: controlled training sessions
 
-After a trustworthy single step exists:
+Building on trustworthy single steps and one explicit epoch:
 
-- iterate over a dataset;
-- define epochs and sample ordering;
+- define multi-epoch session lifetime and configurable sample ordering;
 - expose current epoch and sample index;
 - pause, resume, cancel, and advance one step;
 - retain loss history;

@@ -29,6 +29,7 @@ dataset inspect 0
 dataset evaluate 0 mse
 dataset gradients 0 mse
 train step 0 0.01 mse
+train epoch 0.01 mse
 ```
 
 `dataset evaluate` and `dataset gradients` require a current network whose input and output dimensions match the dataset.
@@ -379,7 +380,25 @@ The Console prints the loss before and after the step and, for every trainable w
 
 The step is transactional. MiaIA performs it on a candidate network and publishes the candidate only after every calculation and the final evaluation succeed. A zero, negative, non-finite, or numerically unsafe learning rate fails without changing network parameters.
 
-A suitable learning rate often reduces loss for the selected sample, but reduction is not guaranteed for every positive value. This command performs one step only; it does not start an epoch or an automatic loop.
+A suitable learning rate often reduces loss for the selected sample, but reduction is not guaranteed for every positive value. This command performs one step only; it does not start an automatic loop.
+
+### `train epoch`
+
+```text
+train epoch <learning-rate> mse
+```
+
+Executes one ordered pass over every sample in the current dataset. Each sample performs the same observable SGD operation as `train step`, and the updated candidate model is passed to the following sample.
+
+Example:
+
+```text
+train epoch 0.01 mse
+```
+
+The Console prints the number of processed samples, the learning rate, the mean loss before and after each sample update, and the before/after loss for every sample. These means summarize the sequential updates: they are not full-dataset loss measurements taken once before and once after the epoch.
+
+The entire epoch is transactional. MiaIA publishes the trained candidate only if every sample succeeds. An invalid sample, incompatible dimension, unsafe update, or non-finite calculation leaves the original network unchanged. The current implementation uses CSV order and does not shuffle samples.
 
 ### `dataset clear`
 
@@ -405,6 +424,7 @@ inspect
 dataset evaluate 0 mse
 dataset gradients 0 mse
 train step 0 0.01 mse
+train epoch 0.01 mse
 ```
 
 This sequence demonstrates the difference between stages:
@@ -414,7 +434,8 @@ This sequence demonstrates the difference between stages:
 3. `forward` changes downstream activations;
 4. `dataset evaluate` performs apply plus forward and calculates loss;
 5. `dataset gradients` performs evaluation plus backward differentiation;
-6. `train step` is the first command in the sequence that updates weights and non-input biases.
+6. `train step` updates weights and non-input biases for one selected sample;
+7. `train epoch` performs the same update once for every sample in dataset order.
 
 ## Common failures
 
