@@ -50,6 +50,11 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Elementi di soluzione", "El
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "SDK", "SDK\SDK.vcxproj", "{E71364B4-EE83-4BFE-8DFB-A620701873CF}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Console Documentation", "Console Documentation", "{B6C6CBBA-6347-41BA-972E-72E3E10718F1}"
+	ProjectSection(SolutionItems) = preProject
+		Docs\Console\Console.md = Docs\Console\Console.md
+	EndProjectSection
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -108,6 +113,7 @@ Global
 		{D1E539D8-1092-48C2-B551-606358A53E74} = {6C83A596-D32D-B35F-00DD-F0C99B673980}
 		{69FE5595-C261-494A-AA24-C451469B3DBA} = {6C83A596-D32D-B35F-00DD-F0C99B673980}
 		{BF2CE80A-03A0-47F3-9C5C-908B17930689} = {6C83A596-D32D-B35F-00DD-F0C99B673980}
+		{B6C6CBBA-6347-41BA-972E-72E3E10718F1} = {6C83A596-D32D-B35F-00DD-F0C99B673980}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {C0D30360-10C0-4D5A-8A25-2939055AA658}
