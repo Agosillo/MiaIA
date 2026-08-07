@@ -60,7 +60,7 @@ Create Dense Network
 
 Call `Advance Debug Phase` repeatedly to move through forward evaluation, backward differentiation, candidate update, verification, and commit. Use `Cancel Debug` before commit to discard the candidate without advancing session progress.
 
-The focused neuron and connection structures expose public and candidate values, gradients, and updates. This is sufficient to drive a simple Blueprint widget or prototype visualization without scanning the complete native snapshot.
+The reflected debug snapshot contains the complete candidate network plus aggregate neuron and connection telemetry. MiaIA Studio therefore refreshes the whole graph with one SDK snapshot instead of issuing one query per visible element. The focused neuron and connection structures remain available for the Inspector: selecting one graph element performs one detailed query for its public value, candidate value, gradient, and update information.
 
 ## Demonstration Blueprint
 
@@ -98,7 +98,7 @@ The animation is slowed down for documentation. The demonstration itself advance
 ### Panel layout
 
 - **Model explorer** lists layers, neurons, and connections. Selecting an item here also selects it in the topology.
-- **Network topology** renders the current layers, neurons, and weighted connections. Neuron color reflects activation strength; connection color and intensity reflect weight sign and magnitude.
+- **Network topology** renders the current layers, neurons, and weighted connections. Its semantic overlay follows the active debug phase: forward uses candidate activations, backward uses gradient sign and normalized magnitude, update uses parameter-delta sign and normalized magnitude, and verified or committed states return to candidate or committed activations and weights.
 - **Inspector** shows neuron activation and bias data or connection weight data, including phase-dependent gradients and candidate updates.
 - **Session and debug status** report training progress and the currently inspected phase.
 - **Console** is the first and initially selected lower tab. It uses a narrow command-suggestion column on the left and a larger output/input workspace on the right. It accepts the same commands as `Console.exe` and operates on the same process-local state displayed by the panel and used by Blueprint nodes.
@@ -186,9 +186,10 @@ The automatic demonstration commits one step and leaves its four-sample training
 2. Select `Start debug` to attach an inspection to the next pending sample.
 3. Select a neuron or connection from the explorer or directly in the topology. A selected connection is drawn thicker in amber.
 4. Select `Step phase` once for each transition: forward, backward, candidate update, verification, and commit.
-5. Observe candidate activations on the graph. For a selected connection, compare public and candidate weights, then inspect its gradient, delta, and updated weight as those values become available.
-6. Before commit, select `Cancel debug` to discard the candidate, or continue stepping to commit it and advance session progress.
-7. After commit, select `Start debug` again to inspect the next pending sample.
+5. Observe the graph overlay change with each phase. Forward displays candidate activation, backward displays positive and negative gradients, update displays positive and negative deltas, and verification returns to the candidate model representation. The legend changes from `weight` to `gradient` or `delta` to identify the current metric.
+6. Select a neuron or connection at any phase to keep using focused inspection. The Inspector compares public and candidate values and shows exact gradient, delta, and updated values as soon as they become available; aggregate graph coloring does not replace this element-level query.
+7. Before commit, select `Cancel debug` to discard the candidate, or continue stepping to commit it and advance session progress.
+8. After commit, select `Start debug` again to inspect the next pending sample.
 
 Neuron color ranges from inactive gray to active green. Positive weights are blue, negative weights are red, and the selected connection is amber. Color intensity and line thickness communicate value strength; exact values remain available in the inspector.
 

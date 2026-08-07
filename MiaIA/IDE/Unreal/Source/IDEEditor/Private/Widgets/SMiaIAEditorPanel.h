@@ -67,6 +67,8 @@ private:
     FText SessionStatusText() const;
     FText DebugPhaseText() const;
     FText NetworkSummaryText() const;
+    FText PositiveMetricLegendText() const;
+    FText NegativeMetricLegendText() const;
     FText ConsoleText() const;
     FText SelectionTitle() const;
     FText SelectionContextText() const;

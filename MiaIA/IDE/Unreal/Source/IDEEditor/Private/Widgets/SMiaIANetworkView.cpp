@@ -48,6 +48,36 @@ void SMiaIANetworkView::SetSnapshot(
     Invalidate(EInvalidateWidgetReason::Paint);
 }
 
+void SMiaIANetworkView::SetDebugSnapshot(
+    const FMiaIATrainingDebugSnapshot& InDebug)
+{
+    DebugPhase = InDebug.Phase;
+    NeuronTelemetry.Reset();
+    ConnectionTelemetry.Reset();
+    MaximumNeuronMetric = UE_DOUBLE_SMALL_NUMBER;
+    MaximumConnectionMetric = UE_DOUBLE_SMALL_NUMBER;
+
+    for (const FMiaIADebugNeuronTelemetry& telemetry :
+        InDebug.NeuronTelemetry)
+    {
+        NeuronTelemetry.Add(telemetry.Id, telemetry);
+        MaximumNeuronMetric = FMath::Max(
+            MaximumNeuronMetric,
+            FMath::Abs(NeuronMetric(telemetry)));
+    }
+
+    for (const FMiaIADebugConnectionTelemetry& telemetry :
+        InDebug.ConnectionTelemetry)
+    {
+        ConnectionTelemetry.Add(telemetry.Id, telemetry);
+        MaximumConnectionMetric = FMath::Max(
+            MaximumConnectionMetric,
+            FMath::Abs(ConnectionMetric(telemetry)));
+    }
+
+    Invalidate(EInvalidateWidgetReason::Paint);
+}
+
 void SMiaIANetworkView::SetSelectedNeuron(int64 InNeuronId)
 {
     SelectedNeuronId = InNeuronId;
@@ -155,6 +185,91 @@ FLinearColor SMiaIANetworkView::ActivationColor(double Activation) const
         palette.InactiveNeuron,
         palette.ActiveNeuron,
         strength);
+}
+
+FLinearColor SMiaIANetworkView::SignedNeuronColor(
+    double Value,
+    double Maximum) const
+{
+    const FMiaIAEditorPalette palette =
+        FMiaIAEditorTheme::Palette(Theme);
+    const float strength = FMath::Clamp(
+        static_cast<float>(FMath::Abs(Value) / Maximum),
+        0.0f,
+        1.0f);
+    const FLinearColor target = Value >= 0.0
+        ? palette.PositiveWeight
+        : palette.NegativeWeight;
+    return FLinearColor::LerpUsingHSV(
+        palette.InactiveNeuron,
+        target,
+        strength);
+}
+
+FLinearColor SMiaIANetworkView::SignedConnectionColor(
+    double Value,
+    double Maximum) const
+{
+    const FMiaIAEditorPalette palette =
+        FMiaIAEditorTheme::Palette(Theme);
+    const float strength = FMath::Clamp(
+        static_cast<float>(FMath::Abs(Value) / Maximum),
+        0.0f,
+        1.0f);
+    const FLinearColor target = Value >= 0.0
+        ? palette.PositiveWeight
+        : palette.NegativeWeight;
+    return target.CopyWithNewOpacity(0.15f + strength * 0.85f);
+}
+
+double SMiaIANetworkView::NeuronMetric(
+    const FMiaIADebugNeuronTelemetry& Telemetry) const
+{
+    if (DebugPhase == EMiaIATrainingDebugPhase::BackwardComplete &&
+        Telemetry.bHasGradients)
+    {
+        return Telemetry.LayerOrder == 0
+            ? Telemetry.ActivationGradient
+            : Telemetry.BiasGradient;
+    }
+
+    if (DebugPhase == EMiaIATrainingDebugPhase::UpdateComplete &&
+        Telemetry.bHasUpdate)
+    {
+        return Telemetry.Delta;
+    }
+
+    if (DebugPhase == EMiaIATrainingDebugPhase::BackwardComplete ||
+        DebugPhase == EMiaIATrainingDebugPhase::UpdateComplete)
+    {
+        return 0.0;
+    }
+
+    return Telemetry.CandidateActivation;
+}
+
+double SMiaIANetworkView::ConnectionMetric(
+    const FMiaIADebugConnectionTelemetry& Telemetry) const
+{
+    if (DebugPhase == EMiaIATrainingDebugPhase::BackwardComplete &&
+        Telemetry.bHasGradient)
+    {
+        return Telemetry.WeightGradient;
+    }
+
+    if (DebugPhase == EMiaIATrainingDebugPhase::UpdateComplete &&
+        Telemetry.bHasUpdate)
+    {
+        return Telemetry.Delta;
+    }
+
+    if (DebugPhase == EMiaIATrainingDebugPhase::BackwardComplete ||
+        DebugPhase == EMiaIATrainingDebugPhase::UpdateComplete)
+    {
+        return 0.0;
+    }
+
+    return Telemetry.CandidateWeight;
 }
 
 FVector2D SMiaIANetworkView::AutomaticPosition(
@@ -318,16 +433,32 @@ int32 SMiaIANetworkView::OnPaint(
             continue;
         }
 
+        const FMiaIADebugConnectionTelemetry* telemetry =
+            ConnectionTelemetry.Find(connection.Id);
+        const double displayedValue = telemetry
+            ? ConnectionMetric(*telemetry)
+            : connection.Weight;
+        const bool displaysTelemetry = telemetry &&
+            ((DebugPhase == EMiaIATrainingDebugPhase::BackwardComplete &&
+                telemetry->bHasGradient) ||
+                (DebugPhase == EMiaIATrainingDebugPhase::UpdateComplete &&
+                    telemetry->bHasUpdate));
         const float weightStrength = FMath::Clamp(
-            static_cast<float>(FMath::Abs(connection.Weight)),
+            static_cast<float>(displaysTelemetry
+                ? FMath::Abs(displayedValue) / MaximumConnectionMetric
+                : FMath::Abs(displayedValue)),
             0.15f,
             1.0f);
         const bool selected = connection.Id == SelectedConnectionId;
         const FLinearColor connectionColor = selected
             ? palette.Selection
-            : connection.Weight >= 0.0
-                ? palette.PositiveWeight.CopyWithNewOpacity(weightStrength)
-                : palette.NegativeWeight.CopyWithNewOpacity(weightStrength);
+            : displaysTelemetry
+                ? SignedConnectionColor(
+                    displayedValue,
+                    MaximumConnectionMetric)
+                : displayedValue >= 0.0
+                    ? palette.PositiveWeight.CopyWithNewOpacity(weightStrength)
+                    : palette.NegativeWeight.CopyWithNewOpacity(weightStrength);
         const TArray<FVector2D> points{ *from, *to };
         FSlateDrawElement::MakeLines(
             OutDrawElements,
@@ -369,6 +500,21 @@ int32 SMiaIANetworkView::OnPaint(
                     palette.Selection);
             }
 
+            const FMiaIADebugNeuronTelemetry* telemetry =
+                NeuronTelemetry.Find(neuron.Id);
+            const bool displaysTelemetry = telemetry &&
+                ((DebugPhase == EMiaIATrainingDebugPhase::BackwardComplete &&
+                    telemetry->bHasGradients) ||
+                    (DebugPhase == EMiaIATrainingDebugPhase::UpdateComplete &&
+                        telemetry->bHasUpdate));
+            const FLinearColor neuronColor = displaysTelemetry
+                ? SignedNeuronColor(
+                    NeuronMetric(*telemetry),
+                    MaximumNeuronMetric)
+                : ActivationColor(telemetry
+                    ? telemetry->CandidateActivation
+                    : neuron.Activation);
+
             FSlateDrawElement::MakeBox(
                 OutDrawElements,
                 nodeLayer + 1,
@@ -380,7 +526,7 @@ int32 SMiaIANetworkView::OnPaint(
                             NeuronDiameter * 0.5f))),
                 &NeuronBrush,
                 ESlateDrawEffect::None,
-                ActivationColor(neuron.Activation));
+                neuronColor);
 
             FSlateDrawElement::MakeText(
                 OutDrawElements,

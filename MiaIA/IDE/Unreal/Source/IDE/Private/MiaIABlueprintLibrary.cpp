@@ -135,6 +135,114 @@ namespace
             source.CandidateNetwork.Layers.size());
         result.CandidateConnectionCount = static_cast<int64>(
             source.CandidateNetwork.Connections.size());
+        result.CandidateNetwork = ToBlueprint(source.CandidateNetwork);
+
+        TMap<int64, int32> neuronIndices;
+        for (const auto& sourceLayer : source.CandidateNetwork.Layers)
+        {
+            for (const auto& sourceNeuron : sourceLayer.Neurons)
+            {
+                FMiaIADebugNeuronTelemetry telemetry;
+                telemetry.Id = static_cast<int64>(sourceNeuron.Id);
+                telemetry.LayerOrder = static_cast<int64>(sourceLayer.Order);
+                telemetry.CandidateActivation = sourceNeuron.Activation;
+                neuronIndices.Add(
+                    telemetry.Id,
+                    result.NeuronTelemetry.Add(MoveTemp(telemetry)));
+            }
+        }
+
+        const bool hasGradients = source.Phase >=
+            MiaIA::Core::TrainingDebugPhase::BackwardComplete;
+        if (hasGradients)
+        {
+            for (const auto& gradient : source.Step.Before.Neurons)
+            {
+                const int32* index = neuronIndices.Find(
+                    static_cast<int64>(gradient.Id));
+                if (!index)
+                {
+                    continue;
+                }
+
+                auto& telemetry = result.NeuronTelemetry[*index];
+                telemetry.bHasGradients = true;
+                telemetry.ActivationGradient = gradient.ActivationGradient;
+                telemetry.PreActivationGradient =
+                    gradient.PreActivationGradient;
+                telemetry.BiasGradient = gradient.BiasGradient;
+            }
+        }
+
+        const bool hasUpdates = source.Phase >=
+            MiaIA::Core::TrainingDebugPhase::UpdateComplete;
+        if (hasUpdates)
+        {
+            for (const auto& update : source.Step.NeuronUpdates)
+            {
+                const int32* index = neuronIndices.Find(
+                    static_cast<int64>(update.Id));
+                if (!index)
+                {
+                    continue;
+                }
+
+                auto& telemetry = result.NeuronTelemetry[*index];
+                telemetry.bHasUpdate = true;
+                telemetry.Delta = update.Delta;
+            }
+        }
+
+        TMap<int64, int32> connectionIndices;
+        for (const auto& sourceConnection :
+            source.CandidateNetwork.Connections)
+        {
+            FMiaIADebugConnectionTelemetry telemetry;
+            telemetry.Id = static_cast<int64>(sourceConnection.Id);
+            telemetry.FromNeuron = static_cast<int64>(
+                sourceConnection.FromNeuron);
+            telemetry.ToNeuron = static_cast<int64>(
+                sourceConnection.ToNeuron);
+            telemetry.CandidateWeight = sourceConnection.Weight;
+            connectionIndices.Add(
+                telemetry.Id,
+                result.ConnectionTelemetry.Add(MoveTemp(telemetry)));
+        }
+
+        if (hasGradients)
+        {
+            for (const auto& gradient : source.Step.Before.Connections)
+            {
+                const int32* index = connectionIndices.Find(
+                    static_cast<int64>(gradient.Id));
+                if (!index)
+                {
+                    continue;
+                }
+
+                auto& telemetry = result.ConnectionTelemetry[*index];
+                telemetry.bHasGradient = true;
+                telemetry.WeightGradient = gradient.WeightGradient;
+            }
+        }
+
+        if (hasUpdates)
+        {
+            for (const auto& update : source.Step.ConnectionUpdates)
+            {
+                const int32* index = connectionIndices.Find(
+                    static_cast<int64>(update.Id));
+                if (!index)
+                {
+                    continue;
+                }
+
+                auto& telemetry = result.ConnectionTelemetry[*index];
+                telemetry.bHasUpdate = true;
+                telemetry.Delta = update.Delta;
+            }
+        }
+
         return result;
     }
 

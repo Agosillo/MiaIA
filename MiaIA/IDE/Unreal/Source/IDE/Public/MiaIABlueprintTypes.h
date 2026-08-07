@@ -103,6 +103,69 @@ struct IDE_API FMiaIANetworkSnapshot
 };
 
 USTRUCT(BlueprintType)
+struct IDE_API FMiaIADebugNeuronTelemetry
+{
+    GENERATED_BODY()
+
+    UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
+    int64 Id{};
+
+    UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
+    int64 LayerOrder{};
+
+    UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
+    double CandidateActivation{};
+
+    UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
+    bool bHasGradients{};
+
+    UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
+    double ActivationGradient{};
+
+    UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
+    double PreActivationGradient{};
+
+    UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
+    double BiasGradient{};
+
+    UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
+    bool bHasUpdate{};
+
+    UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
+    double Delta{};
+};
+
+USTRUCT(BlueprintType)
+struct IDE_API FMiaIADebugConnectionTelemetry
+{
+    GENERATED_BODY()
+
+    UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
+    int64 Id{};
+
+    UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
+    int64 FromNeuron{};
+
+    UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
+    int64 ToNeuron{};
+
+    UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
+    double CandidateWeight{};
+
+    UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
+    bool bHasGradient{};
+
+    UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
+    double WeightGradient{};
+
+    UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
+    bool bHasUpdate{};
+
+    UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
+    double Delta{};
+};
+
+USTRUCT(BlueprintType)
 struct IDE_API FMiaIATrainingDebugSnapshot
 {
     GENERATED_BODY()
@@ -135,6 +198,15 @@ struct IDE_API FMiaIATrainingDebugSnapshot
 
     UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
     int64 CandidateConnectionCount{};
+
+    UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
+    FMiaIANetworkSnapshot CandidateNetwork;
+
+    UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
+    TArray<FMiaIADebugNeuronTelemetry> NeuronTelemetry;
+
+    UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
+    TArray<FMiaIADebugConnectionTelemetry> ConnectionTelemetry;
 };
 
 USTRUCT(BlueprintType)

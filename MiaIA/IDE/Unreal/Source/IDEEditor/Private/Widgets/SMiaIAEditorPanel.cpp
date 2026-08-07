@@ -378,7 +378,7 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
                             .Padding(0.0f, 0.0f, 14.0f, 0.0f)
                             [
                                 SNew(STextBlock)
-                                .Text(LOCTEXT("PositiveLegend", "Positive weight"))
+                                .Text(this, &SMiaIAEditorPanel::PositiveMetricLegendText)
                                 .ColorAndOpacity_Lambda([this]()
                                 {
                                     return FSlateColor(
@@ -391,7 +391,7 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
                             .Padding(0.0f, 0.0f, 14.0f, 0.0f)
                             [
                                 SNew(STextBlock)
-                                .Text(LOCTEXT("NegativeLegend", "Negative weight"))
+                                .Text(this, &SMiaIAEditorPanel::NegativeMetricLegendText)
                                 .ColorAndOpacity_Lambda([this]()
                                 {
                                     return FSlateColor(
@@ -734,15 +734,10 @@ void SMiaIAEditorPanel::RefreshData()
     Session = UMiaIABlueprintLibrary::GetTrainingSession();
     Debug = UMiaIABlueprintLibrary::GetDebugStatus();
 
-    if (Debug.Phase != EMiaIATrainingDebugPhase::Idle)
+    if (Debug.Phase != EMiaIATrainingDebugPhase::Idle &&
+        !Debug.CandidateNetwork.Layers.IsEmpty())
     {
-        FMiaIANetworkSnapshot candidate =
-            UMiaIABlueprintLibrary::GetDebugNetworkSnapshot();
-
-        if (!candidate.Layers.IsEmpty())
-        {
-            Network = MoveTemp(candidate);
-        }
+        Network = Debug.CandidateNetwork;
     }
 
     const FString newTopologyKey = BuildTopologyKey(Network);
@@ -796,6 +791,7 @@ void SMiaIAEditorPanel::RefreshData()
     if (NetworkView.IsValid())
     {
         NetworkView->SetSnapshot(Network);
+        NetworkView->SetDebugSnapshot(Debug);
         NetworkView->SetSelectedNeuron(SelectedNeuronId);
         NetworkView->SetSelectedConnection(SelectedConnectionId);
     }
@@ -1388,6 +1384,32 @@ FText SMiaIAEditorPanel::NetworkSummaryText() const
         FText::AsNumber(Network.Layers.Num()),
         FText::AsNumber(neuronCount),
         FText::AsNumber(Network.Connections.Num()));
+}
+
+FText SMiaIAEditorPanel::PositiveMetricLegendText() const
+{
+    switch (Debug.Phase)
+    {
+    case EMiaIATrainingDebugPhase::BackwardComplete:
+        return LOCTEXT("PositiveGradientLegend", "Positive gradient");
+    case EMiaIATrainingDebugPhase::UpdateComplete:
+        return LOCTEXT("PositiveDeltaLegend", "Positive delta");
+    default:
+        return LOCTEXT("PositiveWeightLegend", "Positive weight");
+    }
+}
+
+FText SMiaIAEditorPanel::NegativeMetricLegendText() const
+{
+    switch (Debug.Phase)
+    {
+    case EMiaIATrainingDebugPhase::BackwardComplete:
+        return LOCTEXT("NegativeGradientLegend", "Negative gradient");
+    case EMiaIATrainingDebugPhase::UpdateComplete:
+        return LOCTEXT("NegativeDeltaLegend", "Negative delta");
+    default:
+        return LOCTEXT("NegativeWeightLegend", "Negative weight");
+    }
 }
 
 FText SMiaIAEditorPanel::ConsoleText() const

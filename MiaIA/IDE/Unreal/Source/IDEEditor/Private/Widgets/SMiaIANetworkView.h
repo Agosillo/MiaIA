@@ -22,6 +22,7 @@ public:
 
     void Construct(const FArguments& InArgs);
     void SetSnapshot(const FMiaIANetworkSnapshot& InSnapshot);
+    void SetDebugSnapshot(const FMiaIATrainingDebugSnapshot& InDebug);
     void SetSelectedNeuron(int64 InNeuronId);
     void SetSelectedConnection(int64 InConnectionId);
     void SetTheme(EMiaIAEditorTheme InTheme);
@@ -54,6 +55,11 @@ public:
 
 private:
     FLinearColor ActivationColor(double Activation) const;
+    FLinearColor SignedNeuronColor(double Value, double Maximum) const;
+    FLinearColor SignedConnectionColor(double Value, double Maximum) const;
+    double NeuronMetric(const FMiaIADebugNeuronTelemetry& Telemetry) const;
+    double ConnectionMetric(
+        const FMiaIADebugConnectionTelemetry& Telemetry) const;
     FVector2D AutomaticPosition(
         int32 LayerIndex,
         int32 NeuronIndex) const;
@@ -73,6 +79,11 @@ private:
         const FVector2D& End);
 
     FMiaIANetworkSnapshot Snapshot;
+    EMiaIATrainingDebugPhase DebugPhase{EMiaIATrainingDebugPhase::Idle};
+    TMap<int64, FMiaIADebugNeuronTelemetry> NeuronTelemetry;
+    TMap<int64, FMiaIADebugConnectionTelemetry> ConnectionTelemetry;
+    double MaximumNeuronMetric{1.0};
+    double MaximumConnectionMetric{1.0};
     int64 SelectedNeuronId{-1};
     int64 SelectedConnectionId{-1};
     int64 DraggedNeuronId{-1};
