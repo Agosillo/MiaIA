@@ -74,8 +74,14 @@ The ordered training primitives were composed into a synchronous session with ex
 
 Session snapshots expose state, epoch and sample cursors, progress, optimizer configuration, and the complete step history. Completion and cancellation are distinct terminal states; cancellation preserves successful updates, while a rejected step leaves both network and session position unchanged.
 
+### Bounded synchronous session run
+
+Controlled sessions gained repeated execution with either an explicit step limit or all remaining steps. Run snapshots record start and end cursors, successful step details, trace loss means, and whether execution stopped at its limit, session completion, or a failed step.
+
+Runs deliberately preserve successful earlier steps when a later step fails. This progressive behavior supports debugging and retry at the failed cursor while retaining the atomic guarantee of every individual update.
+
 ## Current position
 
-MiaIA can now represent, execute, interchange, inspect, evaluate individual samples or a complete fixed-model dataset, differentiate, apply atomic SGD steps and epochs, and manually advance a controlled multi-epoch session. It cannot yet run an automatic pausable training worker, persist a `.mia` workspace, or deliver the planned complete graphical debugging experience.
+MiaIA can now represent, execute, interchange, inspect, evaluate individual samples or a complete fixed-model dataset, differentiate, apply atomic SGD steps and epochs, manually advance controlled sessions, and execute bounded synchronous runs. It cannot yet run a background pausable training worker, persist a `.mia` workspace, or deliver the planned complete graphical debugging experience.
 
 Those next steps are tracked in the [Roadmap](../Roadmap/Roadmap.md).

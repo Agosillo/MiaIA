@@ -4,6 +4,7 @@
 #include "../../Core/Public/OptimizerType.h"
 #include "../../Core/Public/TrainingSessionSnapshot.h"
 #include "../../Core/Public/TrainingStepSnapshot.h"
+#include "../../Core/Public/TrainingRunSnapshot.h"
 
 #include <cstddef>
 
@@ -34,6 +35,13 @@ namespace MiaIA::Engine
             Core::Network& network,
             Core::TrainingSession& session,
             Core::TrainingStepSnapshot& result);
+
+        static bool Run(
+            const Core::Dataset& dataset,
+            Core::Network& network,
+            Core::TrainingSession& session,
+            std::size_t maximumSteps,
+            Core::TrainingRunSnapshot& result);
 
         static bool Cancel(Core::TrainingSession& session);
 

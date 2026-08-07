@@ -17,6 +17,7 @@
 #include "../../Core/Public/TrainingStepSnapshot.h"
 #include "../../Core/Public/TrainingEpochSnapshot.h"
 #include "../../Core/Public/TrainingSessionSnapshot.h"
+#include "../../Core/Public/TrainingRunSnapshot.h"
 
 namespace MiaIA::SDK
 {
@@ -88,6 +89,9 @@ namespace MiaIA::SDK
         static Core::TrainingSessionSnapshot GetTrainingSession();
         static bool AdvanceTrainingSession(
             Core::TrainingStepSnapshot& result);
+        static bool RunTrainingSession(
+            std::size_t maximumSteps,
+            Core::TrainingRunSnapshot& result);
         static bool CancelTrainingSession();
         static bool Predict(
             const std::vector<double>& inputs,

@@ -75,6 +75,12 @@
     <ClInclude Include="Public\TrainingSessionStatus.h">
       <Filter>File di intestazione</Filter>
     </ClInclude>
+    <ClInclude Include="Public\TrainingRunSnapshot.h">
+      <Filter>File di intestazione</Filter>
+    </ClInclude>
+    <ClInclude Include="Public\TrainingRunStopReason.h">
+      <Filter>File di intestazione</Filter>
+    </ClInclude>
     <ClInclude Include="Public\ConnectionGradientSnapshot.h">
       <Filter>File di intestazione</Filter>
     </ClInclude>

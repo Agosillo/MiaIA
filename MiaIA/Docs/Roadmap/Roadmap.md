@@ -29,6 +29,9 @@ The roadmap is organized by dependency rather than by a fixed release date. Math
 - explicit session start, status, single-step advance, and cancel operations;
 - session epoch/sample cursors and complete step history;
 - state preservation when a controlled step is rejected.
+- bounded synchronous session runs by step count or to completion;
+- explicit run stop reasons and partial-progress snapshots;
+- progressive preservation of successful steps before a later failure.
 
 ## Implemented optimizer foundation
 
@@ -53,6 +56,7 @@ Building on trustworthy single steps and one explicit epoch, the current session
 - explicit cancellation and one-step advancement;
 - retained loss and parameter-delta history through full step snapshots;
 - a natural pause boundary between synchronous commands.
+- bounded repeated execution with `run <steps>` and `run all`.
 
 ## Next milestone: automatic session control
 

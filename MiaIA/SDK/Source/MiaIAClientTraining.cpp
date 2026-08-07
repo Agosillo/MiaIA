@@ -80,4 +80,16 @@ namespace MiaIA::SDK
         return Engine::TrainingSessionController::Cancel(
             Detail::ClientTrainingSession());
     }
+
+    bool MiaIAClient::RunTrainingSession(
+        std::size_t maximumSteps,
+        Core::TrainingRunSnapshot& result)
+    {
+        return Engine::TrainingSessionController::Run(
+            Detail::ClientDataset(),
+            Detail::ClientNetwork(),
+            Detail::ClientTrainingSession(),
+            maximumSteps,
+            result);
+    }
 }

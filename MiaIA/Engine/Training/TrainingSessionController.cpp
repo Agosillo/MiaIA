@@ -160,6 +160,70 @@ namespace MiaIA::Engine
         return true;
     }
 
+    bool TrainingSessionController::Run(
+        const Core::Dataset& dataset,
+        Core::Network& network,
+        Core::TrainingSession& session,
+        std::size_t maximumSteps,
+        Core::TrainingRunSnapshot& result)
+    {
+        if (session.Status != Core::TrainingSessionStatus::Active ||
+            maximumSteps == 0)
+        {
+            return false;
+        }
+
+        Core::TrainingRunSnapshot run;
+        run.RequestedSteps = maximumSteps;
+        run.StartEpoch = session.CurrentEpoch;
+        run.StartSampleIndex = session.NextSampleIndex;
+        run.StopReason = Core::TrainingRunStopReason::StepLimitReached;
+        run.Steps.reserve(std::min(
+            maximumSteps,
+            session.EpochCount * session.SampleCount -
+                session.Steps.size()));
+
+        for (std::size_t stepIndex = 0;
+            stepIndex < maximumSteps;
+            ++stepIndex)
+        {
+            Core::TrainingStepSnapshot step;
+
+            if (!Next(dataset, network, session, step))
+            {
+                run.StopReason = Core::TrainingRunStopReason::StepFailed;
+                break;
+            }
+
+            const double executedSteps =
+                static_cast<double>(run.ExecutedSteps + 1);
+
+            run.MeanLossBeforeUpdate +=
+                (step.Before.Evaluation.Loss -
+                    run.MeanLossBeforeUpdate) /
+                executedSteps;
+            run.MeanLossAfterUpdate +=
+                (step.After.Loss - run.MeanLossAfterUpdate) /
+                executedSteps;
+
+            ++run.ExecutedSteps;
+            run.Steps.push_back(std::move(step));
+
+            if (session.Status == Core::TrainingSessionStatus::Completed)
+            {
+                run.StopReason =
+                    Core::TrainingRunStopReason::SessionCompleted;
+                break;
+            }
+        }
+
+        run.EndEpoch = session.CurrentEpoch;
+        run.EndSampleIndex = session.NextSampleIndex;
+        result = std::move(run);
+
+        return true;
+    }
+
     Core::TrainingSessionSnapshot TrainingSessionController::Snapshot(
         const Core::TrainingSession& session)
     {

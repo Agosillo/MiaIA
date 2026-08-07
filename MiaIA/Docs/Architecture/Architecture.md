@@ -195,6 +195,8 @@ A session is synchronous and command-driven; it has no background training threa
 
 Session states are Idle, Active, Completed, and Cancelled. Completion occurs after the configured number of ordered epochs. Cancellation stops future steps but does not roll back parameter updates already published by successful steps. Starting a new session is rejected while another session is Active.
 
+A bounded run composes repeated `next` operations synchronously. It can stop because its requested step limit was reached, the session completed, or a step failed. Unlike the separately atomic `train epoch` operation, a session run is progressive: successful steps remain published if a later step fails. The session stays Active at the failed sample so a client can inspect state, intervene, retry, or cancel. `TrainingRunSnapshot` contains the start/end cursors, executed steps, trace means, detailed step snapshots, and an explicit stop reason.
+
 ## Snapshot boundary
 
 Clients receive snapshots rather than references to mutable engine storage. A snapshot is a value object suitable for inspection, display, logging, comparison, or transport across an integration boundary.
@@ -207,6 +209,7 @@ Current public snapshots include:
 - activation, pre-activation, bias, and weight gradients;
 - individual SGD parameter updates and ordered epoch step histories.
 - controlled session configuration, progress, status, and complete step history.
+- bounded run progress, trace means, details, and stop reason.
 
 This boundary is important for future graphical debugging: visual components can consume a stable description without becoming owners of engine internals.
 

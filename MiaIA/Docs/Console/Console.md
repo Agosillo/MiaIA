@@ -35,6 +35,7 @@ dataset evaluate all mse
 train session start 2 0.01 mse
 train session next
 train session status
+train session run 1
 train session cancel
 ```
 
@@ -440,6 +441,25 @@ Executes exactly one atomic SGD step at the current session position, prints its
 
 The command is the debugger-style pause boundary: nothing trains between two `next` commands. Compatible parameter edits and inspections may be performed between steps. If the current dataset size or network topology is no longer compatible, the operation fails without advancing the cursor or changing the network.
 
+### `train session run`
+
+```text
+train session run <steps>
+train session run 1
+```
+
+Runs repeated session steps synchronously. A numeric limit executes at most that many steps; `all` requests every remaining step. Execution stops early when the session completes or a step fails.
+
+The run summary reports requested and executed steps, start and end cursors, mean loss immediately before and after its successful updates, and one of these stop reasons:
+
+- `Step limit reached`: the requested block completed and the session remains Active;
+- `Session completed`: the configured final epoch completed;
+- `Step failed`: the next atomic step was rejected.
+
+A run is progressive rather than transactional as a whole. Every individual step remains atomic, but earlier successful steps remain applied if a later step fails. The cursor stays on the failed sample, making it possible to inspect the network, modify compatible parameters, retry with `next` or another run, or cancel the session.
+
+`run <steps>` is the preferred integration surface for responsive graphical clients: an editor can request small blocks and redraw between calls. This command remains synchronous; it does not create a background worker.
+
 ### `train session cancel`
 
 ```text
@@ -474,6 +494,7 @@ dataset evaluate all mse
 train session start 2 0.01 mse
 train session next
 train session status
+train session run all
 train session cancel
 dataset gradients 0 mse
 train step 0 0.01 mse
@@ -495,7 +516,8 @@ This sequence demonstrates the difference between stages:
 10. `train session start` creates a paused multi-epoch schedule;
 11. `train session next` performs one inspectable update;
 12. `train session status` reports the unchanged cursor;
-13. `train session cancel` stops future steps without reverting completed updates.
+13. `train session run 1` executes one additional synchronous step;
+14. `train session cancel` stops future steps without reverting completed updates.
 
 ## Common failures
 

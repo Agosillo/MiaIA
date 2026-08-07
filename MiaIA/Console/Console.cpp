@@ -102,6 +102,9 @@ void PrintHelp()
         << "  train session next\n"
         << "      Execute exactly one sample training step\n\n"
 
+        << "  train session run <steps|all>\n"
+        << "      Execute a bounded block or all remaining steps\n\n"
+
         << "  train session cancel\n"
         << "      Stop the session without reverting completed steps\n\n"
 
@@ -797,7 +800,24 @@ void PrintTrainingSessionUsage()
         << "Usage: train session start <epochs> <learning-rate> mse\n"
         << "       train session status\n"
         << "       train session next\n"
+        << "       train session run <steps|all>\n"
         << "       train session cancel\n";
+}
+
+const char* TrainingRunStopReasonName(
+    MiaIA::Core::TrainingRunStopReason reason)
+{
+    switch (reason)
+    {
+    case MiaIA::Core::TrainingRunStopReason::StepLimitReached:
+        return "Step limit reached";
+    case MiaIA::Core::TrainingRunStopReason::SessionCompleted:
+        return "Session completed";
+    case MiaIA::Core::TrainingRunStopReason::StepFailed:
+        return "Step failed";
+    }
+
+    return "Unknown";
 }
 
 void HandleTrainCommand(const std::string& command)
@@ -866,6 +886,113 @@ void HandleTrainCommand(const std::string& command)
             }
 
             PrintTrainingSession(session);
+            return;
+        }
+
+        if (sessionAction == "run")
+        {
+            std::string limit;
+
+            if (!(stream >> limit))
+            {
+                PrintTrainingSessionUsage();
+                return;
+            }
+
+            stream >> std::ws;
+
+            if (!stream.eof())
+            {
+                PrintTrainingSessionUsage();
+                return;
+            }
+
+            const auto session = MiaIAClient::GetTrainingSession();
+            std::size_t maximumSteps{};
+
+            if (limit == "all")
+            {
+                if (session.CompletedSteps > session.TotalSteps)
+                {
+                    std::cout << "Training session state is invalid.\n";
+                    return;
+                }
+
+                maximumSteps =
+                    session.TotalSteps - session.CompletedSteps;
+            }
+            else
+            {
+                if (limit.empty() || limit.front() == '-')
+                {
+                    PrintTrainingSessionUsage();
+                    return;
+                }
+
+                std::stringstream limitStream(limit);
+
+                if (!(limitStream >> maximumSteps))
+                {
+                    PrintTrainingSessionUsage();
+                    return;
+                }
+
+                limitStream >> std::ws;
+
+                if (!limitStream.eof())
+                {
+                    PrintTrainingSessionUsage();
+                    return;
+                }
+            }
+
+            MiaIA::Core::TrainingRunSnapshot run;
+
+            if (!MiaIAClient::RunTrainingSession(
+                maximumSteps,
+                run))
+            {
+                std::cout
+                    << "Training session run could not start. "
+                    << "Check the session state and step limit.\n";
+
+                return;
+            }
+
+            std::cout
+                << "\nTraining Session Run"
+                << "\nRequested steps: " << run.RequestedSteps
+                << "\nExecuted steps: " << run.ExecutedSteps
+                << "\nStop reason: "
+                << TrainingRunStopReasonName(run.StopReason)
+                << "\nStart: epoch " << run.StartEpoch + 1
+                << ", sample " << run.StartSampleIndex;
+
+            if (run.StopReason ==
+                MiaIA::Core::TrainingRunStopReason::SessionCompleted)
+            {
+                std::cout
+                    << "\nEnd: completed " << run.EndEpoch
+                    << " epoch(s)";
+            }
+            else
+            {
+                std::cout
+                    << "\nEnd: epoch " << run.EndEpoch + 1
+                    << ", sample " << run.EndSampleIndex;
+            }
+
+            if (run.ExecutedSteps > 0)
+            {
+                std::cout
+                    << "\nMean loss before update: "
+                    << run.MeanLossBeforeUpdate
+                    << "\nMean loss after update: "
+                    << run.MeanLossAfterUpdate;
+            }
+
+            std::cout << "\n";
+            PrintTrainingSession(MiaIAClient::GetTrainingSession());
             return;
         }
 
