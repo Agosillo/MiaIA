@@ -99,6 +99,12 @@ void PrintHelp()
         << "  train session status\n"
         << "      Show controlled training progress\n\n"
 
+        << "  train session history\n"
+        << "      List every completed session step\n\n"
+
+        << "  train session inspect <step-index>\n"
+        << "      Show gradients and updates for one completed step\n\n"
+
         << "  train session next\n"
         << "      Execute exactly one sample training step\n\n"
 
@@ -842,6 +848,8 @@ void PrintTrainingSessionUsage()
     std::cout
         << "Usage: train session start <epochs> <learning-rate> mse\n"
         << "       train session status\n"
+        << "       train session history\n"
+        << "       train session inspect <step-index>\n"
         << "       train session next\n"
         << "       train session run <steps|all>\n"
         << "       train session resume\n"
@@ -1041,6 +1049,91 @@ void HandleTrainCommand(const std::string& command)
             return;
         }
 
+        if (sessionAction == "inspect")
+        {
+            std::size_t stepIndex{};
+
+            if (!(stream >> stepIndex))
+            {
+                PrintTrainingSessionUsage();
+                return;
+            }
+
+            stream >> std::ws;
+
+            if (!stream.eof())
+            {
+                PrintTrainingSessionUsage();
+                return;
+            }
+
+            MiaIA::Core::TrainingStepSnapshot step;
+
+            if (!MiaIAClient::TryGetTrainingSessionStep(
+                stepIndex,
+                step))
+            {
+                std::cout << "Training session step was not found.\n";
+                return;
+            }
+
+            std::cout
+                << "\nTraining Session Step " << stepIndex
+                << "\nSample: " << step.SampleIndex
+                << "\nLoss before: " << step.Before.Evaluation.Loss
+                << "\nLoss after: " << step.After.Loss
+                << "\nTargets: ";
+            PrintValues(step.Before.Evaluation.Targets);
+            std::cout << "\nPredictions before: ";
+            PrintValues(step.Before.Evaluation.Predictions);
+            std::cout << "\nErrors: ";
+            PrintValues(step.Before.Evaluation.Errors);
+            std::cout << "\nPredictions after: ";
+            PrintValues(step.After.Predictions);
+            std::cout << "\n\nNeuron Gradients\n";
+
+            for (const auto& neuron : step.Before.Neurons)
+            {
+                std::cout
+                    << "Neuron " << neuron.Id
+                    << " dLoss/dActivation "
+                    << neuron.ActivationGradient
+                    << " dLoss/dPreActivation "
+                    << neuron.PreActivationGradient
+                    << " dLoss/dBias " << neuron.BiasGradient
+                    << "\n";
+            }
+
+            std::cout << "\nConnection Updates\n";
+
+            for (const auto& update : step.ConnectionUpdates)
+            {
+                std::cout
+                    << "Connection " << update.Id
+                    << " Weight " << update.PreviousWeight
+                    << " Gradient " << update.Gradient
+                    << " Delta " << update.Delta
+                    << " Updated " << update.UpdatedWeight
+                    << "\n";
+            }
+
+            std::cout << "\nBias Updates\n";
+
+            for (const auto& update : step.NeuronUpdates)
+            {
+                std::cout
+                    << "Neuron " << update.Id
+                    << " Bias " << update.PreviousBias
+                    << " Gradient " << update.Gradient
+                    << " Delta " << update.Delta
+                    << " Updated " << update.UpdatedBias
+                    << "\n";
+            }
+
+            std::cout << "\n";
+            return;
+        }
+
         stream >> std::ws;
 
         if (!stream.eof())
@@ -1052,6 +1145,36 @@ void HandleTrainCommand(const std::string& command)
         if (sessionAction == "status")
         {
             PrintTrainingSession(MiaIAClient::GetTrainingSession());
+            return;
+        }
+
+        if (sessionAction == "history")
+        {
+            const auto history =
+                MiaIAClient::GetTrainingSessionHistory();
+
+            if (history.empty())
+            {
+                std::cout << "Training session history is empty.\n";
+                return;
+            }
+
+            std::cout << "\nTraining Session History\n";
+
+            for (const auto& entry : history)
+            {
+                std::cout
+                    << "Step " << entry.StepIndex
+                    << " Epoch " << entry.EpochIndex + 1
+                    << " Sample " << entry.SampleIndex
+                    << " Loss " << entry.LossBefore
+                    << " -> " << entry.LossAfter
+                    << " Weight updates " << entry.WeightUpdateCount
+                    << " Bias updates " << entry.BiasUpdateCount
+                    << "\n";
+            }
+
+            std::cout << "\n";
             return;
         }
 

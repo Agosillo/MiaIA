@@ -166,6 +166,7 @@
     <ClInclude Include="Public\SampleSnapshot.h" />
     <ClInclude Include="Public\TrainingStepSnapshot.h" />
     <ClInclude Include="Public\TrainingEpochSnapshot.h" />
+    <ClInclude Include="Public\TrainingHistoryEntrySnapshot.h" />
     <ClInclude Include="Public\TrainingRunSnapshot.h" />
     <ClInclude Include="Public\TrainingRunStopReason.h" />
     <ClInclude Include="Public\TrainingSessionSnapshot.h" />

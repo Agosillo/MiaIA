@@ -199,6 +199,8 @@ All SDK access to the process-local network, dataset, and session is serialized 
 
 A bounded run composes repeated `next` operations synchronously. It can stop because its requested step limit was reached, the session completed, or a step failed. Unlike the separately atomic `train epoch` operation, a session run is progressive: successful steps remain published if a later step fails. The session stays Active at the failed sample so a client can inspect state, intervene, retry, or cancel. `TrainingRunSnapshot` contains the start/end cursors, executed steps, trace means, detailed step snapshots, and an explicit stop reason.
 
+`TrainingSessionInspector` provides two read-only views over retained steps. History entries are lightweight indexes containing epoch, sample, loss transition, and update counts. Detailed lookup returns the original `TrainingStepSnapshot`, including evaluation, gradients, and every parameter update. Both operations use the SDK state lock and are safe at a coherent boundary while background training is Running.
+
 ## Snapshot boundary
 
 Clients receive snapshots rather than references to mutable engine storage. A snapshot is a value object suitable for inspection, display, logging, comparison, or transport across an integration boundary.
@@ -213,6 +215,7 @@ Current public snapshots include:
 - controlled session configuration, progress, status, and complete step history;
 - bounded run progress, trace means, details, and stop reason;
 - background worker state and stop reason.
+- lightweight training-history entries and complete retained steps.
 
 This boundary is important for future graphical debugging: visual components can consume a stable description without becoming owners of engine internals.
 

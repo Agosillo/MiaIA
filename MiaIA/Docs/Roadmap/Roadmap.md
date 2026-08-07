@@ -36,6 +36,8 @@ The roadmap is organized by dependency rather than by a fixed release date. Math
 - non-blocking background session execution;
 - cooperative pause, resume, and cancellation at atomic step boundaries;
 - coherent inspection and explicit worker stop reasons while training.
+- lightweight session history summaries;
+- detailed lookup of retained evaluations, gradients, and parameter updates.
 
 ## Implemented optimizer foundation
 

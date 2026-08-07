@@ -1829,6 +1829,92 @@ int main()
 
     });
 
+    runner.Run("Training session history inspection", [&]()
+    {
+    const std::filesystem::path historyPath =
+        std::filesystem::temp_directory_path() /
+        "miaia_training_session_history_test.csv";
+
+    {
+        std::ofstream output(historyPath);
+        assert(output.good());
+        output
+            << "x,target\n"
+            << "1,1\n"
+            << "2,0\n";
+    }
+
+    assert(MiaIAClient::ClearDataset());
+    assert(MiaIAClient::ClearNetwork());
+    assert(MiaIAClient::ImportCsvDataset(
+        historyPath.string(),
+        1,
+        1));
+    assert(MiaIAClient::CreateDenseNetwork(1, 1, 0, 1));
+    assert(MiaIAClient::SetLayerActivation(
+        1,
+        MiaIA::Core::ActivationType::Linear));
+    assert(MiaIAClient::SetConnectionWeight(1, 0.0));
+    assert(MiaIAClient::SetNeuronBias(1002, 0.0));
+
+    MiaIA::Core::TrainingSessionSnapshot session;
+    assert(MiaIAClient::StartTrainingSession(
+        2,
+        0.1,
+        MiaIA::Core::LossType::MeanSquaredError,
+        MiaIA::Core::OptimizerType::StochasticGradientDescent,
+        session));
+    assert(MiaIAClient::GetTrainingSessionHistory().empty());
+
+    MiaIA::Core::TrainingRunSnapshot run;
+    assert(MiaIAClient::RunTrainingSession(3, run));
+
+    const auto history = MiaIAClient::GetTrainingSessionHistory();
+    assert(history.size() == 3);
+    assert(history[0].StepIndex == 0);
+    assert(history[0].EpochIndex == 0);
+    assert(history[0].SampleIndex == 0);
+    assert(std::abs(history[0].LossBefore - 1.0) < 1e-12);
+    assert(std::abs(history[0].LossAfter - 0.36) < 1e-12);
+    assert(history[0].WeightUpdateCount == 1);
+    assert(history[0].BiasUpdateCount == 1);
+    assert(history[1].StepIndex == 1);
+    assert(history[1].EpochIndex == 0);
+    assert(history[1].SampleIndex == 1);
+    assert(std::abs(history[1].LossBefore - 0.36) < 1e-12);
+    assert(std::abs(history[1].LossAfter) < 1e-12);
+    assert(history[2].StepIndex == 2);
+    assert(history[2].EpochIndex == 1);
+    assert(history[2].SampleIndex == 0);
+
+    MiaIA::Core::TrainingStepSnapshot inspectedStep;
+    assert(MiaIAClient::TryGetTrainingSessionStep(
+        1,
+        inspectedStep));
+    assert(inspectedStep.SampleIndex == 1);
+    assert(std::abs(
+        inspectedStep.Before.Evaluation.Loss - 0.36) < 1e-12);
+    assert(std::abs(inspectedStep.After.Loss) < 1e-12);
+    assert(inspectedStep.ConnectionUpdates.size() == 1);
+    assert(inspectedStep.NeuronUpdates.size() == 1);
+
+    MiaIA::Core::TrainingStepSnapshot rejectedStep;
+    rejectedStep.SampleIndex = 999;
+    rejectedStep.LearningRate = 42.0;
+
+    assert(!MiaIAClient::TryGetTrainingSessionStep(
+        3,
+        rejectedStep));
+    assert(rejectedStep.SampleIndex == 999);
+    assert(rejectedStep.LearningRate == 42.0);
+    assert(MiaIAClient::CancelTrainingSession());
+
+    assert(MiaIAClient::ClearDataset());
+    assert(MiaIAClient::ClearNetwork());
+    std::filesystem::remove(historyPath);
+
+    });
+
     runner.Run("Prediction pipeline", [&]()
     {
     MiaIAClient::ClearNetwork();

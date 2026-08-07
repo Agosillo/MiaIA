@@ -4,6 +4,7 @@
 #include "../../Engine/Training/TrainingStepExecutor.h"
 #include "../../Engine/Training/TrainingEpochExecutor.h"
 #include "../../Engine/Training/TrainingSessionController.h"
+#include "../../Engine/Training/TrainingSessionInspector.h"
 #include "../../Core/Model/Dataset.h"
 #include "../../Core/Model/TrainingSession.h"
 
@@ -79,6 +80,25 @@ namespace MiaIA::SDK
         const std::scoped_lock lock(Detail::ClientMutex());
         return Engine::TrainingSessionController::Snapshot(
             Detail::ClientTrainingSession());
+    }
+
+    std::vector<Core::TrainingHistoryEntrySnapshot>
+    MiaIAClient::GetTrainingSessionHistory()
+    {
+        const std::scoped_lock lock(Detail::ClientMutex());
+        return Engine::TrainingSessionInspector::History(
+            Detail::ClientTrainingSession());
+    }
+
+    bool MiaIAClient::TryGetTrainingSessionStep(
+        std::size_t stepIndex,
+        Core::TrainingStepSnapshot& result)
+    {
+        const std::scoped_lock lock(Detail::ClientMutex());
+        return Engine::TrainingSessionInspector::TryGetStep(
+            Detail::ClientTrainingSession(),
+            stepIndex,
+            result);
     }
 
     bool MiaIAClient::AdvanceTrainingSession(

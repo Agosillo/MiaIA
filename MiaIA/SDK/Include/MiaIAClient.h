@@ -18,6 +18,7 @@
 #include "../../Core/Public/TrainingEpochSnapshot.h"
 #include "../../Core/Public/TrainingSessionSnapshot.h"
 #include "../../Core/Public/TrainingRunSnapshot.h"
+#include "../../Core/Public/TrainingHistoryEntrySnapshot.h"
 
 namespace MiaIA::SDK
 {
@@ -87,6 +88,12 @@ namespace MiaIA::SDK
             Core::TrainingSessionSnapshot& result);
         [[nodiscard]]
         static Core::TrainingSessionSnapshot GetTrainingSession();
+        [[nodiscard]]
+        static std::vector<Core::TrainingHistoryEntrySnapshot>
+            GetTrainingSessionHistory();
+        static bool TryGetTrainingSessionStep(
+            std::size_t stepIndex,
+            Core::TrainingStepSnapshot& result);
         static bool AdvanceTrainingSession(
             Core::TrainingStepSnapshot& result);
         static bool RunTrainingSession(

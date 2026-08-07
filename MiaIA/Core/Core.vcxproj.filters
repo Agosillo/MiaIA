@@ -84,6 +84,9 @@
     <ClInclude Include="Public\TrainingWorkerStopReason.h">
       <Filter>File di intestazione</Filter>
     </ClInclude>
+    <ClInclude Include="Public\TrainingHistoryEntrySnapshot.h">
+      <Filter>File di intestazione</Filter>
+    </ClInclude>
     <ClInclude Include="Public\ConnectionGradientSnapshot.h">
       <Filter>File di intestazione</Filter>
     </ClInclude>

@@ -36,6 +36,8 @@ train session start 2 0.01 mse
 train session next
 train session status
 train session run 1
+train session history
+train session inspect 0
 train session cancel
 train session start 100 0.01 mse
 train session resume
@@ -446,6 +448,22 @@ Executes exactly one atomic SGD step at the current session position, prints its
 
 The command is the debugger-style pause boundary: nothing trains between two `next` commands. Compatible parameter edits and inspections may be performed between steps. If the current dataset size or network topology is no longer compatible, the operation fails without advancing the cursor or changing the network.
 
+### `train session history`
+
+```text
+train session history
+```
+
+Lists every completed step retained by the current session. Each row contains the global step index, one-based epoch, dataset sample index, loss before and after the update, and the number of changed weights and biases. The command is read-only and remains available while background training is Running.
+
+### `train session inspect`
+
+```text
+train session inspect <step-index>
+```
+
+Retrieves one completed step by its global history index. It prints targets, predictions, signed errors, loss before and after, neuron gradients, and every weight and bias update with previous value, gradient, delta, and updated value. An invalid index leaves the caller result unchanged.
+
 ### `train session run`
 
 ```text
@@ -520,6 +538,8 @@ train session start 2 0.01 mse
 train session next
 train session status
 train session run 1
+train session history
+train session inspect 0
 train session cancel
 train session start 100 0.01 mse
 train session resume
@@ -547,9 +567,11 @@ This sequence demonstrates the difference between stages:
 11. `train session next` performs one inspectable update;
 12. `train session status` reports the unchanged cursor;
 13. `train session run 1` executes one additional synchronous step;
-14. `train session cancel` stops future steps without reverting completed updates;
-15. `train session resume` starts non-blocking background execution;
-16. `train session pause` joins the worker at the next atomic step boundary.
+14. `train session history` lists the retained updates;
+15. `train session inspect 0` opens one complete mathematical step;
+16. `train session cancel` stops future steps without reverting completed updates;
+17. `train session resume` starts non-blocking background execution;
+18. `train session pause` joins the worker at the next atomic step boundary.
 
 ## Common failures
 

@@ -86,8 +86,14 @@ The SDK gained a single background training worker with explicit Resume and Paus
 
 All access to the process-local network, dataset, and session is serialized. Inspection remains available while Running, while state-changing SDK operations are rejected until pause. Completion, requested pause, requested cancellation, and failed-step stops are observable without exposing partially updated parameters.
 
+### Navigable training history
+
+Retained session steps became directly queryable through a focused Engine inspector and SDK facade. A lightweight history view maps each global step to its epoch, sample, loss transition, and update counts, while detailed lookup returns the original gradients and parameter deltas.
+
+Console history and inspect commands make this information usable without requiring clients to interpret the complete session object themselves.
+
 ## Current position
 
-MiaIA can now represent, execute, interchange, inspect, evaluate individual samples or a complete fixed-model dataset, differentiate, apply atomic SGD steps and epochs, advance controlled sessions synchronously, and pause or resume one background worker. It cannot yet persist a `.mia` workspace or deliver the planned complete graphical debugging experience.
+MiaIA can now represent, execute, interchange, inspect, evaluate, differentiate, train through controlled foreground or background sessions, and navigate the complete history of successful steps. It cannot yet persist a `.mia` workspace or deliver the planned complete graphical debugging experience.
 
 Those next steps are tracked in the [Roadmap](../Roadmap/Roadmap.md).
