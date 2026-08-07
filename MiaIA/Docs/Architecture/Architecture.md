@@ -59,7 +59,7 @@ This separation allows a mathematical subsystem to evolve without requiring clie
 
 ### SDK
 
-`MiaIAClient` is the public facade used by clients. It exposes network creation and editing, snapshots, ONNX interchange, datasets, forward execution, sample evaluation, gradient evaluation, and an atomic sample training step.
+`MiaIAClient` is the public facade used by clients. It exposes network creation and editing, snapshots, ONNX interchange, datasets, forward execution, sample and full-dataset evaluation, gradient evaluation, atomic sample training, and an ordered dataset epoch.
 
 The current SDK owns one process-local network and one process-local dataset through its internal client state. This is sufficient for the present console and integration tests. Multiple sessions, explicit contexts, concurrency, and persisted workspace state are future concerns and should not be assumed to exist today.
 
@@ -127,6 +127,18 @@ Dataset sample
 
 The first implemented loss is mean squared error. Evaluation changes neuron activations because it performs a forward pass. It does not change weights or biases.
 
+### Fixed-model dataset evaluation
+
+```text
+Copy current network
+    -> evaluate every dataset sample on the copy
+    -> retain each SampleEvaluationSnapshot
+    -> calculate the mean of all sample losses
+    -> publish DatasetEvaluationSnapshot after complete success
+```
+
+The copied network isolates temporary forward activations from public state. All samples use the same weights and biases, so `MeanLoss` is a fixed-model metric suitable for comparison before and after training. If any sample fails, neither the public network nor the caller-provided result changes.
+
 ### Gradient evaluation
 
 ```text
@@ -176,8 +188,8 @@ Current public snapshots include:
 
 - network, layer, neuron, and connection state;
 - dataset summary and individual samples;
-- predictions, targets, errors, and loss;
-- activation, pre-activation, bias, and weight gradients.
+- predictions, targets, errors, sample loss, and fixed-model dataset mean loss;
+- activation, pre-activation, bias, and weight gradients;
 - individual SGD parameter updates and ordered epoch step histories.
 
 This boundary is important for future graphical debugging: visual components can consume a stable description without becoming owners of engine internals.

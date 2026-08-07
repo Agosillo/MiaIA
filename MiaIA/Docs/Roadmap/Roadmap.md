@@ -23,6 +23,8 @@ The roadmap is organized by dependency rather than by a fixed release date. Math
 - one ordered, atomic full-dataset SGD epoch;
 - per-sample step snapshots and running epoch loss means;
 - complete epoch rollback when any sample fails.
+- fixed-model full-dataset evaluation with per-sample results and mean loss;
+- non-mutating public network state during complete dataset evaluation.
 
 ## Implemented optimizer foundation
 

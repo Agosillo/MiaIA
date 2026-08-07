@@ -7,6 +7,7 @@
 
 #include "../../Core/Public/NetworkSnapshot.h"
 #include "../../Core/Public/DatasetSummary.h"
+#include "../../Core/Public/DatasetEvaluationSnapshot.h"
 #include "../../Core/Public/LossType.h"
 #include "../../Core/Public/OptimizerType.h"
 #include "../../Core/Public/PredictionSnapshot.h"
@@ -58,6 +59,9 @@ namespace MiaIA::SDK
             std::size_t index,
             Core::LossType type,
             Core::SampleEvaluationSnapshot& result);
+        static bool EvaluateDataset(
+            Core::LossType type,
+            Core::DatasetEvaluationSnapshot& result);
         static bool EvaluateDatasetSampleGradients(
             std::size_t index,
             Core::LossType type,

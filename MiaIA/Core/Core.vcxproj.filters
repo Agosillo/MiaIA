@@ -63,6 +63,9 @@
     <ClInclude Include="Public\SampleEvaluationSnapshot.h">
       <Filter>File di intestazione</Filter>
     </ClInclude>
+    <ClInclude Include="Public\DatasetEvaluationSnapshot.h">
+      <Filter>File di intestazione</Filter>
+    </ClInclude>
     <ClInclude Include="Public\ConnectionGradientSnapshot.h">
       <Filter>File di intestazione</Filter>
     </ClInclude>

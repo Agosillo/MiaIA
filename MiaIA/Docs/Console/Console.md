@@ -27,9 +27,11 @@ dataset import csv 2 1 sample.txt
 dataset summary
 dataset inspect 0
 dataset evaluate 0 mse
+dataset evaluate all mse
 dataset gradients 0 mse
 train step 0 0.01 mse
 train epoch 0.01 mse
+dataset evaluate all mse
 ```
 
 `dataset evaluate` and `dataset gradients` require a current network whose input and output dimensions match the dataset.
@@ -311,6 +313,14 @@ The command prints:
 
 The network must have matching input and output dimensions. Evaluation updates neuron activations because it performs a forward pass. It does not change connection weights or neuron biases.
 
+To evaluate the complete dataset against one fixed model, use:
+
+```text
+dataset evaluate all mse
+```
+
+This form prints the mean loss, each sample loss, and each prediction vector. It evaluates a copy of the network, so public activations, weights, and biases remain unchanged. Every sample uses the same parameters; this makes the result suitable for comparing model quality before and after `train epoch`.
+
 ### `dataset gradients`
 
 ```text
@@ -422,9 +432,11 @@ inspect
 forward
 inspect
 dataset evaluate 0 mse
+dataset evaluate all mse
 dataset gradients 0 mse
 train step 0 0.01 mse
 train epoch 0.01 mse
+dataset evaluate all mse
 ```
 
 This sequence demonstrates the difference between stages:
@@ -432,10 +444,12 @@ This sequence demonstrates the difference between stages:
 1. `dataset inspect` reads a sample;
 2. `dataset apply` changes only input activations;
 3. `forward` changes downstream activations;
-4. `dataset evaluate` performs apply plus forward and calculates loss;
-5. `dataset gradients` performs evaluation plus backward differentiation;
-6. `train step` updates weights and non-input biases for one selected sample;
-7. `train epoch` performs the same update once for every sample in dataset order.
+4. `dataset evaluate 0` performs apply plus forward and calculates one sample loss;
+5. `dataset evaluate all` measures the entire dataset without changing public network state;
+6. `dataset gradients` performs evaluation plus backward differentiation;
+7. `train step` updates weights and non-input biases for one selected sample;
+8. `train epoch` performs the same update once for every sample in dataset order;
+9. the final `dataset evaluate all` measures the trained fixed model for comparison.
 
 ## Common failures
 
@@ -467,7 +481,7 @@ Check the path, header option, column counts, row widths, and numeric values. `n
 
 ## Current limitations
 
-- SGD is the only optimizer and training is limited to one explicit sample step;
+- SGD is the only optimizer; training supports explicit sample steps and one ordered dataset epoch, but not controlled multi-epoch sessions;
 - state is not persisted as a MiaIA workspace;
 - MSE is the only loss;
 - dataset preprocessing and categorical values are not supported;

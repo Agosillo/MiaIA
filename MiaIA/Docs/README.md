@@ -2,7 +2,7 @@
 
 MiaIA is an Interactive Development Environment for Artificial Intelligence. Its purpose is not to compete with large training frameworks on throughput. Its purpose is to make a neural network observable: users should be able to build a model, execute it, inspect its state, evaluate samples, follow gradients, and eventually control training step by step.
 
-The project is currently in its foundation stage. The C++ engine, public SDK facade, interactive console, test harness, ONNX interchange, CSV dataset pipeline, sample evaluation, non-mutating gradient inspection, atomic SGD steps, and one ordered atomic dataset epoch are implemented. Controlled multi-epoch training sessions, persistent MiaIA project files, and the complete Unreal visualization experience are planned work.
+The project is currently in its foundation stage. The C++ engine, public SDK facade, interactive console, test harness, ONNX interchange, CSV dataset pipeline, fixed-model dataset evaluation, non-mutating gradient inspection, atomic SGD steps, and one ordered atomic dataset epoch are implemented. Controlled multi-epoch training sessions, persistent MiaIA project files, and the complete Unreal visualization experience are planned work.
 
 ## Documentation map
 
@@ -25,7 +25,7 @@ The project is currently in its foundation stage. The C++ engine, public SDK fac
 | Inspection | Network, layer, neuron, connection, dataset, evaluation, and gradient snapshots |
 | Interchange | Import and export of the currently supported dense ONNX subset |
 | Datasets | Numeric CSV import with explicit input and target column counts |
-| Evaluation | Predictions, target errors, and mean squared error for a selected sample |
+| Evaluation | Per-sample details and fixed-model mean squared error across a complete dataset |
 | Differentiation | Per-neuron, per-bias, and per-connection gradients without parameter updates |
 | Optimization | Atomic single-sample SGD updates and ordered full-dataset epochs with before/after snapshots |
 | Clients | Interactive console and an initial Unreal Engine integration through `MiaIAClient` |

@@ -75,8 +75,11 @@ void PrintHelp()
         << "  dataset apply [index]\n"
         << "      Apply one sample to the network input\n\n"
 
-        << "  dataset evaluate [index] mse\n"
+        << "  dataset evaluate <index> mse\n"
         << "      Apply and evaluate one sample using mean squared error\n\n"
+
+        << "  dataset evaluate all mse\n"
+        << "      Evaluate every sample against one fixed network\n\n"
 
         << "  dataset gradients [index] mse\n"
         << "      Calculate gradients without changing weights or biases\n\n"
@@ -481,16 +484,16 @@ void HandleDatasetCommand(const std::string& command)
         std::stringstream stream(command);
         std::string datasetToken;
         std::string action;
-        std::size_t index{};
+        std::string selector;
         std::string lossName;
 
-        if (!(stream >> datasetToken >> action >> index >> lossName) ||
+        if (!(stream >> datasetToken >> action >> selector >> lossName) ||
             datasetToken != "dataset" ||
             action != "evaluate" ||
             lossName != "mse")
         {
             std::cout
-                << "Usage: dataset evaluate <index> mse\n";
+                << "Usage: dataset evaluate <index|all> mse\n";
 
             return;
         }
@@ -500,7 +503,63 @@ void HandleDatasetCommand(const std::string& command)
         if (!stream.eof())
         {
             std::cout
-                << "Usage: dataset evaluate <index> mse\n";
+                << "Usage: dataset evaluate <index|all> mse\n";
+
+            return;
+        }
+
+        if (selector == "all")
+        {
+            MiaIA::Core::DatasetEvaluationSnapshot evaluation;
+
+            if (!MiaIAClient::EvaluateDataset(
+                MiaIA::Core::LossType::MeanSquaredError,
+                evaluation))
+            {
+                std::cout
+                    << "Dataset evaluation failed. "
+                    << "Check the dataset, network and dimensions.\n";
+
+                return;
+            }
+
+            std::cout
+                << "\nDataset Evaluation"
+                << "\nSamples: " << evaluation.SampleCount
+                << "\nMean squared error: " << evaluation.MeanLoss
+                << "\n\nSample Losses\n";
+
+            for (const auto& sample : evaluation.Evaluations)
+            {
+                std::cout
+                    << "Sample " << sample.SampleIndex
+                    << " Loss " << sample.Loss
+                    << " Predictions ";
+                PrintValues(sample.Predictions);
+                std::cout << "\n";
+            }
+
+            std::cout << "\n";
+            return;
+        }
+
+        std::stringstream indexStream(selector);
+        std::size_t index{};
+
+        if (!(indexStream >> index))
+        {
+            std::cout
+                << "Usage: dataset evaluate <index|all> mse\n";
+
+            return;
+        }
+
+        indexStream >> std::ws;
+
+        if (!indexStream.eof())
+        {
+            std::cout
+                << "Usage: dataset evaluate <index|all> mse\n";
 
             return;
         }

@@ -450,6 +450,139 @@ int main()
 
     });
 
+    runner.Run("Fixed-model dataset evaluation", [&]()
+    {
+    const std::filesystem::path datasetEvaluationPath =
+        std::filesystem::temp_directory_path() /
+        "miaia_full_dataset_evaluation_test.csv";
+    const std::filesystem::path failingEvaluationPath =
+        std::filesystem::temp_directory_path() /
+        "miaia_full_dataset_evaluation_failure_test.csv";
+
+    {
+        std::ofstream output(datasetEvaluationPath);
+        assert(output.good());
+        output
+            << "x,target\n"
+            << "1,1\n"
+            << "2,0\n";
+    }
+
+    {
+        std::ofstream output(failingEvaluationPath);
+        assert(output.good());
+        output
+            << "x,target\n"
+            << "1,1\n"
+            << "1e308,-1e308\n";
+    }
+
+    MiaIAClient::ClearDataset();
+    MiaIAClient::ClearNetwork();
+
+    assert(MiaIAClient::ImportCsvDataset(
+        datasetEvaluationPath.string(),
+        1,
+        1));
+    assert(MiaIAClient::CreateDenseNetwork(1, 1, 0, 1));
+    assert(MiaIAClient::SetLayerActivation(
+        1,
+        MiaIA::Core::ActivationType::Linear));
+    assert(MiaIAClient::SetConnectionWeight(1, 0.5));
+    assert(MiaIAClient::SetNeuronBias(1002, 0.25));
+    assert(MiaIAClient::SetInputValues({ 0.33 }));
+    assert(MiaIAClient::Forward());
+
+    const auto beforeDatasetEvaluation = MiaIAClient::GetSnapshot();
+    MiaIA::Core::DatasetEvaluationSnapshot evaluation;
+
+    assert(MiaIAClient::EvaluateDataset(
+        MiaIA::Core::LossType::MeanSquaredError,
+        evaluation));
+
+    assert(evaluation.SampleCount == 2);
+    assert(evaluation.Type == MiaIA::Core::LossType::MeanSquaredError);
+    assert(evaluation.Evaluations.size() == 2);
+    assert(std::abs(evaluation.MeanLoss - 0.8125) < 1e-12);
+
+    assert(evaluation.Evaluations[0].SampleIndex == 0);
+    assert(std::abs(evaluation.Evaluations[0].Predictions[0] - 0.75) <
+        1e-12);
+    assert(std::abs(evaluation.Evaluations[0].Loss - 0.0625) < 1e-12);
+
+    assert(evaluation.Evaluations[1].SampleIndex == 1);
+    assert(std::abs(evaluation.Evaluations[1].Predictions[0] - 1.25) <
+        1e-12);
+    assert(std::abs(evaluation.Evaluations[1].Loss - 1.5625) < 1e-12);
+
+    const auto afterDatasetEvaluation = MiaIAClient::GetSnapshot();
+
+    assert(afterDatasetEvaluation.Connections[0].Weight ==
+        beforeDatasetEvaluation.Connections[0].Weight);
+    assert(afterDatasetEvaluation.Layers[0].Neurons[0].Bias ==
+        beforeDatasetEvaluation.Layers[0].Neurons[0].Bias);
+    assert(afterDatasetEvaluation.Layers[0].Neurons[0].Activation ==
+        beforeDatasetEvaluation.Layers[0].Neurons[0].Activation);
+    assert(afterDatasetEvaluation.Layers[1].Neurons[0].Bias ==
+        beforeDatasetEvaluation.Layers[1].Neurons[0].Bias);
+    assert(afterDatasetEvaluation.Layers[1].Neurons[0].Activation ==
+        beforeDatasetEvaluation.Layers[1].Neurons[0].Activation);
+
+    MiaIA::Core::DatasetEvaluationSnapshot rejectedEvaluation;
+    rejectedEvaluation.SampleCount = 999;
+    rejectedEvaluation.MeanLoss = 42.0;
+
+    const auto assertRejectedEvaluationPreserved = [&]()
+    {
+        assert(rejectedEvaluation.SampleCount == 999);
+        assert(rejectedEvaluation.MeanLoss == 42.0);
+        assert(rejectedEvaluation.Evaluations.empty());
+    };
+
+    assert(!MiaIAClient::EvaluateDataset(
+        static_cast<MiaIA::Core::LossType>(999),
+        rejectedEvaluation));
+    assertRejectedEvaluationPreserved();
+
+    MiaIAClient::ClearDataset();
+
+    assert(!MiaIAClient::EvaluateDataset(
+        MiaIA::Core::LossType::MeanSquaredError,
+        rejectedEvaluation));
+    assertRejectedEvaluationPreserved();
+
+    assert(MiaIAClient::ImportCsvDataset(
+        failingEvaluationPath.string(),
+        1,
+        1));
+
+    const auto beforeRejectedEvaluation = MiaIAClient::GetSnapshot();
+
+    assert(!MiaIAClient::EvaluateDataset(
+        MiaIA::Core::LossType::MeanSquaredError,
+        rejectedEvaluation));
+    assertRejectedEvaluationPreserved();
+
+    const auto afterRejectedEvaluation = MiaIAClient::GetSnapshot();
+
+    assert(afterRejectedEvaluation.Connections[0].Weight ==
+        beforeRejectedEvaluation.Connections[0].Weight);
+    assert(afterRejectedEvaluation.Layers[0].Neurons[0].Bias ==
+        beforeRejectedEvaluation.Layers[0].Neurons[0].Bias);
+    assert(afterRejectedEvaluation.Layers[0].Neurons[0].Activation ==
+        beforeRejectedEvaluation.Layers[0].Neurons[0].Activation);
+    assert(afterRejectedEvaluation.Layers[1].Neurons[0].Bias ==
+        beforeRejectedEvaluation.Layers[1].Neurons[0].Bias);
+    assert(afterRejectedEvaluation.Layers[1].Neurons[0].Activation ==
+        beforeRejectedEvaluation.Layers[1].Neurons[0].Activation);
+
+    MiaIAClient::ClearDataset();
+    MiaIAClient::ClearNetwork();
+    std::filesystem::remove(datasetEvaluationPath);
+    std::filesystem::remove(failingEvaluationPath);
+
+    });
+
     runner.Run("Dataset sample gradients", [&]()
     {
     const std::filesystem::path analyticalPath =

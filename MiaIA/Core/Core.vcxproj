@@ -159,6 +159,7 @@
     <ClInclude Include="Public\NeuronUpdateSnapshot.h" />
     <ClInclude Include="Public\OptimizerType.h" />
     <ClInclude Include="Public\PredictionSnapshot.h" />
+    <ClInclude Include="Public\DatasetEvaluationSnapshot.h" />
     <ClInclude Include="Public\SampleEvaluationSnapshot.h" />
     <ClInclude Include="Public\SampleGradientSnapshot.h" />
     <ClInclude Include="Public\SampleSnapshot.h" />
