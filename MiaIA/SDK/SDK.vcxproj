@@ -159,6 +159,7 @@
     <ClCompile Include="SDK.cpp" />
     <ClCompile Include="Source\MiaIAClient.cpp" />
     <ClCompile Include="Source\MiaIAClientDataset.cpp" />
+    <ClCompile Include="Source\MiaIAClientInference.cpp" />
     <ClCompile Include="Source\MiaIAClientOnnx.cpp" />
     <ClCompile Include="Source\MiaIAClientTraining.cpp" />
   </ItemGroup>

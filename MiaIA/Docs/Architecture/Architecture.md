@@ -43,6 +43,7 @@ Engine owns operations and mathematical behavior. Its current responsibilities a
 | `Parameters` | Update biases and activation functions |
 | `Weights` | Read and update connection weights |
 | `Input` | Validate and assign input activations |
+| `Inference` | Execute direct input-to-output prediction |
 | `Validation` | Verify that a network can be executed safely |
 | `Execution` | Perform forward propagation |
 | `Runtime` | Create networks and expose runtime operations |
@@ -98,6 +99,19 @@ Input values
 ```
 
 For each non-input neuron, forward propagation computes the weighted sum of incoming activations plus the neuron bias, then applies the layer activation function.
+
+### Prediction
+
+```text
+Input vector
+    -> validate network and input dimensions
+    -> assign input activations
+    -> forward propagation
+    -> collect activations from the highest-order layer
+    -> PredictionSnapshot
+```
+
+Prediction is the target-free inference path. Unlike sample evaluation, it does not require a dataset or expected outputs. A successful prediction leaves the calculated activations available for inspection. Validation failures preserve the previous activations and caller result; unexpected non-finite outputs trigger activation restoration.
 
 ### Sample evaluation
 

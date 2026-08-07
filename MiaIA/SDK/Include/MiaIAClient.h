@@ -9,6 +9,7 @@
 #include "../../Core/Public/DatasetSummary.h"
 #include "../../Core/Public/LossType.h"
 #include "../../Core/Public/OptimizerType.h"
+#include "../../Core/Public/PredictionSnapshot.h"
 #include "../../Core/Public/SampleEvaluationSnapshot.h"
 #include "../../Core/Public/SampleGradientSnapshot.h"
 #include "../../Core/Public/SampleSnapshot.h"
@@ -66,6 +67,9 @@ namespace MiaIA::SDK
             Core::LossType lossType,
             Core::OptimizerType optimizerType,
             Core::TrainingStepSnapshot& result);
+        static bool Predict(
+            const std::vector<double>& inputs,
+            Core::PredictionSnapshot& result);
         static bool Forward();
     };
 }

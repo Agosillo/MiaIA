@@ -44,6 +44,12 @@ void PrintHelp()
         << "      Example:\n"
         << "        input 0.5 0.2 0.9\n\n"
 
+        << "  predict <values>\n"
+        << "      Apply inputs, run forward and print output values\n\n"
+
+        << "      Example:\n"
+        << "        predict 1 1\n\n"
+
         << "  import onnx [path]\n"
         << "      Replace the current network with an ONNX model\n\n"
 
@@ -341,6 +347,54 @@ void PrintValues(const std::vector<double>& values)
 
         std::cout << values[index];
     }
+}
+
+void Predict(const std::string& command)
+{
+    using MiaIA::SDK::MiaIAClient;
+
+    std::stringstream stream(command);
+    std::string token;
+    std::vector<double> inputs;
+    double input{};
+
+    stream >> token;
+
+    while (stream >> input)
+    {
+        inputs.push_back(input);
+    }
+
+    if (!stream.eof())
+    {
+        std::cout
+            << "Prediction input contains an invalid numeric value.\n";
+
+        return;
+    }
+
+    if (inputs.empty())
+    {
+        std::cout
+            << "Prediction requires at least one input value.\n";
+
+        return;
+    }
+
+    MiaIA::Core::PredictionSnapshot prediction;
+
+    if (!MiaIAClient::Predict(inputs, prediction))
+    {
+        std::cout
+            << "Prediction failed. "
+            << "Check the network and input dimensions.\n";
+
+        return;
+    }
+
+    std::cout << "Prediction: ";
+    PrintValues(prediction.Outputs);
+    std::cout << "\n";
 }
 
 void HandleDatasetCommand(const std::string& command)
@@ -929,6 +983,7 @@ std::string ResolveCommand(
         "help",
         "create",
         "input",
+        "predict",
         "import",
         "export",
         "dataset",
@@ -1007,6 +1062,11 @@ int main()
         else if (command.rfind("input", 0) == 0)
         {
             SetInput(command);
+            continue;
+        }
+        else if (command.rfind("predict", 0) == 0)
+        {
+            Predict(command);
             continue;
         }
         else if (command.rfind("import", 0) == 0)

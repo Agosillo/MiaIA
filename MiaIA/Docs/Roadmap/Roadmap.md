@@ -19,6 +19,7 @@ The roadmap is organized by dependency rather than by a fixed release date. Math
 - atomic single-sample SGD training step;
 - before/after loss and parameter update snapshots;
 - transactional rejection of invalid or non-finite updates.
+- direct SDK and Console prediction for single- and multi-output networks.
 
 ## Implemented optimizer foundation
 

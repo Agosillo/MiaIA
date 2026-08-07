@@ -21,6 +21,7 @@ The project is currently in its foundation stage. The C++ engine, public SDK fac
 | Network model | Ordered feed-forward layers, neurons, biases, weighted connections, and editable activations |
 | Activations | Sigmoid, ReLU, Tanh, and Linear |
 | Execution | Input assignment and forward propagation |
+| Inference | Direct input-to-output prediction through SDK and Console |
 | Inspection | Network, layer, neuron, connection, dataset, evaluation, and gradient snapshots |
 | Interchange | Import and export of the currently supported dense ONNX subset |
 | Datasets | Numeric CSV import with explicit input and target column counts |

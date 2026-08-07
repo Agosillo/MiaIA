@@ -18,10 +18,11 @@ Sample indices are zero-based. Paths containing spaces should be enclosed in dou
 
 ## Quick start
 
-The following session creates a two-input network, imports a dataset, evaluates its first sample, and inspects the gradients that a future optimizer would consume:
+The following session creates a two-input network, runs a direct prediction, imports a dataset, evaluates its first sample, and inspects the gradients used by SGD:
 
 ```text
 create 2 2 1 1
+predict 1 1
 dataset import csv 2 1 sample.txt
 dataset summary
 dataset inspect 0
@@ -98,6 +99,32 @@ input 0.5 0.2 0.9
 ```
 
 This command changes input activations only. Use `forward` afterward to propagate the new input through the network.
+
+### `predict`
+
+```text
+predict <value...>
+```
+
+Validates an input vector, applies it to the current network, performs forward propagation, and prints only the output vector.
+
+Examples:
+
+```text
+predict 1 1
+Prediction: 0.87
+```
+
+```text
+predict 0.2 0.5 0.9
+Prediction: 0.04, 0.91, 0.05
+```
+
+The number of supplied values must match the input layer. The output values are collected from the highest-order layer, so prediction does not depend on a layer being named `Output`.
+
+Prediction is inference: it requires no dataset and no target values. It updates neuron activations with the successful forward result but does not change weights or biases. Invalid dimensions, non-finite inputs, an invalid network, or non-finite outputs fail without replacing the caller result; previous activations are preserved or restored.
+
+Use `predict` when only the model output is needed. Use separate `input`, `forward`, and `inspect` commands when examining execution phase by phase.
 
 ## Network inspection and execution
 
@@ -367,6 +394,7 @@ Clears the current dataset. It does not clear or modify the current network.
 ```text
 create 2 2 1 1
 summary
+predict 1 1
 dataset import csv 2 1 sample.txt
 dataset summary
 dataset inspect 0

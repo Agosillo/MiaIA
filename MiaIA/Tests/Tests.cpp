@@ -959,6 +959,142 @@ int main()
 
     });
 
+    runner.Run("Prediction pipeline", [&]()
+    {
+    MiaIAClient::ClearNetwork();
+
+    assert(MiaIAClient::CreateDenseNetwork(2, 2, 0, 1));
+    assert(MiaIAClient::SetLayerActivation(
+        1,
+        MiaIA::Core::ActivationType::Linear));
+    assert(MiaIAClient::SetConnectionWeight(1, 2.0));
+    assert(MiaIAClient::SetConnectionWeight(2, -1.0));
+    assert(MiaIAClient::SetNeuronBias(1003, 0.5));
+
+    MiaIA::Core::PredictionSnapshot prediction;
+
+    assert(MiaIAClient::Predict({ 1.0, 1.0 }, prediction));
+    assert(prediction.Inputs.size() == 2);
+    assert(prediction.Outputs.size() == 1);
+    assert(prediction.Inputs[0] == 1.0);
+    assert(prediction.Inputs[1] == 1.0);
+    assert(std::abs(prediction.Outputs[0] - 1.5) < 1e-12);
+
+    const auto afterSingleOutputPrediction =
+        MiaIAClient::GetSnapshot();
+
+    assert(afterSingleOutputPrediction.Layers[0].Neurons[0].Activation == 1.0);
+    assert(afterSingleOutputPrediction.Layers[0].Neurons[1].Activation == 1.0);
+    assert(std::abs(
+        afterSingleOutputPrediction.Layers[1].Neurons[0].Activation - 1.5) <
+        1e-12);
+
+    assert(MiaIAClient::SetInputValues({ 2.0, 1.0 }));
+    assert(MiaIAClient::Forward());
+
+    const auto manualForward = MiaIAClient::GetSnapshot();
+
+    assert(MiaIAClient::Predict({ 2.0, 1.0 }, prediction));
+    assert(std::abs(
+        prediction.Outputs[0] -
+        manualForward.Layers[1].Neurons[0].Activation) < 1e-12);
+
+    assert(MiaIAClient::CreateDenseNetwork(2, 2, 0, 2));
+    assert(MiaIAClient::SetLayerActivation(
+        1,
+        MiaIA::Core::ActivationType::Linear));
+    assert(MiaIAClient::SetConnectionWeight(1, 1.0));
+    assert(MiaIAClient::SetConnectionWeight(2, 2.0));
+    assert(MiaIAClient::SetConnectionWeight(3, -1.0));
+    assert(MiaIAClient::SetConnectionWeight(4, 0.5));
+    assert(MiaIAClient::SetNeuronBias(1003, 0.25));
+    assert(MiaIAClient::SetNeuronBias(1004, -0.5));
+
+    assert(MiaIAClient::Predict({ 0.5, 2.0 }, prediction));
+    assert(prediction.Outputs.size() == 2);
+    assert(std::abs(prediction.Outputs[0] - (-1.25)) < 1e-12);
+    assert(std::abs(prediction.Outputs[1] - 1.5) < 1e-12);
+
+    MiaIA::Core::PredictionSnapshot rejectedPrediction;
+    rejectedPrediction.Inputs = { 9.0 };
+    rejectedPrediction.Outputs = { 8.0 };
+
+    const auto beforeRejectedPredictions =
+        MiaIAClient::GetSnapshot();
+
+    const auto assertRejectedPredictionPreserved = [&]()
+    {
+        assert(rejectedPrediction.Inputs.size() == 1);
+        assert(rejectedPrediction.Outputs.size() == 1);
+        assert(rejectedPrediction.Inputs[0] == 9.0);
+        assert(rejectedPrediction.Outputs[0] == 8.0);
+    };
+
+    assert(!MiaIAClient::Predict({}, rejectedPrediction));
+    assertRejectedPredictionPreserved();
+    assert(!MiaIAClient::Predict({ 1.0 }, rejectedPrediction));
+    assertRejectedPredictionPreserved();
+    assert(!MiaIAClient::Predict({ 1.0, 2.0, 3.0 }, rejectedPrediction));
+    assertRejectedPredictionPreserved();
+    assert(!MiaIAClient::Predict({
+        std::numeric_limits<double>::quiet_NaN(),
+        1.0
+        }, rejectedPrediction));
+    assertRejectedPredictionPreserved();
+    assert(!MiaIAClient::Predict({
+        std::numeric_limits<double>::infinity(),
+        1.0
+        }, rejectedPrediction));
+    assertRejectedPredictionPreserved();
+
+    const auto afterRejectedPredictions =
+        MiaIAClient::GetSnapshot();
+
+    for (std::size_t layerIndex = 0;
+        layerIndex < beforeRejectedPredictions.Layers.size();
+        ++layerIndex)
+    {
+        for (std::size_t neuronIndex = 0;
+            neuronIndex <
+                beforeRejectedPredictions.Layers[layerIndex].Neurons.size();
+            ++neuronIndex)
+        {
+            assert(
+                afterRejectedPredictions.Layers[layerIndex]
+                    .Neurons[neuronIndex].Activation ==
+                beforeRejectedPredictions.Layers[layerIndex]
+                    .Neurons[neuronIndex].Activation);
+        }
+    }
+
+    MiaIAClient::ClearNetwork();
+
+    assert(!MiaIAClient::Predict({ 1.0, 1.0 }, rejectedPrediction));
+    assertRejectedPredictionPreserved();
+
+    assert(MiaIAClient::CreateDenseNetwork(1, 1, 0, 1));
+    assert(MiaIAClient::SetLayerActivation(
+        1,
+        MiaIA::Core::ActivationType::Linear));
+    assert(MiaIAClient::SetConnectionWeight(
+        1,
+        (std::numeric_limits<double>::max)()));
+    assert(MiaIAClient::SetNeuronActivation(1001, 0.25));
+    assert(MiaIAClient::SetNeuronActivation(1002, 0.75));
+
+    assert(!MiaIAClient::Predict({ 2.0 }, rejectedPrediction));
+    assertRejectedPredictionPreserved();
+
+    const auto afterOverflowPrediction =
+        MiaIAClient::GetSnapshot();
+
+    assert(afterOverflowPrediction.Layers[0].Neurons[0].Activation == 0.25);
+    assert(afterOverflowPrediction.Layers[1].Neurons[0].Activation == 0.75);
+
+    MiaIAClient::ClearNetwork();
+
+    });
+
     runner.Run("Network input", [&]()
     {
     MiaIAClient::ClearNetwork();
