@@ -8,10 +8,17 @@
 #include "../../Engine/Parameters/NetworkParameters.h"
 #include "../../Engine/Weights/NetworkWeights.h"
 #include "../../Core/Model/Network.h"
+#include "../../Core/Model/Dataset.h"
 
 namespace
 {
+    MiaIA::Core::Dataset CurrentDataset;
     MiaIA::Core::Network CurrentNetwork;
+}
+
+MiaIA::Core::Dataset& MiaIA::SDK::Detail::ClientDataset()
+{
+    return CurrentDataset;
 }
 
 MiaIA::Core::Network& MiaIA::SDK::Detail::ClientNetwork()

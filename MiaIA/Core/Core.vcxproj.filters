@@ -45,6 +45,18 @@
     <ClInclude Include="Execution\Activation.h">
       <Filter>File di intestazione</Filter>
     </ClInclude>
+    <ClInclude Include="Model\Dataset.h">
+      <Filter>File di intestazione</Filter>
+    </ClInclude>
+    <ClInclude Include="Model\Sample.h">
+      <Filter>File di intestazione</Filter>
+    </ClInclude>
+    <ClInclude Include="Public\DatasetSummary.h">
+      <Filter>File di intestazione</Filter>
+    </ClInclude>
+    <ClInclude Include="Public\SampleSnapshot.h">
+      <Filter>File di intestazione</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Core.cpp">

@@ -143,12 +143,16 @@
     <ClInclude Include="Execution\SnapshotBuilder.h" />
     <ClInclude Include="framework.h" />
     <ClInclude Include="Model\Connection.h" />
+    <ClInclude Include="Model\Dataset.h" />
     <ClInclude Include="Model\Layer.h" />
     <ClInclude Include="Model\Network.h" />
     <ClInclude Include="Model\Neuron.h" />
+    <ClInclude Include="Model\Sample.h" />
     <ClInclude Include="pch.h" />
     <ClInclude Include="Public\ConnectionSnapshot.h" />
+    <ClInclude Include="Public\DatasetSummary.h" />
     <ClInclude Include="Public\NetworkSnapshot.h" />
+    <ClInclude Include="Public\SampleSnapshot.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Core.cpp" />

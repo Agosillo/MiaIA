@@ -182,6 +182,145 @@ int main()
 
     });
 
+    runner.Run("CSV dataset pipeline", [&]()
+    {
+    const std::filesystem::path headerPath =
+        std::filesystem::temp_directory_path() /
+        "miaia_dataset_header_test.csv";
+    const std::filesystem::path noHeaderPath =
+        std::filesystem::temp_directory_path() /
+        "miaia_dataset_no_header_test.csv";
+    const std::filesystem::path invalidPath =
+        std::filesystem::temp_directory_path() /
+        "miaia_dataset_invalid_test.csv";
+    const std::filesystem::path nonFinitePath =
+        std::filesystem::temp_directory_path() /
+        "miaia_dataset_non_finite_test.csv";
+
+    {
+        std::ofstream output(headerPath);
+        assert(output.good());
+        output
+            << "x1,x2,target\n"
+            << "0,0,0\n"
+            << "0,1,1\n"
+            << "1,0,1\n"
+            << "1,1,0\n";
+    }
+
+    {
+        std::ofstream output(noHeaderPath);
+        assert(output.good());
+        output
+            << "0.25,-0.5,1\n"
+            << "0.75,0.5,0\n";
+    }
+
+    {
+        std::ofstream output(invalidPath);
+        assert(output.good());
+        output
+            << "x1,x2,target\n"
+            << "0,1\n";
+    }
+
+    {
+        std::ofstream output(nonFinitePath);
+        assert(output.good());
+        output
+            << "x1,x2,target\n"
+            << "0,nan,1\n";
+    }
+
+    MiaIAClient::ClearDataset();
+    MiaIAClient::ClearNetwork();
+
+    assert(MiaIAClient::ImportCsvDataset(
+        headerPath.string(),
+        2,
+        1));
+
+    const auto summary = MiaIAClient::GetDatasetSummary();
+
+    assert(summary.Name == "miaia_dataset_header_test");
+    assert(summary.Source == headerPath.string());
+    assert(summary.SampleCount == 4);
+    assert(summary.InputCount == 2);
+    assert(summary.TargetCount == 1);
+
+    MiaIA::Core::SampleSnapshot sample;
+
+    assert(MiaIAClient::TryGetDatasetSample(2, sample));
+    assert(sample.Index == 2);
+    assert(sample.Inputs.size() == 2);
+    assert(sample.Targets.size() == 1);
+    assert(sample.Inputs[0] == 1.0);
+    assert(sample.Inputs[1] == 0.0);
+    assert(sample.Targets[0] == 1.0);
+    assert(!MiaIAClient::TryGetDatasetSample(4, sample));
+
+    assert(MiaIAClient::CreateDenseNetwork(2, 2, 1, 1));
+    assert(MiaIAClient::ApplyDatasetSample(2));
+
+    const auto appliedSnapshot = MiaIAClient::GetSnapshot();
+
+    assert(appliedSnapshot.Layers[0].Neurons[0].Activation == 1.0);
+    assert(appliedSnapshot.Layers[0].Neurons[1].Activation == 0.0);
+
+    assert(!MiaIAClient::ImportCsvDataset(
+        invalidPath.string(),
+        2,
+        1));
+    assert(!MiaIAClient::ImportCsvDataset(
+        nonFinitePath.string(),
+        2,
+        1));
+    assert(!MiaIAClient::ImportCsvDataset("", 2, 1));
+    assert(!MiaIAClient::ImportCsvDataset(
+        headerPath.string(),
+        0,
+        1));
+
+    const auto afterFailedImport = MiaIAClient::GetDatasetSummary();
+
+    assert(afterFailedImport.Source == summary.Source);
+    assert(afterFailedImport.SampleCount == summary.SampleCount);
+
+    assert(MiaIAClient::ImportCsvDataset(
+        noHeaderPath.string(),
+        2,
+        1,
+        false));
+
+    const auto noHeaderSummary = MiaIAClient::GetDatasetSummary();
+
+    assert(noHeaderSummary.SampleCount == 2);
+
+    assert(MiaIAClient::CreateDenseNetwork(3, 2, 1, 1));
+    assert(MiaIAClient::SetInputValues({ 0.1, 0.2, 0.3 }));
+    assert(!MiaIAClient::ApplyDatasetSample(0));
+
+    const auto afterFailedApply = MiaIAClient::GetSnapshot();
+
+    assert(afterFailedApply.Layers[0].Neurons[0].Activation == 0.1);
+    assert(afterFailedApply.Layers[0].Neurons[1].Activation == 0.2);
+    assert(afterFailedApply.Layers[0].Neurons[2].Activation == 0.3);
+
+    MiaIAClient::ClearDataset();
+
+    const auto clearedSummary = MiaIAClient::GetDatasetSummary();
+
+    assert(clearedSummary.SampleCount == 0);
+    assert(!MiaIAClient::TryGetDatasetSample(0, sample));
+    assert(!MiaIAClient::ApplyDatasetSample(0));
+
+    std::filesystem::remove(headerPath);
+    std::filesystem::remove(noHeaderPath);
+    std::filesystem::remove(invalidPath);
+    std::filesystem::remove(nonFinitePath);
+
+    });
+
     runner.Run("Network input", [&]()
     {
     MiaIAClient::ClearNetwork();

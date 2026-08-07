@@ -50,6 +50,28 @@ void PrintHelp()
         << "  export onnx [path]\n"
         << "      Export the current network as an ONNX model\n\n"
 
+        << "  dataset import csv <input-count> <output-count> <path>\n"
+        << "      Import a numeric CSV dataset with a header\n"
+        << "      The first <input-count> columns are network inputs\n"
+        << "      The following <output-count> columns are expected outputs\n\n"
+
+        << "      Add --no-header before the path when needed\n\n"
+
+        << "      Example:\n"
+        << "        dataset import csv 2 1 \"C:\\Data\\xor.csv\"\n\n"
+
+        << "  dataset summary\n"
+        << "      Show information about the current dataset\n\n"
+
+        << "  dataset inspect [index]\n"
+        << "      Show one dataset sample\n\n"
+
+        << "  dataset apply [index]\n"
+        << "      Apply one sample to the network input\n\n"
+
+        << "  dataset clear\n"
+        << "      Clear the current dataset\n\n"
+
         << "  summary\n"
         << "      Show network overview\n\n"
 
@@ -232,6 +254,227 @@ void ExportOnnx(const std::string& command)
 
     std::cout
         << "ONNX model exported.\n";
+}
+
+std::string UnquotePath(const std::string& value)
+{
+    std::string path = Trim(value);
+
+    if (path.size() >= 2 &&
+        path.front() == '"' &&
+        path.back() == '"')
+    {
+        path = path.substr(1, path.size() - 2);
+    }
+
+    return path;
+}
+
+bool ReadDatasetImport(
+    const std::string& command,
+    std::size_t& inputCount,
+    std::size_t& targetCount,
+    bool& hasHeader,
+    std::string& path)
+{
+    std::stringstream stream(command);
+    std::string datasetToken;
+    std::string action;
+    std::string format;
+
+    if (!(stream >> datasetToken
+        >> action
+        >> format
+        >> inputCount
+        >> targetCount) ||
+        datasetToken != "dataset" ||
+        action != "import" ||
+        format != "csv")
+    {
+        return false;
+    }
+
+    std::string remainder;
+    std::getline(stream, remainder);
+    remainder = Trim(remainder);
+    hasHeader = true;
+
+    constexpr const char* NoHeaderOption = "--no-header";
+
+    if (remainder.rfind(NoHeaderOption, 0) == 0)
+    {
+        const std::size_t optionLength =
+            std::char_traits<char>::length(NoHeaderOption);
+
+        if (remainder.size() > optionLength &&
+            remainder[optionLength] != ' ' &&
+            remainder[optionLength] != '\t')
+        {
+            return false;
+        }
+
+        hasHeader = false;
+        remainder = Trim(remainder.substr(optionLength));
+    }
+
+    path = UnquotePath(remainder);
+    return inputCount > 0 && targetCount > 0 && !path.empty();
+}
+
+void PrintValues(const std::vector<double>& values)
+{
+    for (std::size_t index = 0; index < values.size(); ++index)
+    {
+        if (index > 0)
+        {
+            std::cout << ", ";
+        }
+
+        std::cout << values[index];
+    }
+}
+
+void HandleDatasetCommand(const std::string& command)
+{
+    using MiaIA::SDK::MiaIAClient;
+
+    if (command.rfind("dataset import", 0) == 0)
+    {
+        std::size_t inputCount{};
+        std::size_t targetCount{};
+        bool hasHeader{};
+        std::string path;
+
+        if (!ReadDatasetImport(
+            command,
+            inputCount,
+            targetCount,
+            hasHeader,
+            path))
+        {
+            std::cout
+                << "Usage: dataset import csv <input-count> <output-count> "
+                << "[--no-header] <path>\n";
+
+            return;
+        }
+
+        if (!MiaIAClient::ImportCsvDataset(
+            path,
+            inputCount,
+            targetCount,
+            hasHeader))
+        {
+            std::cout
+                << "CSV dataset import failed. "
+                << "The current dataset was not changed.\n";
+
+            return;
+        }
+
+        std::cout
+            << "CSV dataset imported.\n";
+
+        return;
+    }
+
+    if (command == "dataset summary")
+    {
+        const auto summary = MiaIAClient::GetDatasetSummary();
+
+        if (summary.SampleCount == 0)
+        {
+            std::cout
+                << "No dataset loaded.\n";
+
+            return;
+        }
+
+        std::cout
+            << "\nDataset Summary\n\n"
+            << "Name: " << summary.Name << "\n"
+            << "Source: " << summary.Source << "\n"
+            << "Samples: " << summary.SampleCount << "\n"
+            << "Inputs: " << summary.InputCount << "\n"
+            << "Targets: " << summary.TargetCount << "\n";
+
+        return;
+    }
+
+    if (command == "dataset clear")
+    {
+        MiaIAClient::ClearDataset();
+        std::cout
+            << "Dataset cleared.\n";
+
+        return;
+    }
+
+    std::stringstream stream(command);
+    std::string datasetToken;
+    std::string action;
+    std::size_t index{};
+
+    if (!(stream >> datasetToken >> action >> index) ||
+        datasetToken != "dataset")
+    {
+        std::cout
+            << "Unknown dataset command.\n";
+
+        return;
+    }
+
+    stream >> std::ws;
+
+    if (!stream.eof())
+    {
+        std::cout
+            << "Dataset sample index is invalid.\n";
+
+        return;
+    }
+
+    if (action == "inspect")
+    {
+        MiaIA::Core::SampleSnapshot sample;
+
+        if (!MiaIAClient::TryGetDatasetSample(index, sample))
+        {
+            std::cout
+                << "Dataset sample was not found.\n";
+
+            return;
+        }
+
+        std::cout
+            << "\nSample " << sample.Index << "\n"
+            << "Inputs: ";
+        PrintValues(sample.Inputs);
+        std::cout << "\nTargets: ";
+        PrintValues(sample.Targets);
+        std::cout << "\n";
+
+        return;
+    }
+
+    if (action == "apply")
+    {
+        if (!MiaIAClient::ApplyDatasetSample(index))
+        {
+            std::cout
+                << "Dataset sample could not be applied to the network.\n";
+
+            return;
+        }
+
+        std::cout
+            << "Dataset sample applied to the network input.\n";
+
+        return;
+    }
+
+    std::cout
+        << "Unknown dataset command.\n";
 }
 
 
@@ -457,6 +700,7 @@ std::string ResolveCommand(
         "input",
         "import",
         "export",
+        "dataset",
         "summary",
         "inspect",
         "forward",
@@ -541,6 +785,11 @@ int main()
         else if (command.rfind("export", 0) == 0)
         {
             ExportOnnx(command);
+            continue;
+        }
+        else if (command.rfind("dataset", 0) == 0)
+        {
+            HandleDatasetCommand(command);
             continue;
         }
         else if (command == "summary")

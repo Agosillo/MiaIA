@@ -1,10 +1,13 @@
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 #include <string>
 #include <vector>
 
 #include "../../Core/Public/NetworkSnapshot.h"
+#include "../../Core/Public/DatasetSummary.h"
+#include "../../Core/Public/SampleSnapshot.h"
 
 namespace MiaIA::SDK
 {
@@ -32,6 +35,18 @@ namespace MiaIA::SDK
         static bool CreateDenseNetwork(int inputCount, int hiddenCount, int hiddenLayers, int outputCount);
         static bool ImportOnnx(const std::string& path);
         static bool ExportOnnx(const std::string& path);
+        static bool ImportCsvDataset(
+            const std::string& path,
+            std::size_t inputCount,
+            std::size_t targetCount,
+            bool hasHeader = true);
+        static void ClearDataset();
+        [[nodiscard]]
+        static Core::DatasetSummary GetDatasetSummary();
+        static bool TryGetDatasetSample(
+            std::size_t index,
+            Core::SampleSnapshot& result);
+        static bool ApplyDatasetSample(std::size_t index);
         static bool Forward();
     };
 }

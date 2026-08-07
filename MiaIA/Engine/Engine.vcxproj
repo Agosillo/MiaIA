@@ -146,6 +146,9 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="Data\CsvDatasetImporter.h" />
+    <ClInclude Include="Data\DatasetInspector.h" />
+    <ClInclude Include="Data\DatasetRuntime.h" />
     <ClInclude Include="Editing\NetworkEditor.h" />
     <ClInclude Include="Execution\ForwardEngine.h" />
     <ClInclude Include="framework.h" />
@@ -162,6 +165,9 @@
     <ClInclude Include="Weights\NetworkWeights.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="Data\CsvDatasetImporter.cpp" />
+    <ClCompile Include="Data\DatasetInspector.cpp" />
+    <ClCompile Include="Data\DatasetRuntime.cpp" />
     <ClCompile Include="Editing\NetworkEditor.cpp" />
     <ClCompile Include="Engine.cpp" />
     <ClCompile Include="Execution\ForwardEngine.cpp" />

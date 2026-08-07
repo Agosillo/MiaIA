@@ -41,5 +41,8 @@
     <ClCompile Include="Source\MiaIAClientOnnx.cpp">
       <Filter>File di origine</Filter>
     </ClCompile>
+    <ClCompile Include="Source\MiaIAClientDataset.cpp">
+      <Filter>File di origine</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>
