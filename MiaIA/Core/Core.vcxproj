@@ -175,6 +175,8 @@
     <ClInclude Include="Public\TrainingWorkerStopReason.h" />
     <ClInclude Include="Public\TrainingDebugPhase.h" />
     <ClInclude Include="Public\TrainingDebugSnapshot.h" />
+    <ClInclude Include="Public\TrainingDebugNeuronSnapshot.h" />
+    <ClInclude Include="Public\TrainingDebugConnectionSnapshot.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Core.cpp" />

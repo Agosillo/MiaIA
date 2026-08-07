@@ -22,7 +22,7 @@ The project is currently in its foundation stage. The C++ engine, public SDK fac
 | Activations | Sigmoid, ReLU, Tanh, and Linear |
 | Execution | Input assignment and forward propagation |
 | Inference | Direct input-to-output prediction through SDK and Console |
-| Inspection | Network, dataset, live training-phase, gradient, session-history, and detailed completed-step snapshots |
+| Inspection | Network, dataset, focused neuron/connection debug, gradient, session-history, and completed-step snapshots |
 | Interchange | Import and export of the currently supported dense ONNX subset |
 | Datasets | Numeric CSV import with explicit input and target column counts |
 | Evaluation | Per-sample details and fixed-model mean squared error across a complete dataset |

@@ -1944,6 +1944,24 @@ int main()
 
     const auto original = MiaIAClient::GetSnapshot();
     MiaIA::Core::TrainingDebugSnapshot debug;
+    MiaIA::Core::TrainingDebugNeuronSnapshot debugNeuron;
+    MiaIA::Core::TrainingDebugConnectionSnapshot debugConnection;
+
+    debugNeuron.Id = 999;
+    debugNeuron.PublicBias = 42.0;
+    debugConnection.Id = 999;
+    debugConnection.PublicWeight = 42.0;
+
+    assert(!MiaIAClient::TryGetTrainingDebugNeuron(
+        1002,
+        debugNeuron));
+    assert(debugNeuron.Id == 999);
+    assert(debugNeuron.PublicBias == 42.0);
+    assert(!MiaIAClient::TryGetTrainingDebugConnection(
+        1,
+        debugConnection));
+    assert(debugConnection.Id == 999);
+    assert(debugConnection.PublicWeight == 42.0);
 
     assert(MiaIAClient::StartTrainingDebug(
         0,
@@ -1956,6 +1974,23 @@ int main()
     assert(debug.SampleIndex == 0);
     assert(debug.CandidateNetwork.Connections[0].Weight == 0.0);
     assert(!MiaIAClient::SetConnectionWeight(1, 42.0));
+    assert(MiaIAClient::TryGetTrainingDebugNeuron(
+        1002,
+        debugNeuron));
+    assert(debugNeuron.Phase ==
+        MiaIA::Core::TrainingDebugPhase::BeforeForward);
+    assert(debugNeuron.LayerOrder == 1);
+    assert(debugNeuron.PublicBias == 0.0);
+    assert(debugNeuron.CandidateBias == 0.0);
+    assert(!debugNeuron.HasGradients);
+    assert(!debugNeuron.HasUpdate);
+    assert(MiaIAClient::TryGetTrainingDebugConnection(
+        1,
+        debugConnection));
+    assert(debugConnection.PublicWeight == 0.0);
+    assert(debugConnection.CandidateWeight == 0.0);
+    assert(!debugConnection.HasGradient);
+    assert(!debugConnection.HasUpdate);
 
     MiaIA::Core::TrainingSessionSnapshot rejectedSession;
     assert(!MiaIAClient::StartTrainingSession(
@@ -1973,6 +2008,14 @@ int main()
     assert(debug.Step.Before.Evaluation.Predictions.size() == 1);
     assert(debug.Step.Before.Evaluation.Predictions[0] == 0.0);
     assert(debug.Step.Before.Neurons.empty());
+    assert(MiaIAClient::TryGetTrainingDebugNeuron(
+        1002,
+        debugNeuron));
+    assert(debugNeuron.Phase ==
+        MiaIA::Core::TrainingDebugPhase::ForwardComplete);
+    assert(debugNeuron.PublicActivation == 0.0);
+    assert(debugNeuron.CandidateActivation == 0.0);
+    assert(!debugNeuron.HasGradients);
 
     assert(MiaIAClient::AdvanceTrainingDebug(debug));
     assert(debug.Phase ==
@@ -1982,6 +2025,19 @@ int main()
     assert(std::abs(
         debug.Step.Before.Connections[0].WeightGradient + 2.0) <
         1e-12);
+    assert(MiaIAClient::TryGetTrainingDebugNeuron(
+        1002,
+        debugNeuron));
+    assert(debugNeuron.HasGradients);
+    assert(std::abs(debugNeuron.BiasGradient + 2.0) < 1e-12);
+    assert(!debugNeuron.HasUpdate);
+    assert(MiaIAClient::TryGetTrainingDebugConnection(
+        1,
+        debugConnection));
+    assert(debugConnection.HasGradient);
+    assert(std::abs(debugConnection.WeightGradient + 2.0) <
+        1e-12);
+    assert(!debugConnection.HasUpdate);
 
     assert(MiaIAClient::AdvanceTrainingDebug(debug));
     assert(debug.Phase ==
@@ -1991,6 +2047,37 @@ int main()
     assert(std::abs(
         debug.CandidateNetwork.Connections[0].Weight - 0.2) <
         1e-12);
+    assert(MiaIAClient::TryGetTrainingDebugNeuron(
+        1002,
+        debugNeuron));
+    assert(debugNeuron.HasUpdate);
+    assert(debugNeuron.PublicBias == 0.0);
+    assert(std::abs(debugNeuron.CandidateBias - 0.2) < 1e-12);
+    assert(std::abs(debugNeuron.Delta - 0.2) < 1e-12);
+    assert(MiaIAClient::TryGetTrainingDebugConnection(
+        1,
+        debugConnection));
+    assert(debugConnection.HasUpdate);
+    assert(debugConnection.PublicWeight == 0.0);
+    assert(std::abs(debugConnection.CandidateWeight - 0.2) <
+        1e-12);
+    assert(std::abs(debugConnection.Delta - 0.2) < 1e-12);
+
+    debugNeuron.Id = 999;
+    debugNeuron.PublicBias = 42.0;
+    assert(!MiaIAClient::TryGetTrainingDebugNeuron(
+        9999,
+        debugNeuron));
+    assert(debugNeuron.Id == 999);
+    assert(debugNeuron.PublicBias == 42.0);
+
+    debugConnection.Id = 999;
+    debugConnection.PublicWeight = 42.0;
+    assert(!MiaIAClient::TryGetTrainingDebugConnection(
+        9999,
+        debugConnection));
+    assert(debugConnection.Id == 999);
+    assert(debugConnection.PublicWeight == 42.0);
 
     auto publicNetwork = MiaIAClient::GetSnapshot();
     assert(publicNetwork.Connections[0].Weight ==
@@ -2001,6 +2088,12 @@ int main()
     assert(MiaIAClient::AdvanceTrainingDebug(debug));
     assert(debug.Phase == MiaIA::Core::TrainingDebugPhase::Verified);
     assert(std::abs(debug.Step.After.Loss - 0.36) < 1e-12);
+    assert(MiaIAClient::TryGetTrainingDebugNeuron(
+        1002,
+        debugNeuron));
+    assert(std::abs(debugNeuron.CandidateActivation - 0.4) <
+        1e-12);
+    assert(debugNeuron.PublicActivation == 0.0);
 
     publicNetwork = MiaIAClient::GetSnapshot();
     assert(publicNetwork.Connections[0].Weight == 0.0);
@@ -2014,6 +2107,15 @@ int main()
         1e-12);
     assert(std::abs(
         publicNetwork.Layers[1].Neurons[0].Bias - 0.2) < 1e-12);
+    assert(MiaIAClient::TryGetTrainingDebugConnection(
+        1,
+        debugConnection));
+    assert(debugConnection.Phase ==
+        MiaIA::Core::TrainingDebugPhase::Committed);
+    assert(std::abs(debugConnection.PublicWeight - 0.2) <
+        1e-12);
+    assert(std::abs(debugConnection.CandidateWeight - 0.2) <
+        1e-12);
 
     MiaIA::Core::TrainingDebugSnapshot rejectedDebug;
     rejectedDebug.SampleIndex = 999;
@@ -2037,6 +2139,12 @@ int main()
     assert(MiaIAClient::CancelTrainingDebug());
     assert(MiaIAClient::GetTrainingDebug().Phase ==
         MiaIA::Core::TrainingDebugPhase::Idle);
+    assert(!MiaIAClient::TryGetTrainingDebugNeuron(
+        1002,
+        debugNeuron));
+    assert(!MiaIAClient::TryGetTrainingDebugConnection(
+        1,
+        debugConnection));
 
     publicNetwork = MiaIAClient::GetSnapshot();
     assert(publicNetwork.Connections[0].Weight == 0.0);

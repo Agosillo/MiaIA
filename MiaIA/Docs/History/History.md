@@ -98,6 +98,8 @@ The atomic sample step was decomposed into an explicit transaction controller wi
 
 Every phase exposes a stable snapshot containing the candidate network and the results calculated so far. Public weights and biases remain unchanged until the verified candidate is committed; cancellation discards the candidate completely. The ordinary atomic training step now composes the same controller through completion.
 
+Focused inspector snapshots subsequently made individual neurons and connections queryable without traversing the complete transaction. They compare public and candidate values and expose gradients and optimizer updates only after the corresponding phase, using availability flags so a client never confuses missing data with a mathematical zero.
+
 ## Current position
 
 MiaIA can now represent, execute, interchange, inspect, evaluate, differentiate, debug one training step phase by phase, train through controlled foreground or background sessions, and navigate the complete history of successful steps. It cannot yet persist a `.mia` workspace or deliver the planned complete graphical debugging experience.

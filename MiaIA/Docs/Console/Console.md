@@ -34,6 +34,8 @@ train debug start 0 0.01 mse
 train debug next
 train debug next
 train debug status
+train debug neuron 1003
+train debug connection 1
 train debug cancel
 train epoch 0.01 mse
 dataset evaluate all mse
@@ -415,6 +417,8 @@ A suitable learning rate often reduces loss for the selected sample, but reducti
 train debug start <sample-index> <learning-rate> mse
 train debug status
 train debug next
+train debug neuron <neuron-id>
+train debug connection <connection-id>
 train debug cancel
 ```
 
@@ -427,6 +431,17 @@ Starts one SGD step as an inspectable mathematical transaction. `start` copies t
 5. `Committed`: the verified candidate replaced the public network atomically.
 
 `status` returns the current phase without advancing it. Its snapshot includes the candidate network and every result produced up to that phase, making the same data suitable for Console output, Blueprint nodes, or a graphical signal/gradient visualization.
+
+Focused inspection avoids scanning or printing the complete network:
+
+```text
+train debug neuron <neuron-id>
+train debug connection <connection-id>
+```
+
+Neuron inspection reports its layer, public and candidate activation, public and candidate bias, then the gradients and bias update when the current phase has produced them. Connection inspection reports endpoints, public and candidate weight, weight gradient, and SGD update. Explicit availability flags in the SDK snapshots distinguish data that has not been calculated yet from a valid gradient or delta equal to zero. Input neurons expose gradients but correctly report that their biases are not trainable.
+
+Both commands are read-only: they do not advance the phase or alter either network. They remain available after `Committed` for inspecting the completed transaction and reject requests while the debugger is `Idle` or when an ID does not exist.
 
 The public network remains unchanged through `Verified`. While a debug transaction is active, operations that could mutate the public network or dataset are rejected so that the final commit cannot overwrite unrelated edits. `cancel` discards the candidate and returns the debugger to `Idle`; it is a real rollback because no candidate parameter has yet been published.
 

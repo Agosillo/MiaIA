@@ -41,6 +41,8 @@ The roadmap is organized by dependency rather than by a fixed release date. Math
 - phase-by-phase single-sample training transactions;
 - candidate-network inspection through forward, backward, update, verification, and atomic commit;
 - true candidate rollback before commit.
+- focused neuron and connection inspection at every debug phase;
+- explicit public-versus-candidate values and phase availability flags.
 
 ## Implemented optimizer foundation
 
@@ -87,7 +89,7 @@ The first debugger-like training workflow is implemented for one sample: clients
 The debugging experience should next evolve toward:
 
 - configurable breakpoints around the implemented mathematical phases;
-- inspect a selected neuron or connection;
+- expand selected-neuron and selected-connection inspection with incoming and outgoing relationships;
 - compare current and previous activations, gradients, weights, and biases;
 - identify inactive or consistently saturated neurons;
 - trace signal and gradient flow through the network;

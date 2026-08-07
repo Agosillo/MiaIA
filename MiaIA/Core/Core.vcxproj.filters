@@ -123,6 +123,12 @@
     <ClInclude Include="Public\TrainingDebugSnapshot.h">
       <Filter>File di intestazione</Filter>
     </ClInclude>
+    <ClInclude Include="Public\TrainingDebugNeuronSnapshot.h">
+      <Filter>File di intestazione</Filter>
+    </ClInclude>
+    <ClInclude Include="Public\TrainingDebugConnectionSnapshot.h">
+      <Filter>File di intestazione</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Core.cpp">

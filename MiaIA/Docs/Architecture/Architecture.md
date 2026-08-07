@@ -203,6 +203,8 @@ A bounded run composes repeated `next` operations synchronously. It can stop bec
 
 `TrainingDebugController` is the transaction boundary for a single inspectable SGD step. It owns a private candidate copy and advances through `BeforeForward`, `ForwardComplete`, `BackwardComplete`, `UpdateComplete`, `Verified`, and `Committed`. Phase snapshots include the candidate network and all calculations available at that point. The public network is assigned only at commit, while cancellation destroys the candidate. `TrainingStepExecutor` runs this same controller to completion, so atomic and interactive execution share one mathematical implementation.
 
+`TrainingDebugInspector` provides focused read-only views of a neuron or connection without requiring a client to search the complete debug snapshot. Each result compares public and candidate values and exposes phase-dependent gradients and updates with explicit availability flags. This is the intended query boundary for Console selection, Unreal navigation, and future Blueprint nodes.
+
 ## Snapshot boundary
 
 Clients receive snapshots rather than references to mutable engine storage. A snapshot is a value object suitable for inspection, display, logging, comparison, or transport across an integration boundary.

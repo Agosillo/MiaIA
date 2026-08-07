@@ -20,6 +20,8 @@
 #include "../../Core/Public/TrainingRunSnapshot.h"
 #include "../../Core/Public/TrainingHistoryEntrySnapshot.h"
 #include "../../Core/Public/TrainingDebugSnapshot.h"
+#include "../../Core/Public/TrainingDebugNeuronSnapshot.h"
+#include "../../Core/Public/TrainingDebugConnectionSnapshot.h"
 
 namespace MiaIA::SDK
 {
@@ -114,6 +116,12 @@ namespace MiaIA::SDK
         static bool AdvanceTrainingDebug(
             Core::TrainingDebugSnapshot& result);
         static bool CancelTrainingDebug();
+        static bool TryGetTrainingDebugNeuron(
+            std::uint64_t neuronId,
+            Core::TrainingDebugNeuronSnapshot& result);
+        static bool TryGetTrainingDebugConnection(
+            std::uint64_t connectionId,
+            Core::TrainingDebugConnectionSnapshot& result);
         static bool Predict(
             const std::vector<double>& inputs,
             Core::PredictionSnapshot& result);

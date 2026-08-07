@@ -111,6 +111,9 @@
     <ClInclude Include="Training\TrainingDebugController.h">
       <Filter>File di intestazione</Filter>
     </ClInclude>
+    <ClInclude Include="Training\TrainingDebugInspector.h">
+      <Filter>File di intestazione</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Engine.cpp">
@@ -189,6 +192,9 @@
       <Filter>File di origine</Filter>
     </ClCompile>
     <ClCompile Include="Training\TrainingDebugController.cpp">
+      <Filter>File di origine</Filter>
+    </ClCompile>
+    <ClCompile Include="Training\TrainingDebugInspector.cpp">
       <Filter>File di origine</Filter>
     </ClCompile>
   </ItemGroup>

@@ -2,6 +2,7 @@
 #include "MiaIAClientState.h"
 
 #include "../../Engine/Training/TrainingDebugController.h"
+#include "../../Engine/Training/TrainingDebugInspector.h"
 #include "../../Core/Model/TrainingDebugSession.h"
 #include "../../Core/Model/TrainingSession.h"
 
@@ -59,5 +60,29 @@ namespace MiaIA::SDK
         const std::scoped_lock lock(Detail::ClientMutex());
         return Engine::TrainingDebugController::Cancel(
             Detail::ClientTrainingDebugSession());
+    }
+
+    bool MiaIAClient::TryGetTrainingDebugNeuron(
+        std::uint64_t neuronId,
+        Core::TrainingDebugNeuronSnapshot& result)
+    {
+        const std::scoped_lock lock(Detail::ClientMutex());
+        return Engine::TrainingDebugInspector::TryGetNeuron(
+            Detail::ClientNetwork(),
+            Detail::ClientTrainingDebugSession(),
+            neuronId,
+            result);
+    }
+
+    bool MiaIAClient::TryGetTrainingDebugConnection(
+        std::uint64_t connectionId,
+        Core::TrainingDebugConnectionSnapshot& result)
+    {
+        const std::scoped_lock lock(Detail::ClientMutex());
+        return Engine::TrainingDebugInspector::TryGetConnection(
+            Detail::ClientNetwork(),
+            Detail::ClientTrainingDebugSession(),
+            connectionId,
+            result);
     }
 }

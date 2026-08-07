@@ -99,6 +99,12 @@ void PrintHelp()
         << "  train debug next\n"
         << "      Advance exactly one mathematical phase\n\n"
 
+        << "  train debug neuron <neuron-id>\n"
+        << "      Inspect one neuron in the current debug phase\n\n"
+
+        << "  train debug connection <connection-id>\n"
+        << "      Inspect one connection in the current debug phase\n\n"
+
         << "  train debug cancel\n"
         << "      Discard the candidate network before commit\n\n"
 
@@ -1018,7 +1024,92 @@ void PrintTrainingDebugUsage()
         << "Usage: train debug start <sample-index> <learning-rate> mse\n"
         << "       train debug status\n"
         << "       train debug next\n"
+        << "       train debug neuron <neuron-id>\n"
+        << "       train debug connection <connection-id>\n"
         << "       train debug cancel\n";
+}
+
+void PrintTrainingDebugNeuron(
+    const MiaIA::Core::TrainingDebugNeuronSnapshot& neuron)
+{
+    std::cout
+        << "\nTraining Debug Neuron " << neuron.Id
+        << "\nPhase: " << TrainingDebugPhaseName(neuron.Phase)
+        << "\nLayer order: " << neuron.LayerOrder
+        << "\nPublic activation: " << neuron.PublicActivation
+        << "\nCandidate activation: " << neuron.CandidateActivation
+        << "\nPublic bias: " << neuron.PublicBias
+        << "\nCandidate bias: " << neuron.CandidateBias;
+
+    if (neuron.HasGradients)
+    {
+        std::cout
+            << "\ndLoss/dActivation: "
+            << neuron.ActivationGradient
+            << "\ndLoss/dPreActivation: "
+            << neuron.PreActivationGradient
+            << "\ndLoss/dBias: " << neuron.BiasGradient;
+    }
+    else
+    {
+        std::cout << "\nGradients: not available in this phase";
+    }
+
+    if (neuron.HasUpdate)
+    {
+        std::cout
+            << "\nPrevious bias: " << neuron.PreviousBias
+            << "\nUpdate gradient: " << neuron.UpdateGradient
+            << "\nBias delta: " << neuron.Delta
+            << "\nUpdated bias: " << neuron.UpdatedBias;
+    }
+    else if (neuron.LayerOrder == 0)
+    {
+        std::cout << "\nUpdate: input neuron biases are not trainable";
+    }
+    else
+    {
+        std::cout << "\nUpdate: not available in this phase";
+    }
+
+    std::cout << "\n";
+}
+
+void PrintTrainingDebugConnection(
+    const MiaIA::Core::TrainingDebugConnectionSnapshot& connection)
+{
+    std::cout
+        << "\nTraining Debug Connection " << connection.Id
+        << "\nPhase: " << TrainingDebugPhaseName(connection.Phase)
+        << "\nFrom: " << connection.FromNeuron
+        << "\nTo: " << connection.ToNeuron
+        << "\nPublic weight: " << connection.PublicWeight
+        << "\nCandidate weight: " << connection.CandidateWeight;
+
+    if (connection.HasGradient)
+    {
+        std::cout
+            << "\ndLoss/dWeight: " << connection.WeightGradient;
+    }
+    else
+    {
+        std::cout << "\nGradient: not available in this phase";
+    }
+
+    if (connection.HasUpdate)
+    {
+        std::cout
+            << "\nPrevious weight: " << connection.PreviousWeight
+            << "\nUpdate gradient: " << connection.UpdateGradient
+            << "\nWeight delta: " << connection.Delta
+            << "\nUpdated weight: " << connection.UpdatedWeight;
+    }
+    else
+    {
+        std::cout << "\nUpdate: not available in this phase";
+    }
+
+    std::cout << "\n";
 }
 
 void HandleTrainCommand(const std::string& command)
@@ -1440,6 +1531,74 @@ void HandleTrainCommand(const std::string& command)
             }
 
             PrintTrainingDebug(debug);
+            return;
+        }
+
+        if (debugAction == "neuron")
+        {
+            std::uint64_t neuronId{};
+
+            if (!(stream >> neuronId))
+            {
+                PrintTrainingDebugUsage();
+                return;
+            }
+
+            stream >> std::ws;
+
+            if (!stream.eof())
+            {
+                PrintTrainingDebugUsage();
+                return;
+            }
+
+            MiaIA::Core::TrainingDebugNeuronSnapshot neuron;
+
+            if (!MiaIAClient::TryGetTrainingDebugNeuron(
+                neuronId,
+                neuron))
+            {
+                std::cout
+                    << "Training debug neuron was not found or no "
+                    << "debug transaction is available.\n";
+                return;
+            }
+
+            PrintTrainingDebugNeuron(neuron);
+            return;
+        }
+
+        if (debugAction == "connection")
+        {
+            std::uint64_t connectionId{};
+
+            if (!(stream >> connectionId))
+            {
+                PrintTrainingDebugUsage();
+                return;
+            }
+
+            stream >> std::ws;
+
+            if (!stream.eof())
+            {
+                PrintTrainingDebugUsage();
+                return;
+            }
+
+            MiaIA::Core::TrainingDebugConnectionSnapshot connection;
+
+            if (!MiaIAClient::TryGetTrainingDebugConnection(
+                connectionId,
+                connection))
+            {
+                std::cout
+                    << "Training debug connection was not found or no "
+                    << "debug transaction is available.\n";
+                return;
+            }
+
+            PrintTrainingDebugConnection(connection);
             return;
         }
 
