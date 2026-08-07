@@ -11,6 +11,7 @@ namespace
     constexpr float VerticalPadding = 58.0f;
     constexpr float NeuronDiameter = 34.0f;
     constexpr float SelectionDiameter = 42.0f;
+    constexpr float ConnectionSelectionDistance = 8.0f;
 }
 
 SMiaIANetworkView::SMiaIANetworkView()
@@ -24,6 +25,7 @@ SMiaIANetworkView::SMiaIANetworkView()
 void SMiaIANetworkView::Construct(const FArguments& InArgs)
 {
     OnNeuronSelected = InArgs._OnNeuronSelected;
+    OnConnectionSelected = InArgs._OnConnectionSelected;
     SetCanTick(false);
 }
 
@@ -37,6 +39,12 @@ void SMiaIANetworkView::SetSnapshot(
 void SMiaIANetworkView::SetSelectedNeuron(int64 InNeuronId)
 {
     SelectedNeuronId = InNeuronId;
+    Invalidate(EInvalidateWidgetReason::Paint);
+}
+
+void SMiaIANetworkView::SetSelectedConnection(int64 InConnectionId)
+{
+    SelectedConnectionId = InConnectionId;
     Invalidate(EInvalidateWidgetReason::Paint);
 }
 
@@ -54,6 +62,26 @@ FLinearColor SMiaIANetworkView::ActivationColor(double Activation) const
     const FLinearColor inactive(0.20f, 0.22f, 0.25f, 1.0f);
     const FLinearColor active(0.12f, 0.72f, 0.31f, 1.0f);
     return FLinearColor::LerpUsingHSV(inactive, active, strength);
+}
+
+double SMiaIANetworkView::DistanceToSegment(
+    const FVector2D& Point,
+    const FVector2D& Start,
+    const FVector2D& End)
+{
+    const FVector2D segment = End - Start;
+    const double lengthSquared = segment.SizeSquared();
+
+    if (lengthSquared <= UE_DOUBLE_SMALL_NUMBER)
+    {
+        return FVector2D::Distance(Point, Start);
+    }
+
+    const double projection = FMath::Clamp(
+        FVector2D::DotProduct(Point - Start, segment) / lengthSquared,
+        0.0,
+        1.0);
+    return FVector2D::Distance(Point, Start + segment * projection);
 }
 
 int32 SMiaIANetworkView::OnPaint(
@@ -136,9 +164,12 @@ int32 SMiaIANetworkView::OnPaint(
             static_cast<float>(FMath::Abs(connection.Weight)),
             0.15f,
             1.0f);
-        const FLinearColor connectionColor = connection.Weight >= 0.0
-            ? FLinearColor(0.24f, 0.52f, 0.86f, weightStrength)
-            : FLinearColor(0.86f, 0.30f, 0.28f, weightStrength);
+        const bool selected = connection.Id == SelectedConnectionId;
+        const FLinearColor connectionColor = selected
+            ? FLinearColor(1.0f, 0.76f, 0.16f, 1.0f)
+            : connection.Weight >= 0.0
+                ? FLinearColor(0.24f, 0.52f, 0.86f, weightStrength)
+                : FLinearColor(0.86f, 0.30f, 0.28f, weightStrength);
         const TArray<FVector2D> points{ *from, *to };
         FSlateDrawElement::MakeLines(
             OutDrawElements,
@@ -148,7 +179,7 @@ int32 SMiaIANetworkView::OnPaint(
             ESlateDrawEffect::None,
             connectionColor,
             true,
-            1.0f + weightStrength * 1.5f);
+            selected ? 4.0f : 1.0f + weightStrength * 1.5f);
     }
 
     int32 nodeLayer = LayerId + 1;
@@ -228,10 +259,48 @@ FReply SMiaIANetworkView::OnMouseButtonDown(
             SelectionDiameter * 0.5f)
         {
             SelectedNeuronId = entry.Key;
+            SelectedConnectionId = -1;
             OnNeuronSelected.ExecuteIfBound(entry.Key);
             Invalidate(EInvalidateWidgetReason::Paint);
             return FReply::Handled();
         }
+    }
+
+    const FMiaIAConnectionSnapshot* closestConnection = nullptr;
+    double closestDistance = ConnectionSelectionDistance;
+
+    for (const FMiaIAConnectionSnapshot& connection :
+        Snapshot.Connections)
+    {
+        const FVector2D* from =
+            NeuronPositions.Find(connection.FromNeuron);
+        const FVector2D* to =
+            NeuronPositions.Find(connection.ToNeuron);
+
+        if (!from || !to)
+        {
+            continue;
+        }
+
+        const double distance = DistanceToSegment(
+            localPosition,
+            *from,
+            *to);
+
+        if (distance <= closestDistance)
+        {
+            closestConnection = &connection;
+            closestDistance = distance;
+        }
+    }
+
+    if (closestConnection)
+    {
+        SelectedNeuronId = -1;
+        SelectedConnectionId = closestConnection->Id;
+        OnConnectionSelected.ExecuteIfBound(closestConnection->Id);
+        Invalidate(EInvalidateWidgetReason::Paint);
+        return FReply::Handled();
     }
 
     return FReply::Unhandled();

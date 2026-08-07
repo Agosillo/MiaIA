@@ -10,8 +10,10 @@ The architecture is intended to support multiple front ends. Unreal Engine is th
 
 ```mermaid
 flowchart LR
-    Console["Console client"] --> SDK["SDK / MiaIAClient"]
-    Unreal["Unreal Engine client"] --> SDK
+    Console["Console.exe"] --> CLI["CLI command processor"]
+    UnrealConsole["Unreal command console"] --> CLI
+    CLI --> SDK["SDK / MiaIAClient"]
+    Unreal["Unreal structured UI and Blueprint"] --> SDK
     Future["Future clients: Unity or custom tools"] --> SDK
     SDK --> Engine
     Engine --> Core
@@ -63,11 +65,19 @@ This separation allows a mathematical subsystem to evolve without requiring clie
 
 The current SDK owns one process-local network and one process-local dataset through its internal client state. This is sufficient for the present console and integration tests. Multiple sessions, explicit contexts, concurrency, and persisted workspace state are future concerns and should not be assumed to exist today.
 
+### CLI command processor
+
+The CLI module is a reusable static library that parses one textual command and dispatches it through `MiaIAClient`. It returns captured command output and an explicit exit request instead of owning a terminal loop. Relative file paths are resolved against a working directory supplied by the host.
+
+The module also owns the structured command catalog used for contextual discovery. A client supplies the partially entered text and receives bounded suggestions containing a completion, complete syntax, and short description. Command paths are filtered one level at a time, while an active parameter sequence retains the complete syntax as guidance. This keeps command knowledge out of Unreal-specific widgets and makes the same catalog available to future clients.
+
+`Console.exe` and the Unreal editor console use this same processor in the same process as their SDK state. Unreal does not launch `Console.exe`: a separate process would own a separate process-local network, dataset, and training session. Command execution is serialized because the current processor captures the existing command handlers' standard output during dispatch.
+
 ### Clients
 
-The Console translates text commands into SDK calls. It is both a usable diagnostic client and a reference for other integrations.
+`Console.exe` is a thin terminal host around the shared CLI command processor. It is both a usable diagnostic client and a reference for other integrations.
 
-The Unreal Engine project is the first graphical integration. Its runtime Blueprint function library converts native session, phase, neuron, and connection snapshots into Unreal-reflected types while keeping every operation behind `MiaIAClient`. It provides the first end-to-end Blueprint debug flow, but it is not yet the complete MiaIA editor experience.
+The Unreal Engine project is the first graphical integration. Its runtime Blueprint function library converts native session, phase, neuron, and connection snapshots into Unreal-reflected types while keeping every operation behind `MiaIAClient`. It also exposes the shared command processor to Blueprint and to the editor panel. It provides the first end-to-end Blueprint debug flow, but it is not yet the complete MiaIA editor experience.
 
 ## Network representation
 

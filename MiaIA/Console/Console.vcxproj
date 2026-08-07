@@ -141,6 +141,9 @@
     <ClCompile Include="Console.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\CLI\CLI.vcxproj">
+      <Project>{a66d809e-658d-486d-9488-fd4d8b05d15c}</Project>
+    </ProjectReference>
     <ProjectReference Include="..\SDK\SDK.vcxproj">
       <Project>{e71364b4-ee83-4bfe-8dfb-a620701873cf}</Project>
     </ProjectReference>

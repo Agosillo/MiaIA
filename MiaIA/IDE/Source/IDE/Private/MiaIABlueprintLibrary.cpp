@@ -1,6 +1,8 @@
 #include "MiaIABlueprintLibrary.h"
 
 #include "MiaIAClient.h"
+#include "MiaIACommandProcessor.h"
+#include "Misc/Paths.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -195,6 +197,17 @@ namespace
         result.UpdatedWeight = source.UpdatedWeight;
         return result;
     }
+}
+
+FString UMiaIABlueprintLibrary::ExecuteCommand(
+    const FString& Command,
+    bool& OutExitRequested)
+{
+    const auto result = MiaIA::CLI::MiaIACommandProcessor::Execute(
+        std::string(TCHAR_TO_UTF8(*Command)),
+        std::string(TCHAR_TO_UTF8(*FPaths::ProjectDir())));
+    OutExitRequested = result.ExitRequested;
+    return UTF8_TO_TCHAR(result.Output.c_str());
 }
 
 bool UMiaIABlueprintLibrary::CreateDenseNetwork(

@@ -5,6 +5,8 @@ VisualStudioVersion = 17.14.37216.2
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Console", "Console\Console.vcxproj", "{18A85EF9-8AB0-4BA1-8E7D-DD5178AE0DAC}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "CLI", "CLI\CLI.vcxproj", "{A66D809E-658D-486D-9488-FD4D8B05D15C}"
+EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Engine", "Engine\Engine.vcxproj", "{BAEC0623-1AED-46E2-A3B8-7490E55F1FE2}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Core", "Core\Core.vcxproj", "{6F283A18-2484-43BF-B19F-5A385B2B40FD}"
@@ -63,6 +65,14 @@ Global
 		Release|x86 = Release|x86
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{A66D809E-658D-486D-9488-FD4D8B05D15C}.Debug|x64.ActiveCfg = Debug|x64
+		{A66D809E-658D-486D-9488-FD4D8B05D15C}.Debug|x64.Build.0 = Debug|x64
+		{A66D809E-658D-486D-9488-FD4D8B05D15C}.Debug|x86.ActiveCfg = Debug|Win32
+		{A66D809E-658D-486D-9488-FD4D8B05D15C}.Debug|x86.Build.0 = Debug|Win32
+		{A66D809E-658D-486D-9488-FD4D8B05D15C}.Release|x64.ActiveCfg = Release|x64
+		{A66D809E-658D-486D-9488-FD4D8B05D15C}.Release|x64.Build.0 = Release|x64
+		{A66D809E-658D-486D-9488-FD4D8B05D15C}.Release|x86.ActiveCfg = Release|Win32
+		{A66D809E-658D-486D-9488-FD4D8B05D15C}.Release|x86.Build.0 = Release|Win32
 		{18A85EF9-8AB0-4BA1-8E7D-DD5178AE0DAC}.Debug|x64.ActiveCfg = Debug|x64
 		{18A85EF9-8AB0-4BA1-8E7D-DD5178AE0DAC}.Debug|x64.Build.0 = Debug|x64
 		{18A85EF9-8AB0-4BA1-8E7D-DD5178AE0DAC}.Debug|x86.ActiveCfg = Debug|Win32

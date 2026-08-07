@@ -4,7 +4,35 @@
 
 The MiaIA Console is an interactive SDK client. Every command translates user input into `MiaIAClient` calls, so the Console exercises the same public boundary intended for Unreal Engine and future clients.
 
-The Console is currently process-local and stateful. A session contains one current network and one current dataset. Closing the process discards both unless the model was exported to ONNX. MiaIA workspace persistence is planned but not implemented.
+Command parsing and dispatch live in the reusable CLI command processor. `Console.exe` is only its terminal host; the Unreal editor panel calls the same processor directly. A command therefore has the same syntax and behavior in both interfaces and operates on the host process's shared `MiaIAClient` state.
+
+The state is currently process-local. A host contains one current network and one current dataset. Closing that host discards both unless the model was exported to ONNX. Starting `Console.exe` beside Unreal does not connect it to the editor: the two processes own independent state. MiaIA workspace persistence and remote sessions are planned but not implemented.
+
+Relative paths are resolved from the host working directory. For `Console.exe`, this is the directory from which it was launched. In the Unreal editor console, it is the Unreal project directory that contains `IDE.uproject`. Absolute paths work in both hosts.
+
+## Command discovery and host history
+
+The shared CLI module exposes a structured command catalog in addition to execution. Each suggestion contains the text that can be completed, the full command syntax, and a short description. Filtering is contextual rather than a flat search:
+
+```text
+tr
+    -> train
+
+train s
+    -> train step <sample-index> <learning-rate> mse
+    -> train session <action>
+
+train session r
+    -> train session run <steps|all>
+    -> train session resume
+
+dataset import
+    -> dataset import csv <inputs> <targets> [--no-header] <path>
+```
+
+Once a command starts accepting values, its complete syntax remains visible while the values are entered. For example, `create 2` continues to display `create <inputs> <hidden-width> <hidden-layers> <outputs>`.
+
+History belongs to the host because keyboard behavior is an interface concern. The Unreal editor panel currently provides session-local Up/Down history, clickable suggestions, and Tab completion. The thin `Console.exe` host still relies on the terminal's ordinary line input and does not yet provide interactive suggestion rendering. Neither host persists command history after it closes.
 
 ## Notation
 

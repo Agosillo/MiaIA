@@ -2,7 +2,7 @@
 
 MiaIA is an Interactive Development Environment for Artificial Intelligence. Its purpose is not to compete with large training frameworks on throughput. Its purpose is to make a neural network observable: users should be able to build a model, execute it, inspect its state, evaluate samples, follow gradients, and eventually control training step by step.
 
-The project is currently in its foundation stage. The C++ engine, public SDK facade, interactive console, test harness, ONNX interchange, CSV dataset pipeline, fixed-model dataset evaluation, non-mutating gradient inspection, phase-by-phase SGD debugging, controlled sessions, background pause/resume, and navigable training history are implemented. Persistent MiaIA project files and the complete Unreal visualization experience are planned work.
+The project is currently in its foundation stage. The C++ engine, public SDK facade, shared command processor, terminal and Unreal command consoles, test harness, ONNX interchange, CSV dataset pipeline, fixed-model dataset evaluation, non-mutating gradient inspection, phase-by-phase SGD debugging, controlled sessions, background pause/resume, navigable training history, and first interactive topology panel are implemented. Persistent MiaIA project files and the complete Unreal visualization experience are planned work.
 
 ## Documentation map
 
@@ -29,7 +29,7 @@ The project is currently in its foundation stage. The C++ engine, public SDK fac
 | Evaluation | Per-sample details and fixed-model mean squared error across a complete dataset |
 | Differentiation | Per-neuron, per-bias, and per-connection gradients without parameter updates |
 | Optimization | Standalone and session-attached phase debugging, atomic SGD, ordered epochs, history, bounded runs, and background control |
-| Clients | Interactive Console plus Unreal Blueprint nodes for session-based phase debugging |
+| Clients | One shared CLI command processor hosted by Console.exe and Unreal, plus Blueprint nodes and an interactive topology/debug panel |
 | Verification | Named Debug- and Release-capable C++ test harness, including numerical gradient checks |
 
 ## Solution structure
@@ -39,7 +39,8 @@ MiaIA/
 |-- Core/       Stable data structures, activation primitives, and public snapshots
 |-- Engine/     Validation, execution, evaluation, differentiation, optimization, and training
 |-- SDK/        Client-facing MiaIAClient facade and process-local state
-|-- Console/    Interactive command-line client
+|-- CLI/        Reusable textual command parser and SDK dispatcher
+|-- Console/    Thin terminal host for the shared command processor
 |-- Tests/      Named integration and mathematical correctness tests
 |-- IDE/        Initial Unreal Engine client integration
 `-- Docs/       Project documentation
@@ -68,7 +69,7 @@ For a complete console session, see the [Console guide](Console/Console.md).
 
 ## Architectural direction
 
-All clients use the SDK rather than reaching into Engine or Core internals. The console is therefore not a separate implementation: it exercises the same public facade intended for Unreal Engine, Blueprint wrappers, a future Unity client, or another editor.
+All clients use the SDK rather than reaching into Engine or Core internals. Text commands are implemented once in the CLI module and hosted by both `Console.exe` and Unreal. Structured Unreal and Blueprint operations continue to use the SDK facade directly. A separate executable does not share current state because the SDK context is process-local.
 
 ONNX is used as an interchange format. A future `.mia` format is intended to preserve MiaIA-specific information such as editor layout, debug state, annotations, breakpoints, training history, and visualization metadata. A `.mia` project should still be exportable to ONNX when its model graph is representable by the supported ONNX subset.
 

@@ -5,6 +5,7 @@
 #include "Widgets/SLeafWidget.h"
 
 DECLARE_DELEGATE_OneParam(FOnMiaIANeuronSelected, int64)
+DECLARE_DELEGATE_OneParam(FOnMiaIAConnectionSelected, int64)
 
 class SMiaIANetworkView final : public SLeafWidget
 {
@@ -13,6 +14,7 @@ public:
     {
     }
         SLATE_EVENT(FOnMiaIANeuronSelected, OnNeuronSelected)
+        SLATE_EVENT(FOnMiaIAConnectionSelected, OnConnectionSelected)
     SLATE_END_ARGS()
 
     SMiaIANetworkView();
@@ -20,6 +22,7 @@ public:
     void Construct(const FArguments& InArgs);
     void SetSnapshot(const FMiaIANetworkSnapshot& InSnapshot);
     void SetSelectedNeuron(int64 InNeuronId);
+    void SetSelectedConnection(int64 InConnectionId);
 
     virtual FVector2D ComputeDesiredSize(float) const override;
     virtual int32 OnPaint(
@@ -36,11 +39,17 @@ public:
 
 private:
     FLinearColor ActivationColor(double Activation) const;
+    static double DistanceToSegment(
+        const FVector2D& Point,
+        const FVector2D& Start,
+        const FVector2D& End);
 
     FMiaIANetworkSnapshot Snapshot;
     int64 SelectedNeuronId{-1};
+    int64 SelectedConnectionId{-1};
     mutable TMap<int64, FVector2D> NeuronPositions;
     FOnMiaIANeuronSelected OnNeuronSelected;
+    FOnMiaIAConnectionSelected OnConnectionSelected;
     FSlateRoundedBoxBrush NeuronBrush;
     FSlateRoundedBoxBrush SelectionBrush;
 };

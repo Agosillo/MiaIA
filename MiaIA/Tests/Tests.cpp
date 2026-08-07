@@ -8,6 +8,7 @@
 #include <onnx/checker.h>
 #include <onnx/onnx_pb.h>
 #include "TestHarness.h"
+#include "../CLI/Include/MiaIACommandProcessor.h"
 #include "../SDK/Include/MiaIAClient.h"
 #include "../Core/Execution/Activation.h"
 #include "../Engine/Validation/NetworkValidator.h"
@@ -41,6 +42,99 @@ int main()
     using MiaIA::SDK::MiaIAClient;
 
     MiaIA::Tests::TestRunner runner;
+
+    runner.Run("Shared CLI command processor", [&]()
+    {
+    using MiaIA::CLI::MiaIACommandProcessor;
+
+    const auto blank = MiaIACommandProcessor::Execute("   ");
+    assert(blank.Output.empty());
+    assert(!blank.ExitRequested);
+
+    MiaIAClient::ClearNetwork();
+
+    const auto create = MiaIACommandProcessor::Execute(
+        "  create 2 2 1 1  ");
+    assert(create.Output.find("Dense network created") !=
+        std::string::npos);
+
+    const auto network = MiaIAClient::GetSnapshot();
+    assert(network.Layers.size() == 3);
+    assert(network.Layers[0].Neurons.size() == 2);
+    assert(network.Layers[1].Neurons.size() == 2);
+    assert(network.Layers[2].Neurons.size() == 1);
+
+    const auto abbreviated = MiaIACommandProcessor::Execute("sum");
+    assert(abbreviated.Output.find("Network Summary") !=
+        std::string::npos);
+
+    const auto testDirectory =
+        std::filesystem::temp_directory_path() /
+        "miaia_cli_command_tests";
+    const auto datasetPath = testDirectory / "samples.csv";
+    std::filesystem::create_directories(testDirectory);
+
+    {
+        std::ofstream dataset(datasetPath);
+        dataset << "x1,x2,y\n0,0,0\n1,1,1\n";
+    }
+
+    const auto datasetImport = MiaIACommandProcessor::Execute(
+        "dataset import csv 2 1 samples.csv",
+        testDirectory.string());
+    assert(datasetImport.Output.find("CSV dataset imported") !=
+        std::string::npos);
+    assert(MiaIAClient::GetDatasetSummary().SampleCount == 2);
+
+    const auto unknown = MiaIACommandProcessor::Execute("not-a-command");
+    assert(unknown.Output == "Unknown command\n");
+
+    const auto exit = MiaIACommandProcessor::Execute("exit");
+    assert(exit.ExitRequested);
+    assert(exit.Output.empty());
+
+    const auto help = MiaIACommandProcessor::Execute("help");
+    assert(help.Output.find("Commands:") != std::string::npos);
+
+    const auto trainRoot =
+        MiaIACommandProcessor::GetSuggestions("tr");
+    assert(trainRoot.size() == 1);
+    assert(trainRoot[0].Completion == "train");
+
+    const auto trainActions =
+        MiaIACommandProcessor::GetSuggestions("train s");
+    assert(trainActions.size() == 2);
+    assert(trainActions[0].Completion == "train step");
+    assert(trainActions[1].Completion == "train session");
+
+    const auto sessionActions =
+        MiaIACommandProcessor::GetSuggestions("train session r");
+    assert(sessionActions.size() == 2);
+    assert(sessionActions[0].Completion == "train session run");
+    assert(sessionActions[1].Completion == "train session resume");
+
+    const auto datasetFormat =
+        MiaIACommandProcessor::GetSuggestions("dataset import ");
+    assert(datasetFormat.size() == 1);
+    assert(datasetFormat[0].Completion == "dataset import csv");
+
+    const auto createArguments =
+        MiaIACommandProcessor::GetSuggestions("create 2");
+    assert(createArguments.size() == 1);
+    assert(createArguments[0].Syntax.find("<inputs>") !=
+        std::string::npos);
+
+    const auto limitedSuggestions =
+        MiaIACommandProcessor::GetSuggestions("", 3);
+    assert(limitedSuggestions.size() == 3);
+
+    assert(MiaIACommandProcessor::GetSuggestions(
+        "unknown command").empty());
+
+    std::filesystem::remove(datasetPath);
+    std::filesystem::remove(testDirectory);
+
+    });
 
     runner.Run("Network editing and snapshots", [&]()
     {

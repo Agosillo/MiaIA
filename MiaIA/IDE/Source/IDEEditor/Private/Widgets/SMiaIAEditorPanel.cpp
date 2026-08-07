@@ -1,11 +1,16 @@
 #include "Widgets/SMiaIAEditorPanel.h"
 
+#include "MiaIACommandProcessor.h"
 #include "MiaIABlueprintLibrary.h"
+#include "Framework/Application/SlateApplication.h"
+#include "InputCoreTypes.h"
 #include "Styling/AppStyle.h"
 #include "Widgets/Input/SButton.h"
+#include "Widgets/Input/SEditableTextBox.h"
 #include "Widgets/Text/SMultiLineEditableText.h"
 #include "Widgets/Layout/SBorder.h"
 #include "Widgets/Layout/SBox.h"
+#include "Widgets/Layout/SScrollBar.h"
 #include "Widgets/Layout/SScrollBox.h"
 #include "Widgets/Layout/SSplitter.h"
 #include "Widgets/Layout/SUniformGridPanel.h"
@@ -94,6 +99,16 @@ namespace
             }
         }
 
+        for (const FMiaIAConnectionSnapshot& connection :
+            Network.Connections)
+        {
+            key += FString::Printf(
+                TEXT("|C%lld:%lld>%lld"),
+                connection.Id,
+                connection.FromNeuron,
+                connection.ToNeuron);
+        }
+
         return key;
     }
 }
@@ -101,6 +116,18 @@ namespace
 void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
 {
     const auto panelBorder = FAppStyle::GetBrush(TEXT("ToolPanel.GroupBorder"));
+    ConsoleHistory = TEXT(
+        "MiaIA IDE Console\n"
+        "Type 'help' to list the shared CLI commands. "
+        "Use Up/Down for history and Tab for completion.\n");
+    ConsoleHistoryIndex = 0;
+    SAssignNew(ConsoleOutputScrollBar, SScrollBar)
+        .Orientation(Orient_Vertical)
+        .AlwaysShowScrollbar(true)
+        .AlwaysShowScrollbarTrack(true)
+        .HideWhenNotInUse(false)
+        .Thickness(FVector2D(12.0f, 12.0f))
+        .Padding(FMargin(1.0f));
 
     ChildSlot
     [
@@ -144,9 +171,27 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
                 .Padding(2.0f)
                 [
                     SNew(SButton)
+                    .Text(LOCTEXT("StartDebug", "Start debug"))
+                    .IsEnabled(this, &SMiaIAEditorPanel::CanStartDebug)
+                    .OnClicked(this, &SMiaIAEditorPanel::HandleStartDebug)
+                ]
+                + SHorizontalBox::Slot()
+                .AutoWidth()
+                .Padding(2.0f)
+                [
+                    SNew(SButton)
                     .Text(LOCTEXT("Advance", "Step phase"))
                     .IsEnabled(this, &SMiaIAEditorPanel::CanAdvanceDebug)
                     .OnClicked(this, &SMiaIAEditorPanel::HandleAdvanceDebug)
+                ]
+                + SHorizontalBox::Slot()
+                .AutoWidth()
+                .Padding(2.0f)
+                [
+                    SNew(SButton)
+                    .Text(LOCTEXT("CancelDebug", "Cancel debug"))
+                    .IsEnabled(this, &SMiaIAEditorPanel::CanCancelDebug)
+                    .OnClicked(this, &SMiaIAEditorPanel::HandleCancelDebug)
                 ]
                 + SHorizontalBox::Slot()
                 .FillWidth(1.0f)
@@ -219,6 +264,54 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
                             .OnNeuronSelected(
                                 this,
                                 &SMiaIAEditorPanel::SelectNeuron)
+                            .OnConnectionSelected(
+                                this,
+                                &SMiaIAEditorPanel::SelectConnection)
+                        ]
+                        + SVerticalBox::Slot()
+                        .AutoHeight()
+                        .Padding(8.0f, 4.0f, 8.0f, 6.0f)
+                        [
+                            SNew(SHorizontalBox)
+                            + SHorizontalBox::Slot()
+                            .AutoWidth()
+                            .Padding(0.0f, 0.0f, 14.0f, 0.0f)
+                            [
+                                SNew(STextBlock)
+                                .Text(LOCTEXT("InactiveLegend", "Inactive neuron"))
+                                .ColorAndOpacity(FLinearColor(0.45f, 0.47f, 0.51f))
+                            ]
+                            + SHorizontalBox::Slot()
+                            .AutoWidth()
+                            .Padding(0.0f, 0.0f, 14.0f, 0.0f)
+                            [
+                                SNew(STextBlock)
+                                .Text(LOCTEXT("ActiveLegend", "Active neuron"))
+                                .ColorAndOpacity(FLinearColor(0.12f, 0.72f, 0.31f))
+                            ]
+                            + SHorizontalBox::Slot()
+                            .AutoWidth()
+                            .Padding(0.0f, 0.0f, 14.0f, 0.0f)
+                            [
+                                SNew(STextBlock)
+                                .Text(LOCTEXT("PositiveLegend", "Positive weight"))
+                                .ColorAndOpacity(FLinearColor(0.24f, 0.52f, 0.86f))
+                            ]
+                            + SHorizontalBox::Slot()
+                            .AutoWidth()
+                            .Padding(0.0f, 0.0f, 14.0f, 0.0f)
+                            [
+                                SNew(STextBlock)
+                                .Text(LOCTEXT("NegativeLegend", "Negative weight"))
+                                .ColorAndOpacity(FLinearColor(0.86f, 0.30f, 0.28f))
+                            ]
+                            + SHorizontalBox::Slot()
+                            .AutoWidth()
+                            [
+                                SNew(STextBlock)
+                                .Text(LOCTEXT("SelectedLegend", "Selected"))
+                                .ColorAndOpacity(FLinearColor(1.0f, 0.76f, 0.16f))
+                            ]
                         ]
                     ]
                 ]
@@ -243,35 +336,42 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
                         .Padding(0.0f, 3.0f)
                         [
                             SNew(STextBlock)
-                            .Text(this, &SMiaIAEditorPanel::SelectedNeuronTitle)
+                            .Text(this, &SMiaIAEditorPanel::SelectionTitle)
                         ]
                         + SVerticalBox::Slot()
                         .AutoHeight()
                         .Padding(0.0f, 3.0f)
                         [
                             SNew(STextBlock)
-                            .Text(this, &SMiaIAEditorPanel::SelectedLayerText)
+                            .Text(this, &SMiaIAEditorPanel::SelectionContextText)
                         ]
                         + SVerticalBox::Slot()
                         .AutoHeight()
                         .Padding(0.0f, 3.0f)
                         [
                             SNew(STextBlock)
-                            .Text(this, &SMiaIAEditorPanel::SelectedActivationText)
+                            .Text(this, &SMiaIAEditorPanel::SelectionPrimaryText)
                         ]
                         + SVerticalBox::Slot()
                         .AutoHeight()
                         .Padding(0.0f, 3.0f)
                         [
                             SNew(STextBlock)
-                            .Text(this, &SMiaIAEditorPanel::SelectedBiasText)
+                            .Text(this, &SMiaIAEditorPanel::SelectionSecondaryText)
                         ]
                         + SVerticalBox::Slot()
                         .AutoHeight()
                         .Padding(0.0f, 3.0f)
                         [
                             SNew(STextBlock)
-                            .Text(this, &SMiaIAEditorPanel::SelectedGradientText)
+                            .Text(this, &SMiaIAEditorPanel::SelectionGradientText)
+                        ]
+                        + SVerticalBox::Slot()
+                        .AutoHeight()
+                        .Padding(0.0f, 3.0f)
+                        [
+                            SNew(STextBlock)
+                            .Text(this, &SMiaIAEditorPanel::SelectionUpdateText)
                         ]
                     ]
                 ]
@@ -394,9 +494,103 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
                         ]
                         + SWidgetSwitcher::Slot()
                         [
-                            SNew(SMultiLineEditableText)
-                            .IsReadOnly(true)
-                            .Text(this, &SMiaIAEditorPanel::ConsoleText)
+                            SNew(SSplitter)
+                            .Orientation(Orient_Horizontal)
+                            + SSplitter::Slot()
+                            .Value(0.24f)
+                            [
+                                SNew(SBorder)
+                                .BorderImage(panelBorder)
+                                .Padding(FMargin(4.0f, 2.0f))
+                                [
+                                    SNew(SVerticalBox)
+                                    + SVerticalBox::Slot()
+                                    .AutoHeight()
+                                    .Padding(2.0f, 1.0f, 2.0f, 3.0f)
+                                    [
+                                        SNew(STextBlock)
+                                        .Text(LOCTEXT(
+                                            "ConsoleCommands",
+                                            "Commands"))
+                                        .Font(FAppStyle::GetFontStyle(
+                                            TEXT("SmallFontBold")))
+                                    ]
+                                    + SVerticalBox::Slot()
+                                    .FillHeight(1.0f)
+                                    [
+                                        SNew(SScrollBox)
+                                        + SScrollBox::Slot()
+                                        [
+                                            SAssignNew(
+                                                ConsoleSuggestionsContent,
+                                                SVerticalBox)
+                                        ]
+                                    ]
+                                ]
+                            ]
+                            + SSplitter::Slot()
+                            .Value(0.76f)
+                            [
+                                SNew(SVerticalBox)
+                                + SVerticalBox::Slot()
+                                .FillHeight(1.0f)
+                                [
+                                    SNew(SHorizontalBox)
+                                    + SHorizontalBox::Slot()
+                                    .AutoWidth()
+                                    .Padding(0.0f, 0.0f, 4.0f, 0.0f)
+                                    [
+                                        ConsoleOutputScrollBar.ToSharedRef()
+                                    ]
+                                    + SHorizontalBox::Slot()
+                                    .FillWidth(1.0f)
+                                    [
+                                        SAssignNew(
+                                            ConsoleOutput,
+                                            SMultiLineEditableText)
+                                        .IsReadOnly(true)
+                                        .Text(FText::FromString(ConsoleHistory))
+                                        .VScrollBar(ConsoleOutputScrollBar)
+                                    ]
+                                ]
+                                + SVerticalBox::Slot()
+                                .AutoHeight()
+                                .Padding(4.0f, 6.0f, 0.0f, 0.0f)
+                                [
+                                    SNew(SHorizontalBox)
+                                    + SHorizontalBox::Slot()
+                                    .FillWidth(1.0f)
+                                    [
+                                        SAssignNew(
+                                            ConsoleInput,
+                                            SEditableTextBox)
+                                        .HintText(LOCTEXT(
+                                            "ConsoleInputHint",
+                                            "Enter a MiaIA command and press Enter"))
+                                        .OnTextChanged(
+                                            this,
+                                            &SMiaIAEditorPanel::HandleConsoleTextChanged)
+                                        .OnTextCommitted(
+                                            this,
+                                            &SMiaIAEditorPanel::HandleConsoleCommandCommitted)
+                                        .OnKeyDownHandler(
+                                            this,
+                                            &SMiaIAEditorPanel::HandleConsoleInputKeyDown)
+                                    ]
+                                    + SHorizontalBox::Slot()
+                                    .AutoWidth()
+                                    .Padding(6.0f, 0.0f, 0.0f, 0.0f)
+                                    [
+                                        SNew(SButton)
+                                        .Text(LOCTEXT(
+                                            "ConsoleSend",
+                                            "Send"))
+                                        .OnClicked(
+                                            this,
+                                            &SMiaIAEditorPanel::HandleConsoleSend)
+                                    ]
+                                ]
+                            ]
                         ]
                         + SWidgetSwitcher::Slot()
                         [
@@ -411,6 +605,7 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
         ]
     ];
 
+    RebuildConsoleSuggestions(FString());
     RefreshData();
     RegisterActiveTimer(
         0.25f,
@@ -440,7 +635,16 @@ void SMiaIAEditorPanel::RefreshData()
     const bool topologyChanged = newTopologyKey != TopologyKey;
     TopologyKey = newTopologyKey;
 
-    if (!FindNeuron(SelectedNeuronId))
+    if (!FindConnection(SelectedConnectionId))
+    {
+        SelectedConnectionId = -1;
+    }
+
+    if (SelectedConnectionId >= 0)
+    {
+        SelectedNeuronId = -1;
+    }
+    else if (!FindNeuron(SelectedNeuronId))
     {
         SelectedNeuronId = Network.Layers.IsEmpty() ||
             Network.Layers[0].Neurons.IsEmpty()
@@ -452,6 +656,10 @@ void SMiaIAEditorPanel::RefreshData()
         UMiaIABlueprintLibrary::GetDebugNeuron(
             SelectedNeuronId,
             DebugNeuron);
+    bHasDebugConnection = SelectedConnectionId >= 0 &&
+        UMiaIABlueprintLibrary::GetDebugConnection(
+            SelectedConnectionId,
+            DebugConnection);
 
     SelectedLayerName.Reset();
 
@@ -475,6 +683,7 @@ void SMiaIAEditorPanel::RefreshData()
     {
         NetworkView->SetSnapshot(Network);
         NetworkView->SetSelectedNeuron(SelectedNeuronId);
+        NetworkView->SetSelectedConnection(SelectedConnectionId);
     }
 
     if (topologyChanged)
@@ -537,11 +746,63 @@ void SMiaIAEditorPanel::RebuildExplorer()
             ];
         }
     }
+
+    if (!Network.Connections.IsEmpty())
+    {
+        ExplorerContent->AddSlot()
+        .AutoHeight()
+        .Padding(2.0f, 10.0f, 2.0f, 5.0f)
+        [
+            SNew(STextBlock)
+            .Text(FText::Format(
+                LOCTEXT("ConnectionsEntry", "Connections  |  {0}"),
+                FText::AsNumber(Network.Connections.Num())))
+        ];
+
+        for (const FMiaIAConnectionSnapshot& connection :
+            Network.Connections)
+        {
+            const int64 connectionId = connection.Id;
+            const int64 fromNeuron = connection.FromNeuron;
+            const int64 toNeuron = connection.ToNeuron;
+            ExplorerContent->AddSlot()
+            .AutoHeight()
+            .Padding(12.0f, 1.0f, 2.0f, 1.0f)
+            [
+                SNew(SButton)
+                .ButtonStyle(FAppStyle::Get(), TEXT("SimpleButton"))
+                .ContentPadding(FMargin(4.0f, 2.0f))
+                .OnClicked_Lambda([this, connectionId]()
+                {
+                    SelectConnection(connectionId);
+                    return FReply::Handled();
+                })
+                [
+                    SNew(STextBlock)
+                    .Text(FText::Format(
+                        LOCTEXT(
+                            "ConnectionEntry",
+                            "#{0}: {1} -> {2}"),
+                        FText::AsNumber(connectionId),
+                        FText::AsNumber(fromNeuron),
+                        FText::AsNumber(toNeuron)))
+                ]
+            ];
+        }
+    }
 }
 
 void SMiaIAEditorPanel::SelectNeuron(int64 NeuronId)
 {
     SelectedNeuronId = NeuronId;
+    SelectedConnectionId = -1;
+    RefreshData();
+}
+
+void SMiaIAEditorPanel::SelectConnection(int64 ConnectionId)
+{
+    SelectedConnectionId = ConnectionId;
+    SelectedNeuronId = -1;
     RefreshData();
 }
 
@@ -562,6 +823,16 @@ const FMiaIANeuronSnapshot* SMiaIAEditorPanel::FindNeuron(
     }
 
     return nullptr;
+}
+
+const FMiaIAConnectionSnapshot* SMiaIAEditorPanel::FindConnection(
+    int64 ConnectionId) const
+{
+    return Network.Connections.FindByPredicate(
+        [ConnectionId](const FMiaIAConnectionSnapshot& connection)
+        {
+            return connection.Id == ConnectionId;
+        });
 }
 
 EActiveTimerReturnType SMiaIAEditorPanel::HandleRefreshTimer(
@@ -592,10 +863,25 @@ FReply SMiaIAEditorPanel::HandlePause()
     return FReply::Handled();
 }
 
+FReply SMiaIAEditorPanel::HandleStartDebug()
+{
+    FMiaIATrainingDebugSnapshot result;
+    UMiaIABlueprintLibrary::StartSessionDebug(result);
+    RefreshData();
+    return FReply::Handled();
+}
+
 FReply SMiaIAEditorPanel::HandleAdvanceDebug()
 {
     FMiaIATrainingDebugSnapshot result;
     UMiaIABlueprintLibrary::AdvanceDebugPhase(result);
+    RefreshData();
+    return FReply::Handled();
+}
+
+FReply SMiaIAEditorPanel::HandleCancelDebug()
+{
+    UMiaIABlueprintLibrary::CancelDebug();
     RefreshData();
     return FReply::Handled();
 }
@@ -610,6 +896,232 @@ FReply SMiaIAEditorPanel::SelectBottomTab(int32 TabIndex)
     return FReply::Handled();
 }
 
+void SMiaIAEditorPanel::HandleConsoleCommandCommitted(
+    const FText& Text,
+    ETextCommit::Type CommitType)
+{
+    if (CommitType != ETextCommit::OnEnter)
+    {
+        return;
+    }
+
+    const FString command = Text.ToString().TrimStartAndEnd();
+
+    if (command.IsEmpty())
+    {
+        return;
+    }
+
+    if (ConsoleCommandHistory.IsEmpty() ||
+        ConsoleCommandHistory.Last() != command)
+    {
+        ConsoleCommandHistory.Add(command);
+    }
+
+    ConsoleHistoryIndex = ConsoleCommandHistory.Num();
+    ConsoleHistoryDraft.Empty();
+
+    bool exitRequested{};
+    const FString output = UMiaIABlueprintLibrary::ExecuteCommand(
+        command,
+        exitRequested);
+    ConsoleHistory += FString::Printf(TEXT("\n> %s\n"), *command);
+    ConsoleHistory += output;
+
+    if (exitRequested)
+    {
+        ConsoleHistory += TEXT(
+            "Exit is available only in the standalone Console.\n");
+    }
+
+    UpdateConsoleOutput();
+    SetConsoleInputText(FString());
+
+    RefreshData();
+}
+
+void SMiaIAEditorPanel::HandleConsoleTextChanged(const FText& Text)
+{
+    const FString input = Text.ToString();
+
+    if (!bUpdatingConsoleInput)
+    {
+        ConsoleHistoryIndex = ConsoleCommandHistory.Num();
+        ConsoleHistoryDraft = input;
+    }
+
+    RebuildConsoleSuggestions(input);
+}
+
+FReply SMiaIAEditorPanel::HandleConsoleInputKeyDown(
+    const FGeometry& Geometry,
+    const FKeyEvent& KeyEvent)
+{
+    const FKey key = KeyEvent.GetKey();
+
+    if (key == EKeys::Tab && !FirstConsoleSuggestion.IsEmpty())
+    {
+        return ApplyConsoleSuggestion(FirstConsoleSuggestion);
+    }
+
+    if (key == EKeys::Up)
+    {
+        if (ConsoleCommandHistory.IsEmpty())
+        {
+            return FReply::Unhandled();
+        }
+
+        if (ConsoleHistoryIndex >= ConsoleCommandHistory.Num())
+        {
+            ConsoleHistoryDraft = ConsoleInput.IsValid()
+                ? ConsoleInput->GetText().ToString()
+                : FString();
+            ConsoleHistoryIndex = ConsoleCommandHistory.Num() - 1;
+        }
+        else if (ConsoleHistoryIndex > 0)
+        {
+            --ConsoleHistoryIndex;
+        }
+
+        SetConsoleInputText(
+            ConsoleCommandHistory[ConsoleHistoryIndex]);
+        return FReply::Handled();
+    }
+
+    if (key == EKeys::Down)
+    {
+        if (ConsoleCommandHistory.IsEmpty() ||
+            ConsoleHistoryIndex >= ConsoleCommandHistory.Num())
+        {
+            return FReply::Unhandled();
+        }
+
+        ++ConsoleHistoryIndex;
+
+        if (ConsoleHistoryIndex == ConsoleCommandHistory.Num())
+        {
+            SetConsoleInputText(ConsoleHistoryDraft);
+        }
+        else
+        {
+            SetConsoleInputText(
+                ConsoleCommandHistory[ConsoleHistoryIndex]);
+        }
+
+        return FReply::Handled();
+    }
+
+    return FReply::Unhandled();
+}
+
+FReply SMiaIAEditorPanel::HandleConsoleSend()
+{
+    if (ConsoleInput.IsValid())
+    {
+        HandleConsoleCommandCommitted(
+            ConsoleInput->GetText(),
+            ETextCommit::OnEnter);
+    }
+
+    return FReply::Handled();
+}
+
+FReply SMiaIAEditorPanel::ApplyConsoleSuggestion(FString Completion)
+{
+    if (!Completion.EndsWith(TEXT(" ")))
+    {
+        Completion += TEXT(" ");
+    }
+
+    SetConsoleInputText(Completion);
+
+    if (ConsoleInput.IsValid())
+    {
+        FSlateApplication::Get().SetKeyboardFocus(
+            ConsoleInput,
+            EFocusCause::SetDirectly);
+    }
+
+    return FReply::Handled();
+}
+
+void SMiaIAEditorPanel::RebuildConsoleSuggestions(
+    const FString& Input)
+{
+    FirstConsoleSuggestion.Empty();
+
+    if (!ConsoleSuggestionsContent.IsValid())
+    {
+        return;
+    }
+
+    ConsoleSuggestionsContent->ClearChildren();
+    const auto suggestions =
+        MiaIA::CLI::MiaIACommandProcessor::GetSuggestions(
+            std::string(TCHAR_TO_UTF8(*Input)),
+            8);
+
+    for (const auto& suggestion : suggestions)
+    {
+        const FString completion =
+            UTF8_TO_TCHAR(suggestion.Completion.c_str());
+        const FText syntax = FText::FromString(
+            UTF8_TO_TCHAR(suggestion.Syntax.c_str()));
+        const FText description = FText::FromString(
+            UTF8_TO_TCHAR(suggestion.Description.c_str()));
+
+        if (FirstConsoleSuggestion.IsEmpty())
+        {
+            FirstConsoleSuggestion = completion;
+        }
+
+        ConsoleSuggestionsContent->AddSlot()
+        .AutoHeight()
+        .Padding(0.0f, 1.0f)
+        [
+            SNew(SButton)
+            .ContentPadding(FMargin(6.0f, 2.0f))
+            .ToolTipText(description)
+            .OnClicked(
+                this,
+                &SMiaIAEditorPanel::ApplyConsoleSuggestion,
+                completion)
+            [
+                SNew(STextBlock)
+                .Text(syntax)
+                .Font(FAppStyle::GetFontStyle(
+                    TEXT("SmallFontBold")))
+                .AutoWrapText(true)
+            ]
+        ];
+    }
+}
+
+void SMiaIAEditorPanel::SetConsoleInputText(const FString& Text)
+{
+    if (!ConsoleInput.IsValid())
+    {
+        return;
+    }
+
+    bUpdatingConsoleInput = true;
+    ConsoleInput->SetText(FText::FromString(Text));
+    ConsoleInput->GoTo(ETextLocation::EndOfDocument);
+    bUpdatingConsoleInput = false;
+    RebuildConsoleSuggestions(Text);
+}
+
+void SMiaIAEditorPanel::UpdateConsoleOutput()
+{
+    if (!ConsoleOutput.IsValid())
+    {
+        return;
+    }
+
+    ConsoleOutput->SetText(FText::FromString(ConsoleHistory));
+    ConsoleOutput->ScrollTo(ETextLocation::EndOfDocument);
+}
+
 bool SMiaIAEditorPanel::CanResume() const
 {
     return Session.Status == EMiaIATrainingSessionStatus::Active &&
@@ -621,7 +1133,21 @@ bool SMiaIAEditorPanel::CanPause() const
     return Session.Status == EMiaIATrainingSessionStatus::Running;
 }
 
+bool SMiaIAEditorPanel::CanStartDebug() const
+{
+    return Session.Status == EMiaIATrainingSessionStatus::Active &&
+        Session.CompletedSteps < Session.TotalSteps &&
+        (Debug.Phase == EMiaIATrainingDebugPhase::Idle ||
+            Debug.Phase == EMiaIATrainingDebugPhase::Committed);
+}
+
 bool SMiaIAEditorPanel::CanAdvanceDebug() const
+{
+    return Debug.Phase != EMiaIATrainingDebugPhase::Idle &&
+        Debug.Phase != EMiaIATrainingDebugPhase::Committed;
+}
+
+bool SMiaIAEditorPanel::CanCancelDebug() const
 {
     return Debug.Phase != EMiaIATrainingDebugPhase::Idle &&
         Debug.Phase != EMiaIATrainingDebugPhase::Committed;
@@ -663,35 +1189,54 @@ FText SMiaIAEditorPanel::NetworkSummaryText() const
 
 FText SMiaIAEditorPanel::ConsoleText() const
 {
-    return FText::Format(
-        LOCTEXT(
-            "ConsoleStatus",
-            "> session status\nStatus: {0}\nEpoch: {1}/{2}\n\n> train debug status\nPhase: {3}\nSample: {4}"),
-        SessionStatusName(Session.Status),
-        FText::AsNumber(Session.CurrentEpoch),
-        FText::AsNumber(Session.EpochCount),
-        DebugPhaseName(Debug.Phase),
-        FText::AsNumber(Debug.SampleIndex));
+    return FText::FromString(ConsoleHistory);
 }
 
-FText SMiaIAEditorPanel::SelectedNeuronTitle() const
+FText SMiaIAEditorPanel::SelectionTitle() const
 {
+    if (SelectedConnectionId >= 0)
+    {
+        return FText::Format(
+            LOCTEXT("SelectedConnection", "Connection #{0}"),
+            FText::AsNumber(SelectedConnectionId));
+    }
+
     return SelectedNeuronId < 0
-        ? LOCTEXT("NoNeuron", "No neuron selected")
+        ? LOCTEXT("NoSelection", "No item selected")
         : FText::Format(
             LOCTEXT("SelectedNeuron", "Neuron #{0}"),
             FText::AsNumber(SelectedNeuronId));
 }
 
-FText SMiaIAEditorPanel::SelectedLayerText() const
+FText SMiaIAEditorPanel::SelectionContextText() const
 {
+    if (const FMiaIAConnectionSnapshot* connection =
+        FindConnection(SelectedConnectionId))
+    {
+        return FText::Format(
+            LOCTEXT("SelectedEndpoints", "From #{0} to #{1}"),
+            FText::AsNumber(connection->FromNeuron),
+            FText::AsNumber(connection->ToNeuron));
+    }
+
     return FText::Format(
         LOCTEXT("SelectedLayer", "Layer: {0}"),
         FText::FromString(SelectedLayerName));
 }
 
-FText SMiaIAEditorPanel::SelectedActivationText() const
+FText SMiaIAEditorPanel::SelectionPrimaryText() const
 {
+    if (const FMiaIAConnectionSnapshot* connection =
+        FindConnection(SelectedConnectionId))
+    {
+        const double weight = bHasDebugConnection
+            ? DebugConnection.PublicWeight
+            : connection->Weight;
+        return FText::Format(
+            LOCTEXT("SelectedPublicWeight", "Public weight: {0}"),
+            FText::AsNumber(weight));
+    }
+
     const FMiaIANeuronSnapshot* neuron = FindNeuron(SelectedNeuronId);
     const double activation = bHasDebugNeuron
         ? DebugNeuron.CandidateActivation
@@ -701,8 +1246,21 @@ FText SMiaIAEditorPanel::SelectedActivationText() const
         FText::AsNumber(activation));
 }
 
-FText SMiaIAEditorPanel::SelectedBiasText() const
+FText SMiaIAEditorPanel::SelectionSecondaryText() const
 {
+    if (SelectedConnectionId >= 0)
+    {
+        return bHasDebugConnection
+            ? FText::Format(
+                LOCTEXT(
+                    "SelectedCandidateWeight",
+                    "Candidate weight: {0}"),
+                FText::AsNumber(DebugConnection.CandidateWeight))
+            : LOCTEXT(
+                "CandidateWeightUnavailable",
+                "Candidate weight: unavailable");
+    }
+
     const FMiaIANeuronSnapshot* neuron = FindNeuron(SelectedNeuronId);
     const double bias = bHasDebugNeuron
         ? DebugNeuron.CandidateBias
@@ -712,13 +1270,48 @@ FText SMiaIAEditorPanel::SelectedBiasText() const
         FText::AsNumber(bias));
 }
 
-FText SMiaIAEditorPanel::SelectedGradientText() const
+FText SMiaIAEditorPanel::SelectionGradientText() const
 {
+    if (SelectedConnectionId >= 0)
+    {
+        return bHasDebugConnection && DebugConnection.bHasGradient
+            ? FText::Format(
+                LOCTEXT("SelectedWeightGradient", "Weight gradient: {0}"),
+                FText::AsNumber(DebugConnection.WeightGradient))
+            : LOCTEXT(
+                "WeightGradientUnavailable",
+                "Weight gradient: unavailable");
+    }
+
     return bHasDebugNeuron && DebugNeuron.bHasGradients
         ? FText::Format(
-            LOCTEXT("SelectedGradient", "Bias gradient: {0}"),
+            LOCTEXT("SelectedBiasGradient", "Bias gradient: {0}"),
             FText::AsNumber(DebugNeuron.BiasGradient))
-        : LOCTEXT("GradientUnavailable", "Bias gradient: unavailable");
+        : LOCTEXT("BiasGradientUnavailable", "Bias gradient: unavailable");
+}
+
+FText SMiaIAEditorPanel::SelectionUpdateText() const
+{
+    if (SelectedConnectionId >= 0)
+    {
+        return bHasDebugConnection && DebugConnection.bHasUpdate
+            ? FText::Format(
+                LOCTEXT(
+                    "SelectedWeightUpdate",
+                    "Delta: {0}\nUpdated weight: {1}"),
+                FText::AsNumber(DebugConnection.Delta),
+                FText::AsNumber(DebugConnection.UpdatedWeight))
+            : LOCTEXT("WeightUpdateUnavailable", "Weight update: unavailable");
+    }
+
+    return bHasDebugNeuron && DebugNeuron.bHasUpdate
+        ? FText::Format(
+            LOCTEXT(
+                "SelectedBiasUpdate",
+                "Delta: {0}\nUpdated bias: {1}"),
+            FText::AsNumber(DebugNeuron.Delta),
+            FText::AsNumber(DebugNeuron.UpdatedBias))
+        : LOCTEXT("BiasUpdateUnavailable", "Bias update: unavailable");
 }
 
 FSlateColor SMiaIAEditorPanel::PhaseColor(

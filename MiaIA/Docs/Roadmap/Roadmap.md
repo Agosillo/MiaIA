@@ -45,6 +45,9 @@ The roadmap is organized by dependency rather than by a fixed release date. Math
 - explicit public-versus-candidate values and phase availability flags.
 - phase debugging attached to the current controlled-session sample;
 - atomic promotion of a committed debug step into session history and progress.
+- one reusable CLI command processor shared by the terminal and Unreal editor hosts;
+- first dockable Unreal topology, explorer, focused inspector, phase controls, and interactive command console;
+- shared contextual command catalog plus Unreal suggestion filtering, Tab completion, and session-local command history.
 
 ## Implemented optimizer foundation
 
@@ -114,11 +117,12 @@ The `.mia` format is planned and does not exist in the current implementation.
 
 - implemented the first Blueprint runtime adapter for dense creation, CSV import, controlled sessions, phase advancement, cancellation, and focused debug inspection;
 - added Unreal-reflected phase, session, neuron, and connection snapshots without leaking STL types;
-- expose reusable SDK operations through Unreal C++ wrappers;
+- exposed reusable SDK and shared CLI operations through Unreal C++ wrappers;
+- added a dockable topology panel with neuron and connection selection, candidate values, phase controls, and a shared interactive command console;
 - broaden Blueprint coverage to the remaining appropriate SDK operations;
-- provide an IDE command console;
-- visualize layers, neurons, and weighted connections;
-- color neurons using activation and debug state;
+- refine the IDE command console with persistent history and asynchronous long-running execution;
+- scale layer, neuron, and weighted-connection visualization to larger models;
+- expand neuron coloring beyond activation and current debug state;
 - animate forward signal flow and backward gradient flow;
 - navigate from network overview to an individual neuron or connection;
 - compare snapshots and training checkpoints;

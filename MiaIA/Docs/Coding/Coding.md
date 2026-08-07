@@ -40,18 +40,20 @@ Names should describe the represented concept rather than the current user inter
 
 ## Namespace and module boundaries
 
-Core types live in `MiaIA::Core`, engine operations in `MiaIA::Engine`, and the client facade in `MiaIA::SDK`.
+Core types live in `MiaIA::Core`, engine operations in `MiaIA::Engine`, the client facade in `MiaIA::SDK`, and reusable text-command dispatch in `MiaIA::CLI`.
 
 The allowed dependency direction is:
 
 ```text
-Client -> SDK -> Engine -> Core
+Client -> CLI -> SDK -> Engine -> Core
+Client --------> SDK -> Engine -> Core
 ```
 
 Do not introduce reverse dependencies. In particular:
 
 - Core must not call Engine or SDK;
 - Engine must not know about Console or Unreal;
+- CLI may translate commands but must not reimplement Engine mathematics;
 - clients should not mutate `Core::Network` directly;
 - new client features should first be exposed through `MiaIAClient` when they represent shared functionality.
 
@@ -86,6 +88,10 @@ Public calls should:
 - behave consistently for Console, Unreal, and future clients.
 
 When the facade grows, group implementations by responsibility in separate source files while preserving one coherent public client API.
+
+The CLI command processor is a host-independent adapter. It must not own a terminal loop, terminate a process, or change the process working directory. Hosts supply a command and working directory, receive textual output plus an explicit exit request, and decide how those results affect their own interface.
+
+Command syntax and descriptions belong to the CLI catalog rather than an individual host. Contextual completion should query that catalog so additions remain testable and consistent across clients. Keyboard navigation, visual suggestion lists, and history lifetime remain host responsibilities.
 
 ## Mathematical code
 

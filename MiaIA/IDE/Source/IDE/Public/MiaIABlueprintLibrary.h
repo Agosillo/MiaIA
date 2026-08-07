@@ -11,6 +11,11 @@ class IDE_API UMiaIABlueprintLibrary : public UBlueprintFunctionLibrary
     GENERATED_BODY()
 
 public:
+    UFUNCTION(BlueprintCallable, Category = "MiaIA|Command")
+    static FString ExecuteCommand(
+        const FString& Command,
+        bool& OutExitRequested);
+
     UFUNCTION(BlueprintCallable, Category = "MiaIA|Network")
     static bool CreateDenseNetwork(
         int32 InputCount,

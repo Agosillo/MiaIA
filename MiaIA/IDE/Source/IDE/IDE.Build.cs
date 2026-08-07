@@ -24,6 +24,14 @@ public class IDE : ModuleRules
             Path.Combine(MiaIARoot, "Core", "Public")
         );
 
+        PublicIncludePaths.Add(
+            Path.Combine(MiaIARoot, "CLI", "Include")
+        );
+
+        PublicAdditionalLibraries.Add(
+            Path.Combine(MiaIARoot, "x64", "Release", "CLI.lib")
+        );
+
         PublicAdditionalLibraries.Add(
             Path.Combine(MiaIARoot, "x64", "Release", "SDK.lib")
         );
@@ -31,6 +39,33 @@ public class IDE : ModuleRules
         PublicAdditionalLibraries.Add(
             Path.Combine(MiaIARoot, "x64", "Release", "Engine.lib")
         );
+
+        string VcpkgLibraryDirectory = Path.Combine(
+            System.Environment.GetFolderPath(
+                System.Environment.SpecialFolder.LocalApplicationData),
+            "MiaIA",
+            "vcpkg_installed",
+            "x64-windows-static-md-v143",
+            "lib"
+        );
+
+        if (!Directory.Exists(VcpkgLibraryDirectory))
+        {
+            throw new BuildException(
+                $"MiaIA vcpkg libraries were not found at '{VcpkgLibraryDirectory}'. " +
+                "Build the MiaIA native solution in Release | x64 first."
+            );
+        }
+
+        string[] VcpkgLibraries = Directory.GetFiles(
+            VcpkgLibraryDirectory,
+            "*.lib"
+        );
+        System.Array.Sort(
+            VcpkgLibraries,
+            System.StringComparer.OrdinalIgnoreCase
+        );
+        PublicAdditionalLibraries.AddRange(VcpkgLibraries);
 
 
         // Uncomment if you are using Slate UI

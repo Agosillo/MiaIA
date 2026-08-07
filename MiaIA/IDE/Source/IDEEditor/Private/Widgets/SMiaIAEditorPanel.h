@@ -4,6 +4,9 @@
 #include "Widgets/SCompoundWidget.h"
 
 class SMiaIANetworkView;
+class SEditableTextBox;
+class SMultiLineEditableText;
+class SScrollBar;
 class SVerticalBox;
 class SWidgetSwitcher;
 
@@ -21,7 +24,10 @@ private:
     void RefreshData();
     void RebuildExplorer();
     void SelectNeuron(int64 NeuronId);
+    void SelectConnection(int64 ConnectionId);
     const FMiaIANeuronSnapshot* FindNeuron(int64 NeuronId) const;
+    const FMiaIAConnectionSnapshot* FindConnection(
+        int64 ConnectionId) const;
 
     EActiveTimerReturnType HandleRefreshTimer(
         double CurrentTime,
@@ -29,34 +35,64 @@ private:
     FReply HandleRefresh();
     FReply HandleResume();
     FReply HandlePause();
+    FReply HandleStartDebug();
     FReply HandleAdvanceDebug();
+    FReply HandleCancelDebug();
     FReply SelectBottomTab(int32 TabIndex);
+    void HandleConsoleCommandCommitted(
+        const FText& Text,
+        ETextCommit::Type CommitType);
+    void HandleConsoleTextChanged(const FText& Text);
+    FReply HandleConsoleInputKeyDown(
+        const FGeometry& Geometry,
+        const FKeyEvent& KeyEvent);
+    FReply HandleConsoleSend();
+    FReply ApplyConsoleSuggestion(FString Completion);
+    void RebuildConsoleSuggestions(const FString& Input);
+    void SetConsoleInputText(const FString& Text);
+    void UpdateConsoleOutput();
 
     bool CanResume() const;
     bool CanPause() const;
+    bool CanStartDebug() const;
     bool CanAdvanceDebug() const;
+    bool CanCancelDebug() const;
 
     FText SessionStatusText() const;
     FText DebugPhaseText() const;
     FText NetworkSummaryText() const;
     FText ConsoleText() const;
-    FText SelectedNeuronTitle() const;
-    FText SelectedLayerText() const;
-    FText SelectedActivationText() const;
-    FText SelectedBiasText() const;
-    FText SelectedGradientText() const;
+    FText SelectionTitle() const;
+    FText SelectionContextText() const;
+    FText SelectionPrimaryText() const;
+    FText SelectionSecondaryText() const;
+    FText SelectionGradientText() const;
+    FText SelectionUpdateText() const;
     FSlateColor PhaseColor(EMiaIATrainingDebugPhase Phase) const;
 
     FMiaIANetworkSnapshot Network;
     FMiaIATrainingSessionSnapshot Session;
     FMiaIATrainingDebugSnapshot Debug;
     FMiaIATrainingDebugNeuron DebugNeuron;
+    FMiaIATrainingDebugConnection DebugConnection;
     int64 SelectedNeuronId{-1};
+    int64 SelectedConnectionId{-1};
     FString SelectedLayerName;
     FString TopologyKey;
+    FString ConsoleHistory;
+    TArray<FString> ConsoleCommandHistory;
+    FString ConsoleHistoryDraft;
+    FString FirstConsoleSuggestion;
+    int32 ConsoleHistoryIndex{};
     bool bHasDebugNeuron{};
+    bool bHasDebugConnection{};
+    bool bUpdatingConsoleInput{};
 
     TSharedPtr<SVerticalBox> ExplorerContent;
+    TSharedPtr<SVerticalBox> ConsoleSuggestionsContent;
     TSharedPtr<SMiaIANetworkView> NetworkView;
     TSharedPtr<SWidgetSwitcher> BottomSwitcher;
+    TSharedPtr<SMultiLineEditableText> ConsoleOutput;
+    TSharedPtr<SScrollBar> ConsoleOutputScrollBar;
+    TSharedPtr<SEditableTextBox> ConsoleInput;
 };
