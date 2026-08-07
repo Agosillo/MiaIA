@@ -2,7 +2,7 @@
 
 MiaIA is an Interactive Development Environment for Artificial Intelligence. Its purpose is not to compete with large training frameworks on throughput. Its purpose is to make a neural network observable: users should be able to build a model, execute it, inspect its state, evaluate samples, follow gradients, and eventually control training step by step.
 
-The project is currently in its foundation stage. The C++ engine, public SDK facade, interactive console, test harness, ONNX interchange, CSV dataset pipeline, fixed-model dataset evaluation, non-mutating gradient inspection, atomic SGD steps, ordered epochs, manually controlled multi-epoch sessions, and bounded synchronous runs are implemented. Persistent MiaIA project files, background training control, and the complete Unreal visualization experience are planned work.
+The project is currently in its foundation stage. The C++ engine, public SDK facade, interactive console, test harness, ONNX interchange, CSV dataset pipeline, fixed-model dataset evaluation, non-mutating gradient inspection, atomic SGD steps, ordered epochs, controlled sessions, bounded synchronous runs, and cooperative background pause/resume are implemented. Persistent MiaIA project files and the complete Unreal visualization experience are planned work.
 
 ## Documentation map
 
@@ -27,7 +27,7 @@ The project is currently in its foundation stage. The C++ engine, public SDK fac
 | Datasets | Numeric CSV import with explicit input and target column counts |
 | Evaluation | Per-sample details and fixed-model mean squared error across a complete dataset |
 | Differentiation | Per-neuron, per-bias, and per-connection gradients without parameter updates |
-| Optimization | Atomic SGD steps, ordered epochs, manually advanced sessions, and bounded synchronous runs with retained history |
+| Optimization | Atomic SGD steps, ordered epochs, retained session history, bounded runs, and background pause/resume |
 | Clients | Interactive console and an initial Unreal Engine integration through `MiaIAClient` |
 | Verification | Named Debug- and Release-capable C++ test harness, including numerical gradient checks |
 

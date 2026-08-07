@@ -17,6 +17,13 @@ namespace MiaIA::SDK
         std::size_t targetCount,
         bool hasHeader)
     {
+        const std::scoped_lock lock(Detail::ClientMutex());
+
+        if (Detail::IsTrainingSessionRunning())
+        {
+            return false;
+        }
+
         return Engine::CsvDatasetImporter::Import(
             Detail::ClientDataset(),
             path,
@@ -25,13 +32,22 @@ namespace MiaIA::SDK
             hasHeader);
     }
 
-    void MiaIAClient::ClearDataset()
+    bool MiaIAClient::ClearDataset()
     {
+        const std::scoped_lock lock(Detail::ClientMutex());
+
+        if (Detail::IsTrainingSessionRunning())
+        {
+            return false;
+        }
+
         Detail::ClientDataset() = Core::Dataset{};
+        return true;
     }
 
     Core::DatasetSummary MiaIAClient::GetDatasetSummary()
     {
+        const std::scoped_lock lock(Detail::ClientMutex());
         return Engine::DatasetInspector::Summary(
             Detail::ClientDataset());
     }
@@ -40,6 +56,7 @@ namespace MiaIA::SDK
         std::size_t index,
         Core::SampleSnapshot& result)
     {
+        const std::scoped_lock lock(Detail::ClientMutex());
         return Engine::DatasetInspector::TryGetSample(
             Detail::ClientDataset(),
             index,
@@ -48,6 +65,13 @@ namespace MiaIA::SDK
 
     bool MiaIAClient::ApplyDatasetSample(std::size_t index)
     {
+        const std::scoped_lock lock(Detail::ClientMutex());
+
+        if (Detail::IsTrainingSessionRunning())
+        {
+            return false;
+        }
+
         return Engine::DatasetRuntime::ApplySample(
             Detail::ClientDataset(),
             index,
@@ -59,6 +83,13 @@ namespace MiaIA::SDK
         Core::LossType type,
         Core::SampleEvaluationSnapshot& result)
     {
+        const std::scoped_lock lock(Detail::ClientMutex());
+
+        if (Detail::IsTrainingSessionRunning())
+        {
+            return false;
+        }
+
         return Engine::SampleEvaluator::Evaluate(
             Detail::ClientDataset(),
             index,
@@ -71,6 +102,7 @@ namespace MiaIA::SDK
         Core::LossType type,
         Core::DatasetEvaluationSnapshot& result)
     {
+        const std::scoped_lock lock(Detail::ClientMutex());
         return Engine::DatasetEvaluator::Evaluate(
             Detail::ClientDataset(),
             Detail::ClientNetwork(),
@@ -83,6 +115,13 @@ namespace MiaIA::SDK
         Core::LossType type,
         Core::SampleGradientSnapshot& result)
     {
+        const std::scoped_lock lock(Detail::ClientMutex());
+
+        if (Detail::IsTrainingSessionRunning())
+        {
+            return false;
+        }
+
         return Engine::SampleGradientEvaluator::Evaluate(
             Detail::ClientDataset(),
             index,

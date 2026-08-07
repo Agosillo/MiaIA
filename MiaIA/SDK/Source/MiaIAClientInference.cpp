@@ -9,6 +9,13 @@ namespace MiaIA::SDK
         const std::vector<double>& inputs,
         Core::PredictionSnapshot& result)
     {
+        const std::scoped_lock lock(Detail::ClientMutex());
+
+        if (Detail::IsTrainingSessionRunning())
+        {
+            return false;
+        }
+
         return Engine::PredictionEvaluator::Predict(
             Detail::ClientNetwork(),
             inputs,

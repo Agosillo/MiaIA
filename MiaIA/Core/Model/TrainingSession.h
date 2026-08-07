@@ -4,6 +4,7 @@
 #include "../Public/OptimizerType.h"
 #include "../Public/TrainingSessionStatus.h"
 #include "../Public/TrainingStepSnapshot.h"
+#include "../Public/TrainingWorkerStopReason.h"
 
 #include <cstddef>
 #include <vector>
@@ -13,6 +14,9 @@ namespace MiaIA::Core
     struct TrainingSession
     {
         TrainingSessionStatus Status{ TrainingSessionStatus::Idle };
+        TrainingWorkerStopReason WorkerStopReason{
+            TrainingWorkerStopReason::None
+        };
         std::size_t EpochCount{};
         std::size_t CurrentEpoch{};
         std::size_t NextSampleIndex{};

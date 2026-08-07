@@ -16,6 +16,13 @@ namespace MiaIA::SDK
         Core::OptimizerType optimizerType,
         Core::TrainingStepSnapshot& result)
     {
+        const std::scoped_lock lock(Detail::ClientMutex());
+
+        if (Detail::IsTrainingSessionRunning())
+        {
+            return false;
+        }
+
         return Engine::TrainingStepExecutor::Run(
             Detail::ClientDataset(),
             index,
@@ -32,6 +39,13 @@ namespace MiaIA::SDK
         Core::OptimizerType optimizerType,
         Core::TrainingEpochSnapshot& result)
     {
+        const std::scoped_lock lock(Detail::ClientMutex());
+
+        if (Detail::IsTrainingSessionRunning())
+        {
+            return false;
+        }
+
         return Engine::TrainingEpochExecutor::Run(
             Detail::ClientDataset(),
             Detail::ClientNetwork(),
@@ -48,6 +62,7 @@ namespace MiaIA::SDK
         Core::OptimizerType optimizerType,
         Core::TrainingSessionSnapshot& result)
     {
+        const std::scoped_lock lock(Detail::ClientMutex());
         return Engine::TrainingSessionController::Start(
             Detail::ClientDataset(),
             Detail::ClientNetwork(),
@@ -61,6 +76,7 @@ namespace MiaIA::SDK
 
     Core::TrainingSessionSnapshot MiaIAClient::GetTrainingSession()
     {
+        const std::scoped_lock lock(Detail::ClientMutex());
         return Engine::TrainingSessionController::Snapshot(
             Detail::ClientTrainingSession());
     }
@@ -68,6 +84,14 @@ namespace MiaIA::SDK
     bool MiaIAClient::AdvanceTrainingSession(
         Core::TrainingStepSnapshot& result)
     {
+        const std::scoped_lock lock(Detail::ClientMutex());
+
+        if (Detail::ClientTrainingSession().Status !=
+            Core::TrainingSessionStatus::Active)
+        {
+            return false;
+        }
+
         return Engine::TrainingSessionController::Next(
             Detail::ClientDataset(),
             Detail::ClientNetwork(),
@@ -75,16 +99,11 @@ namespace MiaIA::SDK
             result);
     }
 
-    bool MiaIAClient::CancelTrainingSession()
-    {
-        return Engine::TrainingSessionController::Cancel(
-            Detail::ClientTrainingSession());
-    }
-
     bool MiaIAClient::RunTrainingSession(
         std::size_t maximumSteps,
         Core::TrainingRunSnapshot& result)
     {
+        const std::scoped_lock lock(Detail::ClientMutex());
         return Engine::TrainingSessionController::Run(
             Detail::ClientDataset(),
             Detail::ClientNetwork(),

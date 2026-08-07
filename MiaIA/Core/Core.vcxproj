@@ -170,6 +170,7 @@
     <ClInclude Include="Public\TrainingRunStopReason.h" />
     <ClInclude Include="Public\TrainingSessionSnapshot.h" />
     <ClInclude Include="Public\TrainingSessionStatus.h" />
+    <ClInclude Include="Public\TrainingWorkerStopReason.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Core.cpp" />

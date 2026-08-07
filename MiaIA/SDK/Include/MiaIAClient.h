@@ -26,7 +26,7 @@ namespace MiaIA::SDK
     public:
         [[nodiscard]]
         static Core::NetworkSnapshot GetSnapshot();
-        static void ClearNetwork();
+        static bool ClearNetwork();
         static bool AddLayer(std::uint64_t id, const std::string& name, std::uint64_t order);
         static bool AddNeuron(std::uint64_t layerId, std::uint64_t neuronId, double bias, double activation);
         static bool AddConnection(std::uint64_t id, std::uint64_t fromNeuron, std::uint64_t toNeuron, double weight);
@@ -50,7 +50,7 @@ namespace MiaIA::SDK
             std::size_t inputCount,
             std::size_t targetCount,
             bool hasHeader = true);
-        static void ClearDataset();
+        static bool ClearDataset();
         [[nodiscard]]
         static Core::DatasetSummary GetDatasetSummary();
         static bool TryGetDatasetSample(
@@ -92,6 +92,8 @@ namespace MiaIA::SDK
         static bool RunTrainingSession(
             std::size_t maximumSteps,
             Core::TrainingRunSnapshot& result);
+        static bool ResumeTrainingSession();
+        static bool PauseTrainingSession();
         static bool CancelTrainingSession();
         static bool Predict(
             const std::vector<double>& inputs,

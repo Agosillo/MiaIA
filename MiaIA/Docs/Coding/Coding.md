@@ -106,6 +106,14 @@ MSE = sum(error^2) / output-count
 dMSE/dPrediction = 2 * error / output-count
 ```
 
+## Concurrency
+
+The SDK owns the synchronization boundary for its process-local network, dataset, and training session. Every public SDK operation must acquire the shared client-state lock before reading or writing those objects.
+
+Background training may publish state only after one complete atomic sample step. Inspection is allowed while the worker runs because it observes state under the same lock. Mutating calls must reject Running state rather than interleave with the worker. Pause and cancellation must request cooperative stop and join the worker without holding the client-state lock.
+
+Concurrency tests should synchronize through public state and join operations. Avoid fixed sleeps as correctness conditions.
+
 ## Formatting and includes
 
 - use `#pragma once` in headers;

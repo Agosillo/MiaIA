@@ -105,6 +105,12 @@ void PrintHelp()
         << "  train session run <steps|all>\n"
         << "      Execute a bounded block or all remaining steps\n\n"
 
+        << "  train session resume\n"
+        << "      Continue training on a background worker\n\n"
+
+        << "  train session pause\n"
+        << "      Stop the worker after its current atomic step\n\n"
+
         << "  train session cancel\n"
         << "      Stop the session without reverting completed steps\n\n"
 
@@ -487,7 +493,15 @@ void HandleDatasetCommand(const std::string& command)
 
     if (command == "dataset clear")
     {
-        MiaIAClient::ClearDataset();
+        if (!MiaIAClient::ClearDataset())
+        {
+            std::cout
+                << "Dataset cannot be cleared while training is running. "
+                << "Pause the session first.\n";
+
+            return;
+        }
+
         std::cout
             << "Dataset cleared.\n";
 
@@ -762,10 +776,30 @@ const char* TrainingSessionStatusName(
         return "Idle";
     case MiaIA::Core::TrainingSessionStatus::Active:
         return "Active";
+    case MiaIA::Core::TrainingSessionStatus::Running:
+        return "Running";
     case MiaIA::Core::TrainingSessionStatus::Completed:
         return "Completed";
     case MiaIA::Core::TrainingSessionStatus::Cancelled:
         return "Cancelled";
+    }
+
+    return "Unknown";
+}
+
+const char* TrainingWorkerStopReasonName(
+    MiaIA::Core::TrainingWorkerStopReason reason)
+{
+    switch (reason)
+    {
+    case MiaIA::Core::TrainingWorkerStopReason::None:
+        return "None";
+    case MiaIA::Core::TrainingWorkerStopReason::PauseRequested:
+        return "Pause requested";
+    case MiaIA::Core::TrainingWorkerStopReason::CancelRequested:
+        return "Cancel requested";
+    case MiaIA::Core::TrainingWorkerStopReason::StepFailed:
+        return "Step failed";
     }
 
     return "Unknown";
@@ -782,7 +816,16 @@ void PrintTrainingSession(
         << "\nSteps: " << session.CompletedSteps
         << " / " << session.TotalSteps;
 
-    if (session.Status == MiaIA::Core::TrainingSessionStatus::Active)
+    if (session.WorkerStopReason !=
+        MiaIA::Core::TrainingWorkerStopReason::None)
+    {
+        std::cout
+            << "\nWorker stop reason: "
+            << TrainingWorkerStopReasonName(session.WorkerStopReason);
+    }
+
+    if (session.Status == MiaIA::Core::TrainingSessionStatus::Active ||
+        session.Status == MiaIA::Core::TrainingSessionStatus::Running)
     {
         std::cout
             << "\nCurrent epoch: " << session.CurrentEpoch + 1
@@ -801,6 +844,8 @@ void PrintTrainingSessionUsage()
         << "       train session status\n"
         << "       train session next\n"
         << "       train session run <steps|all>\n"
+        << "       train session resume\n"
+        << "       train session pause\n"
         << "       train session cancel\n";
 }
 
@@ -1006,6 +1051,33 @@ void HandleTrainCommand(const std::string& command)
 
         if (sessionAction == "status")
         {
+            PrintTrainingSession(MiaIAClient::GetTrainingSession());
+            return;
+        }
+
+        if (sessionAction == "resume")
+        {
+            if (!MiaIAClient::ResumeTrainingSession())
+            {
+                std::cout
+                    << "Training session could not resume. "
+                    << "It must be Active at a safe step boundary.\n";
+                return;
+            }
+
+            PrintTrainingSession(MiaIAClient::GetTrainingSession());
+            return;
+        }
+
+        if (sessionAction == "pause")
+        {
+            if (!MiaIAClient::PauseTrainingSession())
+            {
+                std::cout
+                    << "No running training worker to pause.\n";
+                return;
+            }
+
             PrintTrainingSession(MiaIAClient::GetTrainingSession());
             return;
         }

@@ -37,6 +37,11 @@ train session next
 train session status
 train session run 1
 train session cancel
+train session start 100 0.01 mse
+train session resume
+train session status
+train session pause
+train session cancel
 ```
 
 `dataset evaluate` and `dataset gradients` require a current network whose input and output dimensions match the dataset.
@@ -421,7 +426,7 @@ The entire epoch is transactional. MiaIA publishes the trained candidate only if
 train session start <epochs> <learning-rate> mse
 ```
 
-Creates a manually controlled multi-epoch session. The dataset must be non-empty, the network dimensions must match it, the epoch count and learning rate must be positive, and no other session may be Active. Starting does not train a sample: the session waits before its first step.
+Creates a controlled multi-epoch session. The dataset must be non-empty, the network dimensions must match it, the epoch count and learning rate must be positive, and no other session may be Active or Running. Starting does not train a sample: the session waits Active before its first step.
 
 ### `train session status`
 
@@ -429,7 +434,7 @@ Creates a manually controlled multi-epoch session. The dataset must be non-empty
 train session status
 ```
 
-Prints the session state, completed and configured epochs, completed and total steps, and—while Active—the current epoch and next sample index. Status inspection never changes the network or session.
+Prints the session state, completed and configured epochs, completed and total steps, and—while Active or Running—the current epoch and next sample index. It also reports why the last background worker stopped. Status inspection never changes the network or session.
 
 ### `train session next`
 
@@ -445,7 +450,7 @@ The command is the debugger-style pause boundary: nothing trains between two `ne
 
 ```text
 train session run <steps>
-train session run 1
+train session run all
 ```
 
 Runs repeated session steps synchronously. A numeric limit executes at most that many steps; `all` requests every remaining step. Execution stops early when the session completes or a step fails.
@@ -460,13 +465,33 @@ A run is progressive rather than transactional as a whole. Every individual step
 
 `run <steps>` is the preferred integration surface for responsive graphical clients: an editor can request small blocks and redraw between calls. This command remains synchronous; it does not create a background worker.
 
+### `train session resume`
+
+```text
+train session resume
+```
+
+Changes an Active session to Running and starts a background worker. The command returns immediately, allowing the Console or another client to request status and inspection snapshots while training continues.
+
+Only coherent state is observable: SDK inspection waits if an atomic sample step is currently publishing its result. Network, dataset, input, inference, and other mutating operations are rejected while Running. Pause the session before intervening in parameters or topology.
+
+### `train session pause`
+
+```text
+train session pause
+```
+
+Requests cooperative pause and waits for the current sample step, if any, to finish. It never interrupts forward propagation, backward propagation, or an optimizer update halfway through. When the command returns successfully, the worker has been joined and the session is Active at the next safe sample boundary.
+
+If the worker stops because a step fails, the session also returns to Active and reports `Step failed` as its worker stop reason. The failed step does not advance the cursor or change the network.
+
 ### `train session cancel`
 
 ```text
 train session cancel
 ```
 
-Marks an Active session as Cancelled. Successful steps already changed the public network and are not rolled back. A Completed, Cancelled, or Idle session cannot advance or be cancelled again, but a new session may be started.
+Stops and joins a Running worker when necessary, then marks the session Cancelled. Successful steps already changed the public network and are not rolled back. A Completed, Cancelled, or Idle session cannot advance or be cancelled again, but a new session may be started.
 
 ### `dataset clear`
 
@@ -474,7 +499,7 @@ Marks an Active session as Cancelled. Successful steps already changed the publi
 dataset clear
 ```
 
-Clears the current dataset. It does not clear or modify the current network.
+Clears the current dataset. It does not clear or modify the current network. The operation is rejected while a background training worker is Running.
 
 ## Complete analysis workflow
 
@@ -494,7 +519,12 @@ dataset evaluate all mse
 train session start 2 0.01 mse
 train session next
 train session status
-train session run all
+train session run 1
+train session cancel
+train session start 100 0.01 mse
+train session resume
+train session status
+train session pause
 train session cancel
 dataset gradients 0 mse
 train step 0 0.01 mse
@@ -517,7 +547,9 @@ This sequence demonstrates the difference between stages:
 11. `train session next` performs one inspectable update;
 12. `train session status` reports the unchanged cursor;
 13. `train session run 1` executes one additional synchronous step;
-14. `train session cancel` stops future steps without reverting completed updates.
+14. `train session cancel` stops future steps without reverting completed updates;
+15. `train session resume` starts non-blocking background execution;
+16. `train session pause` joins the worker at the next atomic step boundary.
 
 ## Common failures
 
@@ -549,7 +581,7 @@ Check the path, header option, column counts, row widths, and numeric values. `n
 
 ## Current limitations
 
-- SGD is the only optimizer; controlled sessions are manually advanced and do not yet run, pause, or resume an automatic worker;
+- SGD is the only optimizer and background execution uses one cooperative worker;
 - state is not persisted as a MiaIA workspace;
 - MSE is the only loss;
 - dataset preprocessing and categorical values are not supported;

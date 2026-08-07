@@ -70,6 +70,7 @@ namespace MiaIA::Engine
         Core::TrainingSessionSnapshot& result)
     {
         if (session.Status == Core::TrainingSessionStatus::Active ||
+            session.Status == Core::TrainingSessionStatus::Running ||
             epochCount == 0 ||
             !std::isfinite(learningRate) ||
             learningRate <= 0.0 ||
@@ -106,7 +107,8 @@ namespace MiaIA::Engine
         Core::TrainingSession& session,
         Core::TrainingStepSnapshot& result)
     {
-        if (session.Status != Core::TrainingSessionStatus::Active ||
+        if ((session.Status != Core::TrainingSessionStatus::Active &&
+                session.Status != Core::TrainingSessionStatus::Running) ||
             dataset.Samples.size() != session.SampleCount ||
             session.NextSampleIndex >= session.SampleCount ||
             session.CurrentEpoch >= session.EpochCount ||
@@ -130,6 +132,7 @@ namespace MiaIA::Engine
         }
 
         session.Steps.push_back(step);
+        session.WorkerStopReason = Core::TrainingWorkerStopReason::None;
         ++session.NextSampleIndex;
 
         if (session.NextSampleIndex == session.SampleCount)
@@ -229,6 +232,7 @@ namespace MiaIA::Engine
     {
         Core::TrainingSessionSnapshot snapshot;
         snapshot.Status = session.Status;
+        snapshot.WorkerStopReason = session.WorkerStopReason;
         snapshot.EpochCount = session.EpochCount;
         snapshot.CurrentEpoch = session.CurrentEpoch;
         snapshot.NextSampleIndex = session.NextSampleIndex;

@@ -191,9 +191,11 @@ Start session with epoch count and optimizer configuration
     -> remain paused before the following sample
 ```
 
-A session is synchronous and command-driven; it has no background training thread. `next` is therefore the control boundary and executes exactly one sample. Clients can inspect snapshots or intentionally edit compatible network parameters between steps. Dataset size and network compatibility are checked again before every advance. A rejected step preserves the network, session cursor, history, and caller result.
+A session starts Active at a safe step boundary. `next` executes exactly one sample, while bounded runs compose multiple steps synchronously. Clients can inspect snapshots or intentionally edit compatible network parameters while the session is Active. Dataset size and network compatibility are checked again before every advance. A rejected step preserves the network, session cursor, history, and caller result.
 
-Session states are Idle, Active, Completed, and Cancelled. Completion occurs after the configured number of ordered epochs. Cancellation stops future steps but does not roll back parameter updates already published by successful steps. Starting a new session is rejected while another session is Active.
+`resume` changes an Active session to Running and launches one SDK-owned background worker. `pause` requests cooperative stop, waits for the current atomic sample step to finish, joins the worker, and returns the session to Active. The network is therefore never exposed halfway through an update. Completion occurs after the configured number of ordered epochs. Cancellation stops and joins a running worker but does not roll back successful steps.
+
+All SDK access to the process-local network, dataset, and session is serialized by one client-state mutex. Snapshot and inspection calls remain available while Running and observe a coherent step boundary. Operations that would mutate the network, dataset, or activations are rejected until the session is paused. Worker stop reasons distinguish a requested pause, requested cancellation, and a failed step.
 
 A bounded run composes repeated `next` operations synchronously. It can stop because its requested step limit was reached, the session completed, or a step failed. Unlike the separately atomic `train epoch` operation, a session run is progressive: successful steps remain published if a later step fails. The session stays Active at the failed sample so a client can inspect state, intervene, retry, or cancel. `TrainingRunSnapshot` contains the start/end cursors, executed steps, trace means, detailed step snapshots, and an explicit stop reason.
 
@@ -207,9 +209,10 @@ Current public snapshots include:
 - dataset summary and individual samples;
 - predictions, targets, errors, sample loss, and fixed-model dataset mean loss;
 - activation, pre-activation, bias, and weight gradients;
-- individual SGD parameter updates and ordered epoch step histories.
-- controlled session configuration, progress, status, and complete step history.
-- bounded run progress, trace means, details, and stop reason.
+- individual SGD parameter updates and ordered epoch step histories;
+- controlled session configuration, progress, status, and complete step history;
+- bounded run progress, trace means, details, and stop reason;
+- background worker state and stop reason.
 
 This boundary is important for future graphical debugging: visual components can consume a stable description without becoming owners of engine internals.
 
@@ -243,8 +246,9 @@ Clients should treat a `false` result as a rejected operation and should not inf
 - feed-forward execution only;
 - dense factory and a limited ONNX graph subset;
 - MSE is the only loss type;
-- SGD is the only optimizer and can apply one sample step at a time;
-- no batch or epoch loop, checkpoint, pause, resume, or training-session controller yet;
+- SGD is the only optimizer;
+- background execution uses one cooperative worker and one process-local state lock;
+- no mini-batches, checkpoints, breakpoints, or configurable sample ordering yet;
 - no `.mia` persistence yet;
 - Unreal visualization and Blueprint coverage are incomplete.
 

@@ -6,6 +6,7 @@ namespace MiaIA::Core
     {
         Idle,
         Active,
+        Running,
         Completed,
         Cancelled
     };

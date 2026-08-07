@@ -11,11 +11,14 @@
 #include "../../Core/Model/Dataset.h"
 #include "../../Core/Model/TrainingSession.h"
 
+#include <mutex>
+
 namespace
 {
     MiaIA::Core::Dataset CurrentDataset;
     MiaIA::Core::Network CurrentNetwork;
     MiaIA::Core::TrainingSession CurrentTrainingSession;
+    std::mutex CurrentClientMutex;
 }
 
 MiaIA::Core::Dataset& MiaIA::SDK::Detail::ClientDataset()
@@ -34,15 +37,41 @@ MiaIA::SDK::Detail::ClientTrainingSession()
     return CurrentTrainingSession;
 }
 
+std::mutex& MiaIA::SDK::Detail::ClientMutex()
+{
+    return CurrentClientMutex;
+}
+
+bool MiaIA::SDK::Detail::IsTrainingSessionRunning()
+{
+    return CurrentTrainingSession.Status ==
+        MiaIA::Core::TrainingSessionStatus::Running;
+}
+
 namespace MiaIA::SDK
 {
-    void MiaIAClient::ClearNetwork()
+    bool MiaIAClient::ClearNetwork()
     {
+        const std::scoped_lock lock(Detail::ClientMutex());
+
+        if (Detail::IsTrainingSessionRunning())
+        {
+            return false;
+        }
+
         Engine::NetworkEditor::Clear(CurrentNetwork);
+        return true;
     }
 
     bool MiaIAClient::AddLayer(std::uint64_t id, const std::string& name, std::uint64_t order)
     {
+        const std::scoped_lock lock(Detail::ClientMutex());
+
+        if (Detail::IsTrainingSessionRunning())
+        {
+            return false;
+        }
+
         return Engine::NetworkEditor::AddLayer(
             CurrentNetwork,
             id,
@@ -56,6 +85,13 @@ namespace MiaIA::SDK
         double bias,
         double activation)
     {
+        const std::scoped_lock lock(Detail::ClientMutex());
+
+        if (Detail::IsTrainingSessionRunning())
+        {
+            return false;
+        }
+
         return Engine::NetworkEditor::AddNeuron(
             CurrentNetwork,
             layerId,
@@ -70,6 +106,13 @@ namespace MiaIA::SDK
         std::uint64_t toNeuron,
         double weight)
     {
+        const std::scoped_lock lock(Detail::ClientMutex());
+
+        if (Detail::IsTrainingSessionRunning())
+        {
+            return false;
+        }
+
         return Engine::NetworkEditor::AddConnection(
             CurrentNetwork,
             id,
@@ -82,6 +125,13 @@ namespace MiaIA::SDK
         std::uint64_t neuronId,
         double activation)
     {
+        const std::scoped_lock lock(Detail::ClientMutex());
+
+        if (Detail::IsTrainingSessionRunning())
+        {
+            return false;
+        }
+
         return Engine::NetworkInput::SetActivation(
             CurrentNetwork,
             neuronId,
@@ -91,6 +141,13 @@ namespace MiaIA::SDK
     bool MiaIAClient::SetInputValues(
         const std::vector<double>& values)
     {
+        const std::scoped_lock lock(Detail::ClientMutex());
+
+        if (Detail::IsTrainingSessionRunning())
+        {
+            return false;
+        }
+
         return Engine::NetworkInput::SetValues(
             CurrentNetwork,
             values);
@@ -100,6 +157,13 @@ namespace MiaIA::SDK
         std::uint64_t neuronId,
         double bias)
     {
+        const std::scoped_lock lock(Detail::ClientMutex());
+
+        if (Detail::IsTrainingSessionRunning())
+        {
+            return false;
+        }
+
         return Engine::NetworkParameters::SetBias(
             CurrentNetwork,
             neuronId,
@@ -110,6 +174,13 @@ namespace MiaIA::SDK
         std::uint64_t connectionId,
         double weight)
     {
+        const std::scoped_lock lock(Detail::ClientMutex());
+
+        if (Detail::IsTrainingSessionRunning())
+        {
+            return false;
+        }
+
         return Engine::NetworkWeights::SetWeight(
             CurrentNetwork,
             connectionId,
@@ -120,6 +191,7 @@ namespace MiaIA::SDK
         std::uint64_t neuronId,
         Core::NeuronSnapshot& result)
     {
+        const std::scoped_lock lock(Detail::ClientMutex());
         return Engine::NetworkInspector::TryGetNeuron(
             CurrentNetwork,
             neuronId,
@@ -130,6 +202,7 @@ namespace MiaIA::SDK
         std::uint64_t connectionId,
         Core::ConnectionSnapshot& result)
     {
+        const std::scoped_lock lock(Detail::ClientMutex());
         return Engine::NetworkInspector::TryGetConnection(
             CurrentNetwork,
             connectionId,
@@ -140,6 +213,7 @@ namespace MiaIA::SDK
         std::uint64_t layerId,
         Core::LayerSnapshot& result)
     {
+        const std::scoped_lock lock(Detail::ClientMutex());
         return Engine::NetworkInspector::TryGetLayer(
             CurrentNetwork,
             layerId,
@@ -149,6 +223,13 @@ namespace MiaIA::SDK
     bool MiaIAClient::RemoveConnection(
         std::uint64_t id)
     {
+        const std::scoped_lock lock(Detail::ClientMutex());
+
+        if (Detail::IsTrainingSessionRunning())
+        {
+            return false;
+        }
+
         return Engine::NetworkEditor::RemoveConnection(
             CurrentNetwork,
             id);
@@ -157,6 +238,13 @@ namespace MiaIA::SDK
     bool MiaIAClient::RemoveNeuron(
         std::uint64_t neuronId)
     {
+        const std::scoped_lock lock(Detail::ClientMutex());
+
+        if (Detail::IsTrainingSessionRunning())
+        {
+            return false;
+        }
+
         return Engine::NetworkEditor::RemoveNeuron(
             CurrentNetwork,
             neuronId);
@@ -165,6 +253,13 @@ namespace MiaIA::SDK
     bool MiaIAClient::RemoveLayer(
         std::uint64_t layerId)
     {
+        const std::scoped_lock lock(Detail::ClientMutex());
+
+        if (Detail::IsTrainingSessionRunning())
+        {
+            return false;
+        }
+
         return Engine::NetworkEditor::RemoveLayer(
             CurrentNetwork,
             layerId);
@@ -174,6 +269,13 @@ namespace MiaIA::SDK
         std::uint64_t layerId,
         Core::ActivationType activation)
     {
+        const std::scoped_lock lock(Detail::ClientMutex());
+
+        if (Detail::IsTrainingSessionRunning())
+        {
+            return false;
+        }
+
         return Engine::NetworkParameters::SetLayerActivation(
             CurrentNetwork,
             layerId,
@@ -182,11 +284,19 @@ namespace MiaIA::SDK
 
     bool MiaIAClient::Forward()
     {
+        const std::scoped_lock lock(Detail::ClientMutex());
+
+        if (Detail::IsTrainingSessionRunning())
+        {
+            return false;
+        }
+
         return Engine::NetworkRuntime::Forward(CurrentNetwork);
     }
 
     Core::NetworkSnapshot MiaIAClient::GetSnapshot()
     {
+        const std::scoped_lock lock(Detail::ClientMutex());
         return Engine::NetworkInspector::Snapshot(CurrentNetwork);
     }
 
@@ -194,6 +304,7 @@ namespace MiaIA::SDK
         std::uint64_t connectionId,
         double& weight)
     {
+        const std::scoped_lock lock(Detail::ClientMutex());
         return Engine::NetworkWeights::GetWeight(
             CurrentNetwork,
             connectionId,
@@ -206,6 +317,13 @@ namespace MiaIA::SDK
         int hiddenLayers,
         int outputCount)
     {
+        const std::scoped_lock lock(Detail::ClientMutex());
+
+        if (Detail::IsTrainingSessionRunning())
+        {
+            return false;
+        }
+
         return Engine::NetworkFactory::CreateDense(
             CurrentNetwork,
             inputCount,

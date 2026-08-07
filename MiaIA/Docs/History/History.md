@@ -80,8 +80,14 @@ Controlled sessions gained repeated execution with either an explicit step limit
 
 Runs deliberately preserve successful earlier steps when a later step fails. This progressive behavior supports debugging and retry at the failed cursor while retaining the atomic guarantee of every individual update.
 
+### Cooperative background pause and resume
+
+The SDK gained a single background training worker with explicit Resume and Pause operations. Pause requests cooperative stop, waits for the current atomic step, and joins the worker before returning an Active session at a coherent boundary.
+
+All access to the process-local network, dataset, and session is serialized. Inspection remains available while Running, while state-changing SDK operations are rejected until pause. Completion, requested pause, requested cancellation, and failed-step stops are observable without exposing partially updated parameters.
+
 ## Current position
 
-MiaIA can now represent, execute, interchange, inspect, evaluate individual samples or a complete fixed-model dataset, differentiate, apply atomic SGD steps and epochs, manually advance controlled sessions, and execute bounded synchronous runs. It cannot yet run a background pausable training worker, persist a `.mia` workspace, or deliver the planned complete graphical debugging experience.
+MiaIA can now represent, execute, interchange, inspect, evaluate individual samples or a complete fixed-model dataset, differentiate, apply atomic SGD steps and epochs, advance controlled sessions synchronously, and pause or resume one background worker. It cannot yet persist a `.mia` workspace or deliver the planned complete graphical debugging experience.
 
 Those next steps are tracked in the [Roadmap](../Roadmap/Roadmap.md).

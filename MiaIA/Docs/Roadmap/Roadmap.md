@@ -32,6 +32,10 @@ The roadmap is organized by dependency rather than by a fixed release date. Math
 - bounded synchronous session runs by step count or to completion;
 - explicit run stop reasons and partial-progress snapshots;
 - progressive preservation of successful steps before a later failure.
+- serialized SDK access to network, dataset, and session state;
+- non-blocking background session execution;
+- cooperative pause, resume, and cancellation at atomic step boundaries;
+- coherent inspection and explicit worker stop reasons while training.
 
 ## Implemented optimizer foundation
 
@@ -58,11 +62,15 @@ Building on trustworthy single steps and one explicit epoch, the current session
 - a natural pause boundary between synchronous commands.
 - bounded repeated execution with `run <steps>` and `run all`.
 
-## Next milestone: automatic session control
+## Implemented automatic session control
 
 - run a session automatically without blocking client interaction;
-- pause and resume the automatic worker safely;
-- expose structured stop reasons and diagnostics;
+- pause, resume, and cancel the worker safely;
+- expose structured worker stop reasons;
+- reject unsafe mutations while Running and preserve coherent inspection.
+
+## Next training controls
+
 - add deterministic seeding where randomness is introduced;
 - add configurable sample ordering;
 - introduce mini-batches only after single-sample behavior remains transparent.
