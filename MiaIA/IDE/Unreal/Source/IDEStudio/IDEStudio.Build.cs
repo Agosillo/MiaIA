@@ -16,7 +16,8 @@ public class IDEStudio : ModuleRules
             "IDE",
             "InputCore",
             "Slate",
-            "SlateCore"
+            "SlateCore",
+            "UMG"
         });
     }
 }

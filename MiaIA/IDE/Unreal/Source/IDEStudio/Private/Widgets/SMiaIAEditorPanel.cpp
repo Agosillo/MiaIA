@@ -18,6 +18,7 @@
 #include "Widgets/Layout/SSplitter.h"
 #include "Widgets/Layout/SUniformGridPanel.h"
 #include "Widgets/Layout/SWidgetSwitcher.h"
+#include "Widgets/SMiaIA3DNetworkView.h"
 #include "Widgets/SMiaIANetworkView.h"
 #include "Widgets/SNullWidget.h"
 #include "Widgets/Text/STextBlock.h"
@@ -204,8 +205,22 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
                     .Text(LOCTEXT("ResetLayout", "Reset layout"))
                     .ToolTipText(LOCTEXT(
                         "ResetLayoutTooltip",
-                        "Restore the automatic neuron layout and fit the view."))
+                        "Restore automatic neuron positions and the default camera framing."))
                     .OnClicked(this, &SMiaIAEditorPanel::HandleResetLayout)
+                ]
+                + SHorizontalBox::Slot()
+                .AutoWidth()
+                .Padding(2.0f)
+                [
+                    SNew(SButton)
+                    .ButtonStyle(&ButtonStyle)
+                    .Text(this, &SMiaIAEditorPanel::TopologyWorkspaceText)
+                    .ToolTipText(LOCTEXT(
+                        "TopologyWorkspaceTooltip",
+                        "Expand the topology canvas or restore the surrounding panels."))
+                    .OnClicked(
+                        this,
+                        &SMiaIAEditorPanel::HandleToggleTopologyWorkspace)
                 ]
                 + SHorizontalBox::Slot()
                 .AutoWidth()
@@ -256,6 +271,33 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
                     .Text(LOCTEXT("CancelDebug", "Cancel debug"))
                     .IsEnabled(this, &SMiaIAEditorPanel::CanCancelDebug)
                     .OnClicked(this, &SMiaIAEditorPanel::HandleCancelDebug)
+                ]
+                + SHorizontalBox::Slot()
+                .AutoWidth()
+                .VAlign(VAlign_Center)
+                .Padding(10.0f, 0.0f, 2.0f, 0.0f)
+                [
+                    SNew(STextBlock)
+                    .Text(LOCTEXT("ViewLabel", "View"))
+                ]
+                + SHorizontalBox::Slot()
+                .AutoWidth()
+                .VAlign(VAlign_Center)
+                .Padding(2.0f)
+                [
+                    SNew(SComboButton)
+                    .ComboButtonStyle(&ComboButtonStyle)
+                    .ToolTipText(LOCTEXT(
+                        "ViewModeTooltip",
+                        "Switch between the editable 2D canvas and the 3D orbit view."))
+                    .ButtonContent()
+                    [
+                        SNew(STextBlock)
+                        .Text(this, &SMiaIAEditorPanel::ViewModeText)
+                    ]
+                    .OnGetMenuContent(
+                        this,
+                        &SMiaIAEditorPanel::BuildViewModeMenu)
                 ]
                 + SHorizontalBox::Slot()
                 .AutoWidth()
@@ -344,6 +386,12 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
                 .Value(0.20f)
                 [
                     SNew(SBorder)
+                    .Visibility_Lambda([this]()
+                    {
+                        return bTopologyWorkspaceExpanded
+                            ? EVisibility::Collapsed
+                            : EVisibility::Visible;
+                    })
                     .BorderImage(panelBorder)
                     .BorderBackgroundColor(this, &SMiaIAEditorPanel::PanelColor)
                     .Padding(6.0f)
@@ -376,13 +424,31 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
                         + SVerticalBox::Slot()
                         .FillHeight(1.0f)
                         [
-                            SAssignNew(NetworkView, SMiaIANetworkView)
-                            .OnNeuronSelected(
-                                this,
-                                &SMiaIAEditorPanel::SelectNeuron)
-                            .OnConnectionSelected(
-                                this,
-                                &SMiaIAEditorPanel::SelectConnection)
+                            SAssignNew(
+                                TopologySwitcher,
+                                SWidgetSwitcher)
+                            + SWidgetSwitcher::Slot()
+                            [
+                                SAssignNew(NetworkView, SMiaIANetworkView)
+                                .OnNeuronSelected(
+                                    this,
+                                    &SMiaIAEditorPanel::SelectNeuron)
+                                .OnConnectionSelected(
+                                    this,
+                                    &SMiaIAEditorPanel::SelectConnection)
+                            ]
+                            + SWidgetSwitcher::Slot()
+                            [
+                                SAssignNew(
+                                    Network3DView,
+                                    SMiaIA3DNetworkView)
+                                .OnNeuronSelected(
+                                    this,
+                                    &SMiaIAEditorPanel::SelectNeuron)
+                                .OnConnectionSelected(
+                                    this,
+                                    &SMiaIAEditorPanel::SelectConnection)
+                            ]
                         ]
                         + SVerticalBox::Slot()
                         .AutoHeight()
@@ -528,6 +594,12 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
             .Value(0.28f)
             [
                 SNew(SBorder)
+                .Visibility_Lambda([this]()
+                {
+                    return bTopologyWorkspaceExpanded
+                        ? EVisibility::Collapsed
+                        : EVisibility::Visible;
+                })
                 .BorderImage(panelBorder)
                 .BorderBackgroundColor(this, &SMiaIAEditorPanel::PanelColor)
                 .Padding(6.0f)
@@ -722,6 +794,7 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
                                             ConsoleInput,
                                             SEditableTextBox)
                                         .Style(&InputStyle)
+                                        .ClearKeyboardFocusOnCommit(false)
                                         .HintText(LOCTEXT(
                                             "ConsoleInputHint",
                                             "Enter a MiaIA command and press Enter"))
@@ -766,7 +839,9 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
     ];
 
     BottomSwitcher->SetActiveWidgetIndex(1);
+    TopologySwitcher->SetActiveWidgetIndex(0);
     NetworkView->SetTheme(Theme);
+    Network3DView->SetTheme(Theme);
     RebuildConsoleSuggestions(FString());
     RefreshData();
     RegisterActiveTimer(
@@ -859,6 +934,17 @@ void SMiaIAEditorPanel::RefreshData()
         NetworkView->SetDebugSnapshot(Debug);
         NetworkView->SetSelectedNeuron(SelectedNeuronId);
         NetworkView->SetSelectedConnection(SelectedConnectionId);
+    }
+
+    if (Network3DView.IsValid())
+    {
+        Network3DView->SetSnapshot(Network);
+        Network3DView->SetOverview(
+            NetworkOverview,
+            bCompactTopology);
+        Network3DView->SetDebugSnapshot(Debug);
+        Network3DView->SetSelectedNeuron(SelectedNeuronId);
+        Network3DView->SetSelectedConnection(SelectedConnectionId);
     }
 
     if (topologyChanged)
@@ -1056,6 +1142,14 @@ EActiveTimerReturnType SMiaIAEditorPanel::HandleRefreshTimer(
     return EActiveTimerReturnType::Continue;
 }
 
+EActiveTimerReturnType SMiaIAEditorPanel::HandleDeferredWorkspaceFit(
+    double,
+    float)
+{
+    HandleFitView();
+    return EActiveTimerReturnType::Stop;
+}
+
 FReply SMiaIAEditorPanel::HandleRefresh()
 {
     RefreshData();
@@ -1064,7 +1158,12 @@ FReply SMiaIAEditorPanel::HandleRefresh()
 
 FReply SMiaIAEditorPanel::HandleFitView()
 {
-    if (NetworkView.IsValid())
+    if (ViewMode == EMiaIAStudioViewMode::ThreeDimensional &&
+        Network3DView.IsValid())
+    {
+        Network3DView->FitView();
+    }
+    else if (NetworkView.IsValid())
     {
         NetworkView->FitView();
     }
@@ -1074,11 +1173,28 @@ FReply SMiaIAEditorPanel::HandleFitView()
 
 FReply SMiaIAEditorPanel::HandleResetLayout()
 {
-    if (NetworkView.IsValid())
+    if (ViewMode == EMiaIAStudioViewMode::ThreeDimensional &&
+        Network3DView.IsValid())
+    {
+        Network3DView->ResetView();
+    }
+    else if (NetworkView.IsValid())
     {
         NetworkView->ResetLayout();
     }
 
+    return FReply::Handled();
+}
+
+FReply SMiaIAEditorPanel::HandleToggleTopologyWorkspace()
+{
+    bTopologyWorkspaceExpanded = !bTopologyWorkspaceExpanded;
+    Invalidate(EInvalidateWidgetReason::LayoutAndVolatility);
+    RegisterActiveTimer(
+        0.05f,
+        FWidgetActiveTimerDelegate::CreateSP(
+            this,
+            &SMiaIAEditorPanel::HandleDeferredWorkspaceFit));
     return FReply::Handled();
 }
 
@@ -1139,6 +1255,56 @@ FReply SMiaIAEditorPanel::SelectBottomTab(int32 TabIndex)
     return FReply::Handled();
 }
 
+TSharedRef<SWidget> SMiaIAEditorPanel::BuildViewModeMenu()
+{
+    return SNew(SVerticalBox)
+        + SVerticalBox::Slot()
+        .AutoHeight()
+        [
+            SNew(SButton)
+            .ButtonStyle(&ButtonStyle)
+            .Text(LOCTEXT("TwoDimensionalView", "2D"))
+            .OnClicked(
+                this,
+                &SMiaIAEditorPanel::SelectViewMode,
+                EMiaIAStudioViewMode::TwoDimensional)
+        ]
+        + SVerticalBox::Slot()
+        .AutoHeight()
+        [
+            SNew(SButton)
+            .ButtonStyle(&ButtonStyle)
+            .Text(LOCTEXT("ThreeDimensionalView", "3D"))
+            .OnClicked(
+                this,
+                &SMiaIAEditorPanel::SelectViewMode,
+                EMiaIAStudioViewMode::ThreeDimensional)
+        ];
+}
+
+FReply SMiaIAEditorPanel::SelectViewMode(
+    EMiaIAStudioViewMode InViewMode)
+{
+    ViewMode = InViewMode;
+
+    if (TopologySwitcher.IsValid())
+    {
+        TopologySwitcher->SetActiveWidgetIndex(
+            ViewMode == EMiaIAStudioViewMode::TwoDimensional
+                ? 0
+                : 1);
+    }
+
+    if (ViewMode == EMiaIAStudioViewMode::ThreeDimensional &&
+        Network3DView.IsValid())
+    {
+        Network3DView->FitView();
+    }
+
+    FSlateApplication::Get().DismissAllMenus();
+    return FReply::Handled();
+}
+
 TSharedRef<SWidget> SMiaIAEditorPanel::BuildThemeMenu()
 {
     return SNew(SVerticalBox)
@@ -1189,6 +1355,11 @@ FReply SMiaIAEditorPanel::SelectTheme(EMiaIAEditorTheme InTheme)
     if (NetworkView.IsValid())
     {
         NetworkView->SetTheme(Theme);
+    }
+
+    if (Network3DView.IsValid())
+    {
+        Network3DView->SetTheme(Theme);
     }
 
     FSlateApplication::Get().DismissAllMenus();
@@ -1249,6 +1420,13 @@ void SMiaIAEditorPanel::HandleConsoleCommandCommitted(
     SetConsoleInputText(FString());
 
     RefreshData();
+
+    if (ConsoleInput.IsValid())
+    {
+        FSlateApplication::Get().SetKeyboardFocus(
+            ConsoleInput,
+            EFocusCause::SetDirectly);
+    }
 }
 
 void SMiaIAEditorPanel::HandleConsoleTextChanged(const FText& Text)
@@ -1680,9 +1858,23 @@ FSlateColor SMiaIAEditorPanel::TextColor() const
     return FSlateColor(FMiaIAEditorTheme::Palette(Theme).Text);
 }
 
+FText SMiaIAEditorPanel::ViewModeText() const
+{
+    return ViewMode == EMiaIAStudioViewMode::TwoDimensional
+        ? LOCTEXT("CurrentTwoDimensionalView", "2D")
+        : LOCTEXT("CurrentThreeDimensionalView", "3D");
+}
+
 FText SMiaIAEditorPanel::ThemeText() const
 {
     return FMiaIAEditorTheme::DisplayName(Theme);
+}
+
+FText SMiaIAEditorPanel::TopologyWorkspaceText() const
+{
+    return bTopologyWorkspaceExpanded
+        ? LOCTEXT("RestoreTopologyPanels", "Restore panels")
+        : LOCTEXT("ExpandTopologyView", "Expand view");
 }
 
 #undef LOCTEXT_NAMESPACE

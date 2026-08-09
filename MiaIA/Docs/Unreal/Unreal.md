@@ -98,7 +98,7 @@ The animation is slowed down for documentation. The demonstration itself advance
 ### Panel layout
 
 - **Model explorer** lists layers, neurons, and connections. Selecting an item here also selects it in the topology.
-- **Network topology** renders the current layers, neurons, and weighted connections. Its semantic overlay follows the active debug phase: forward uses candidate activations, backward uses gradient sign and normalized magnitude, update uses parameter-delta sign and normalized magnitude, and verified or committed states return to candidate or committed activations and weights.
+- **Network topology** switches between interactive 2D and 3D renderers for the same current layers, neurons, and weighted connections. Its semantic overlay follows the active debug phase: forward uses candidate activations, backward uses gradient sign and normalized magnitude, update uses parameter-delta sign and normalized magnitude, and verified or committed states return to candidate or committed activations and weights.
 - **Inspector** shows neuron activation and bias data or connection weight data, including phase-dependent gradients and candidate updates.
 - **Session and debug status** report training progress and the currently inspected phase.
 - **Console** is the first and initially selected lower tab. It uses a narrow command-suggestion column on the left and a larger output/input workspace on the right. It accepts the same commands as `Console.exe` and operates on the same process-local state displayed by the panel and used by Blueprint nodes.
@@ -115,11 +115,20 @@ Use the `Theme` selector in the panel toolbar to choose `Follow Unreal`, `Dark`,
 
 The selection is stored in the local Unreal game-user settings configuration and restored by both hosts. It is a per-user preference and does not modify tracked project configuration. The selected palette consistently controls panel surfaces, splitters, buttons, menus, inputs, scrollbars, text, neuron activation, positive and negative weights, selection, and debug-phase emphasis.
 
+### Topology view mode
+
+Use the `View` selector in the toolbar to switch between `2D` and `3D`. Both modes read the same snapshot, selection, Inspector, phase telemetry, semantic colors, and detailed-versus-compact policy. Switching the renderer does not create another network or alter any model value.
+
+The 3D renderer runs inside a real Unreal runtime preview scene and is therefore available in both the editor panel and the packaged application. `StudioCore` supplies normalized two- and three-dimensional positions. Unreal combines them so the initial front camera preserves the familiar 2D reading of layers from left to right and neurons from top to bottom, while layer and neuron depth becomes visible as soon as the camera orbits. Unreal applies only world scale, camera behavior, colors, and drawing.
+
+Detailed 3D rendering keeps every neuron and connection individually identifiable. It does not create one Unreal Actor per element. One aggregated runtime viewport renderer builds shaded neuron spheres and weighted connection cylinders into a single dynamic mesh submission, while MiaIA retains IDs separately for hit testing and Inspector queries. Sphere and cylinder tessellation decrease automatically as the visible graph grows. Stable FXAA smooths geometry edges without the temporal trails produced by history-based antialiasing. Bloom and tonemapping remain disabled, and the embedded viewport uses neutral display gamma, so the shared semantic palette and background follow the same color composition as the 2D Slate canvas instead of becoming emissive, desaturated, or artificially bright. This rendering optimization is distinct from compact mode, which intentionally displays one aggregate sphere per layer for very large networks.
+
 ### Panel controls
 
 - `Refresh` immediately reloads all visible snapshots. The panel also refreshes runtime values automatically.
-- `Fit view` adjusts zoom and pan so every neuron in the current layout is visible without changing neuron positions.
-- `Reset layout` discards manual neuron positions, restores the automatic layer layout, and fits the complete network.
+- `Fit view` fits the active renderer: it adjusts 2D zoom and pan or derives a centered front-facing 3D camera from the current topology bounds, viewport size, and aspect ratio while preserving manual neuron positions.
+- `Reset layout` discards manual positions and restores the automatic layout and default framing in both 2D and detailed 3D modes.
+- `Expand view` collapses Model explorer and the lower tool area so the live topology occupies the available panel while Inspector remains visible on the right. The same button becomes `Restore panels`; expanding or restoring preserves the current renderer, selection, and topology state and automatically refits the new canvas size.
 - `Continue` resumes an active paused training session when no phase inspection owns the current step.
 - `Pause` requests a safe pause for a running training session.
 - `Start debug` attaches a new phase inspection to the next pending training sample. It can start from an idle debug state or after the previous step was committed.
@@ -131,7 +140,7 @@ Buttons are enabled only when their operation is valid for the current session a
 
 ### Topology navigation and layout
 
-The topology view supports direct 2D navigation and layout editing:
+The 2D topology view supports navigation and layout editing:
 
 - use the mouse wheel to zoom around the pointer;
 - drag with the middle mouse button to pan the view;
@@ -141,11 +150,23 @@ The topology view supports direct 2D navigation and layout editing:
 
 Manual positions use normalized layout coordinates rather than Slate pixel coordinates. They remain stable while the panel is open and can later be reused by another renderer, including a 3D view. They are intentionally not written to ONNX or project configuration. Persistent visualization layouts belong to future MiaIA-specific model metadata.
 
-In compact mode, the mouse wheel and middle-button pan remain available. `Fit view` and `Reset layout` restore the aggregate layer graph. Individual layer nodes are summaries and are not presented as real neurons.
+The 3D topology view uses these controls:
+
+- drag with the right mouse button to orbit around the network;
+- drag with the middle mouse button to pan the camera target;
+- use the mouse wheel to move closer to or farther from the network across the extended near-to-far camera range;
+- click a neuron marker or connection with the left mouse button to select it and update the shared Inspector;
+- drag a neuron marker with the left mouse button to assign a manual position on the camera-facing plane at its current depth;
+- select `Fit view` to restore the complete front-facing camera framing without discarding manual positions;
+- select `Reset layout` to discard manual positions and restore the automatic arrangement and default framing.
+
+The 3D renderer uses solid shaded sphere geometry in a real Unreal scene. It starts with the same front-facing topology reading as 2D; orbiting reveals the pre-existing depth. Detailed views project neuron identifiers back into the Slate overlay, preserving the readable `#id` labels from 2D, and show selection as an antialiased yellow circular outline without replacing the sphere's activation or debug color. The outline is derived from sampled projection bounds around the real sphere and retains a minimum screen-space radius, so it stays aligned at extreme close zoom and recognizable after zooming far away. Labels are omitted above 500 visible neurons to keep larger scenes legible. Dragging changes only the visualization layout held by the open Studio panel: it does not alter topology, weights, activation values, or Engine mathematics.
+
+In compact mode, 2D zoom and pan and 3D camera navigation remain available. `Fit view` and `Reset layout` restore the aggregate layer graph. Individual layer nodes are summaries rather than real neurons and are not draggable in this increment; aggregate-layout editing will be reconsidered with the future layout design.
 
 ### Interactive command console
 
-The `Console` tab opens automatically at the bottom of the MiaIA panel. Enter a command in the text box, then press `Enter` or select `Send`. Both actions use the same execution path. The command, its output, and any diagnostic text are appended to the history. The model explorer, topology, inspector, session status, and controls refresh immediately afterward.
+The `Console` tab opens automatically at the bottom of the MiaIA panel. Enter a command in the text box, then press `Enter` or select `Send`. Both actions use the same execution path. The command, its output, and any diagnostic text are appended to the history. The model explorer, topology, inspector, session status, and controls refresh immediately afterward, while keyboard focus returns to the empty command field so the next command can be typed without another click.
 
 The output view automatically scrolls to the newest result after execution. A persistent external vertical scrollbar is positioned on its left edge and remains available for reviewing earlier output. The horizontal splitter between suggestions and the output workspace can be dragged when more room is needed for either side.
 

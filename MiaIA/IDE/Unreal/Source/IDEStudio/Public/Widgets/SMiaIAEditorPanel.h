@@ -5,11 +5,18 @@
 #include "Widgets/SCompoundWidget.h"
 
 class SMiaIANetworkView;
+class SMiaIA3DNetworkView;
 class SEditableTextBox;
 class SMultiLineEditableText;
 class SScrollBar;
 class SVerticalBox;
 class SWidgetSwitcher;
+
+enum class EMiaIAStudioViewMode : uint8
+{
+    TwoDimensional,
+    ThreeDimensional
+};
 
 class IDESTUDIO_API SMiaIAEditorPanel final : public SCompoundWidget
 {
@@ -35,9 +42,13 @@ private:
     EActiveTimerReturnType HandleRefreshTimer(
         double CurrentTime,
         float DeltaTime);
+    EActiveTimerReturnType HandleDeferredWorkspaceFit(
+        double CurrentTime,
+        float DeltaTime);
     FReply HandleRefresh();
     FReply HandleFitView();
     FReply HandleResetLayout();
+    FReply HandleToggleTopologyWorkspace();
     FReply HandleResume();
     FReply HandlePause();
     FReply HandleStartDebug();
@@ -45,6 +56,8 @@ private:
     FReply HandleCancelDebug();
     FReply HandleExit();
     FReply SelectBottomTab(int32 TabIndex);
+    TSharedRef<SWidget> BuildViewModeMenu();
+    FReply SelectViewMode(EMiaIAStudioViewMode InViewMode);
     TSharedRef<SWidget> BuildThemeMenu();
     FReply SelectTheme(EMiaIAEditorTheme InTheme);
     void RefreshWidgetStyles();
@@ -83,7 +96,9 @@ private:
     FSlateColor BackgroundColor() const;
     FSlateColor PanelColor() const;
     FSlateColor TextColor() const;
+    FText ViewModeText() const;
     FText ThemeText() const;
+    FText TopologyWorkspaceText() const;
 
     FMiaIANetworkSnapshot Network;
     FMiaIANetworkOverview NetworkOverview;
@@ -100,6 +115,8 @@ private:
     FString ConsoleHistoryDraft;
     FString FirstConsoleSuggestion;
     int32 ConsoleHistoryIndex{};
+    EMiaIAStudioViewMode ViewMode{
+        EMiaIAStudioViewMode::TwoDimensional};
     EMiaIAEditorTheme Theme{EMiaIAEditorTheme::FollowUnreal};
     FButtonStyle ButtonStyle;
     FButtonStyle ExplorerButtonStyle;
@@ -112,10 +129,13 @@ private:
     bool bUpdatingConsoleInput{};
     bool bCompactTopology{};
     bool bStandaloneMode{};
+    bool bTopologyWorkspaceExpanded{};
 
     TSharedPtr<SVerticalBox> ExplorerContent;
     TSharedPtr<SVerticalBox> ConsoleSuggestionsContent;
     TSharedPtr<SMiaIANetworkView> NetworkView;
+    TSharedPtr<SMiaIA3DNetworkView> Network3DView;
+    TSharedPtr<SWidgetSwitcher> TopologySwitcher;
     TSharedPtr<SWidgetSwitcher> BottomSwitcher;
     TSharedPtr<SMultiLineEditableText> ConsoleOutput;
     TSharedPtr<SScrollBar> ConsoleOutputScrollBar;

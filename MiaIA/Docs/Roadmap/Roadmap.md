@@ -135,10 +135,10 @@ The `.mia` format is planned and does not exist in the current implementation.
 
 ## MiaIA Studio delivery
 
-The platform-neutral Studio application foundation, shared Unreal runtime host, and Win64 packaging workflow are implemented. The next delivery steps are:
+The platform-neutral Studio application foundation, shared Unreal runtime host, Win64 packaging workflow, user-selectable 2D/3D topology mode, and first interactive runtime 3D renderer are implemented. The next delivery steps are:
 
-- add a user-selectable 2D/3D topology mode;
-- implement the first interactive three-dimensional renderer over StudioCore coordinates;
+- evolve the first point-and-link 3D scene toward richer neuron geometry, labels, filtering, and layout tools without introducing one Actor per element;
+- persist user visualization layouts in future MiaIA workspace metadata rather than ONNX;
 - retain StudioCore as the shared application boundary for a possible future Qt frontend.
 
 ## Additional clients
