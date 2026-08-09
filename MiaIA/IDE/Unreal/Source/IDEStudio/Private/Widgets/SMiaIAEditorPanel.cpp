@@ -6,6 +6,7 @@
 #include "Framework/Application/SlateApplication.h"
 #include "HAL/PlatformMisc.h"
 #include "InputCoreTypes.h"
+#include "Misc/ConfigCacheIni.h"
 #include "Styling/AppStyle.h"
 #include "Widgets/Input/SButton.h"
 #include "Widgets/Input/SComboButton.h"
@@ -15,6 +16,7 @@
 #include "Widgets/Layout/SBox.h"
 #include "Widgets/Layout/SScrollBar.h"
 #include "Widgets/Layout/SScrollBox.h"
+#include "Widgets/SOverlay.h"
 #include "Widgets/Layout/SSplitter.h"
 #include "Widgets/Layout/SUniformGridPanel.h"
 #include "Widgets/Layout/SWidgetSwitcher.h"
@@ -27,6 +29,95 @@
 
 namespace
 {
+    constexpr TCHAR DataRefreshSettingsSection[] =
+        TEXT("MiaIAStudio.UserSettings");
+    constexpr TCHAR DataRefreshSettingsKey[] = TEXT("DataRefresh");
+
+    FString DataRefreshModeName(EMiaIADataRefreshMode Mode)
+    {
+        switch (Mode)
+        {
+        case EMiaIADataRefreshMode::OneHz:
+            return TEXT("1Hz");
+        case EMiaIADataRefreshMode::TwoHz:
+            return TEXT("2Hz");
+        case EMiaIADataRefreshMode::FourHz:
+            return TEXT("4Hz");
+        case EMiaIADataRefreshMode::TenHz:
+            return TEXT("10Hz");
+        case EMiaIADataRefreshMode::Adaptive:
+        default:
+            return TEXT("Adaptive");
+        }
+    }
+
+    EMiaIADataRefreshMode LoadDataRefreshMode()
+    {
+        FString savedMode;
+
+        if (GConfig && GConfig->GetString(
+            DataRefreshSettingsSection,
+            DataRefreshSettingsKey,
+            savedMode,
+            GGameUserSettingsIni))
+        {
+            if (savedMode.Equals(TEXT("1Hz"), ESearchCase::IgnoreCase))
+            {
+                return EMiaIADataRefreshMode::OneHz;
+            }
+
+            if (savedMode.Equals(TEXT("2Hz"), ESearchCase::IgnoreCase))
+            {
+                return EMiaIADataRefreshMode::TwoHz;
+            }
+
+            if (savedMode.Equals(TEXT("4Hz"), ESearchCase::IgnoreCase))
+            {
+                return EMiaIADataRefreshMode::FourHz;
+            }
+
+            if (savedMode.Equals(TEXT("10Hz"), ESearchCase::IgnoreCase))
+            {
+                return EMiaIADataRefreshMode::TenHz;
+            }
+        }
+
+        return EMiaIADataRefreshMode::Adaptive;
+    }
+
+    void SaveDataRefreshMode(EMiaIADataRefreshMode Mode)
+    {
+        if (!GConfig)
+        {
+            return;
+        }
+
+        GConfig->SetString(
+            DataRefreshSettingsSection,
+            DataRefreshSettingsKey,
+            *DataRefreshModeName(Mode),
+            GGameUserSettingsIni);
+        GConfig->Flush(false, GGameUserSettingsIni);
+    }
+
+    FText DataRefreshModeDisplayName(EMiaIADataRefreshMode Mode)
+    {
+        switch (Mode)
+        {
+        case EMiaIADataRefreshMode::OneHz:
+            return LOCTEXT("DataRefreshOneHz", "1 Hz");
+        case EMiaIADataRefreshMode::TwoHz:
+            return LOCTEXT("DataRefreshTwoHz", "2 Hz");
+        case EMiaIADataRefreshMode::FourHz:
+            return LOCTEXT("DataRefreshFourHz", "4 Hz");
+        case EMiaIADataRefreshMode::TenHz:
+            return LOCTEXT("DataRefreshTenHz", "10 Hz");
+        case EMiaIADataRefreshMode::Adaptive:
+        default:
+            return LOCTEXT("DataRefreshAdaptive", "Adaptive");
+        }
+    }
+
     FText SessionStatusName(EMiaIATrainingSessionStatus Status)
     {
         switch (Status)
@@ -142,6 +233,7 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
     const auto panelBorder = FAppStyle::GetBrush(TEXT("WhiteBrush"));
     bStandaloneMode = InArgs._StandaloneMode;
     Theme = FMiaIAEditorTheme::Load();
+    DataRefreshMode = LoadDataRefreshMode();
     RefreshWidgetStyles();
     ConsoleHistory = TEXT(
         "MiaIA Studio Console\n"
@@ -159,6 +251,9 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
 
     ChildSlot
     [
+        SNew(SOverlay)
+        + SOverlay::Slot()
+        [
         SNew(SBorder)
         .BorderImage(panelBorder)
         .BorderBackgroundColor(this, &SMiaIAEditorPanel::BackgroundColor)
@@ -324,6 +419,52 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
                         &SMiaIAEditorPanel::BuildThemeMenu)
                 ]
                 + SHorizontalBox::Slot()
+                .AutoWidth()
+                .VAlign(VAlign_Center)
+                .Padding(10.0f, 0.0f, 2.0f, 0.0f)
+                [
+                    SNew(STextBlock)
+                    .Text(LOCTEXT("DataRefreshLabel", "Data refresh"))
+                ]
+                + SHorizontalBox::Slot()
+                .AutoWidth()
+                .VAlign(VAlign_Center)
+                .Padding(2.0f)
+                [
+                    SNew(SComboButton)
+                    .ComboButtonStyle(&ComboButtonStyle)
+                    .ToolTipText(LOCTEXT(
+                        "DataRefreshTooltip",
+                        "Control automatic model-data polling. Commands and debug controls always refresh immediately."))
+                    .ButtonContent()
+                    [
+                        SNew(STextBlock)
+                        .Text(this, &SMiaIAEditorPanel::DataRefreshText)
+                    ]
+                    .OnGetMenuContent(
+                        this,
+                        &SMiaIAEditorPanel::BuildDataRefreshMenu)
+                ]
+                + SHorizontalBox::Slot()
+                .AutoWidth()
+                .VAlign(VAlign_Center)
+                .Padding(10.0f, 0.0f, 2.0f, 0.0f)
+                [
+                    SNew(SComboButton)
+                    .ComboButtonStyle(&ComboButtonStyle)
+                    .ToolTipText(LOCTEXT(
+                        "HelpMenuTooltip",
+                        "Open interaction help or MiaIA Studio information."))
+                    .ButtonContent()
+                    [
+                        SNew(STextBlock)
+                        .Text(LOCTEXT("HelpMenuLabel", "Help"))
+                    ]
+                    .OnGetMenuContent(
+                        this,
+                        &SMiaIAEditorPanel::BuildHelpMenu)
+                ]
+                + SHorizontalBox::Slot()
                 .FillWidth(1.0f)
                 [
                     SNullWidget::NullWidget
@@ -430,9 +571,9 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
                             + SWidgetSwitcher::Slot()
                             [
                                 SAssignNew(NetworkView, SMiaIANetworkView)
-                                .OnNeuronSelected(
+                                .OnNeuronSelectionChanged(
                                     this,
-                                    &SMiaIAEditorPanel::SelectNeuron)
+                                    &SMiaIAEditorPanel::SelectNeurons)
                                 .OnConnectionSelected(
                                     this,
                                     &SMiaIAEditorPanel::SelectConnection)
@@ -442,9 +583,9 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
                                 SAssignNew(
                                     Network3DView,
                                     SMiaIA3DNetworkView)
-                                .OnNeuronSelected(
+                                .OnNeuronSelectionChanged(
                                     this,
-                                    &SMiaIAEditorPanel::SelectNeuron)
+                                    &SMiaIAEditorPanel::SelectNeurons)
                                 .OnConnectionSelected(
                                     this,
                                     &SMiaIAEditorPanel::SelectConnection)
@@ -836,6 +977,72 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
             ]
         ]
         ]
+        ]
+        + SOverlay::Slot()
+        [
+            SNew(SBorder)
+            .Visibility(this, &SMiaIAEditorPanel::DialogVisibility)
+            .BorderImage(panelBorder)
+            .BorderBackgroundColor(FLinearColor(0.0f, 0.0f, 0.0f, 0.68f))
+            .OnMouseButtonDown_Lambda(
+                [](const FGeometry&, const FPointerEvent&)
+                {
+                    return FReply::Handled();
+                })
+        ]
+        + SOverlay::Slot()
+        .HAlign(HAlign_Center)
+        .VAlign(VAlign_Center)
+        .Padding(40.0f)
+        [
+            SNew(SBox)
+            .Visibility(this, &SMiaIAEditorPanel::DialogVisibility)
+            .WidthOverride(640.0f)
+            .MaxDesiredHeight(620.0f)
+            [
+                SNew(SBorder)
+                .BorderImage(panelBorder)
+                .BorderBackgroundColor(
+                    this,
+                    &SMiaIAEditorPanel::PanelColor)
+                .ForegroundColor(this, &SMiaIAEditorPanel::TextColor)
+                .Padding(18.0f)
+                [
+                    SNew(SVerticalBox)
+                    + SVerticalBox::Slot()
+                    .AutoHeight()
+                    .Padding(0.0f, 0.0f, 0.0f, 14.0f)
+                    [
+                        SNew(STextBlock)
+                        .Text_Lambda([this]() { return DialogTitle; })
+                        .Font(FAppStyle::GetFontStyle(TEXT("HeadingExtraSmall")))
+                    ]
+                    + SVerticalBox::Slot()
+                    .FillHeight(1.0f)
+                    [
+                        SNew(SScrollBox)
+                        + SScrollBox::Slot()
+                        [
+                            SNew(STextBlock)
+                            .Text_Lambda([this]() { return DialogContent; })
+                            .AutoWrapText(true)
+                        ]
+                    ]
+                    + SVerticalBox::Slot()
+                    .AutoHeight()
+                    .HAlign(HAlign_Right)
+                    .Padding(0.0f, 16.0f, 0.0f, 0.0f)
+                    [
+                        SNew(SButton)
+                        .ButtonStyle(&ButtonStyle)
+                        .Text(LOCTEXT("CloseStudioDialog", "Close"))
+                        .OnClicked(
+                            this,
+                            &SMiaIAEditorPanel::HandleCloseDialog)
+                    ]
+                ]
+            ]
+        ]
     ];
 
     BottomSwitcher->SetActiveWidgetIndex(1);
@@ -845,7 +1052,7 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
     RebuildConsoleSuggestions(FString());
     RefreshData();
     RegisterActiveTimer(
-        0.25f,
+        0.1f,
         FWidgetActiveTimerDelegate::CreateSP(
             this,
             &SMiaIAEditorPanel::HandleRefreshTimer));
@@ -853,6 +1060,7 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
 
 void SMiaIAEditorPanel::RefreshData()
 {
+    PeriodicRefreshElapsedSeconds = 0.0;
     NetworkOverview = UMiaIABlueprintLibrary::GetNetworkOverview();
     bCompactTopology =
         MiaIA::Studio::StudioTopologyBuilder::RequiresCompactMode(
@@ -888,19 +1096,45 @@ void SMiaIAEditorPanel::RefreshData()
         SelectedConnectionId = -1;
     }
 
+    for (auto iterator = SelectedNeuronIds.CreateIterator(); iterator; ++iterator)
+    {
+        if (!FindNeuron(*iterator))
+        {
+            iterator.RemoveCurrent();
+        }
+    }
+
     if (SelectedConnectionId >= 0)
     {
         SelectedNeuronId = -1;
+        SelectedNeuronIds.Reset();
     }
-    else if (!FindNeuron(SelectedNeuronId))
+    else
     {
-        SelectedNeuronId = Network.Layers.IsEmpty() ||
-            Network.Layers[0].Neurons.IsEmpty()
-            ? -1
-            : Network.Layers[0].Neurons[0].Id;
+        if (!SelectedNeuronIds.Contains(SelectedNeuronId))
+        {
+            SelectedNeuronId = -1;
+        }
+
+        if (SelectedNeuronIds.Num() == 0 && topologyChanged &&
+            !Network.Layers.IsEmpty() &&
+            !Network.Layers[0].Neurons.IsEmpty())
+        {
+            SelectedNeuronId = Network.Layers[0].Neurons[0].Id;
+            SelectedNeuronIds.Add(SelectedNeuronId);
+        }
+        else if (SelectedNeuronId < 0)
+        {
+            for (const int64 selectedId : SelectedNeuronIds)
+            {
+                SelectedNeuronId = selectedId;
+                break;
+            }
+        }
     }
 
-    bHasDebugNeuron = SelectedNeuronId >= 0 &&
+    bHasDebugNeuron = SelectedNeuronIds.Num() == 1 &&
+        SelectedNeuronId >= 0 &&
         UMiaIABlueprintLibrary::GetDebugNeuron(
             SelectedNeuronId,
             DebugNeuron);
@@ -913,7 +1147,8 @@ void SMiaIAEditorPanel::RefreshData()
 
     for (const FMiaIALayerSnapshot& layer : Network.Layers)
     {
-        if (layer.Neurons.ContainsByPredicate(
+        if (SelectedNeuronIds.Num() == 1 &&
+            layer.Neurons.ContainsByPredicate(
             [this](const FMiaIANeuronSnapshot& neuron)
             {
                 return neuron.Id == SelectedNeuronId;
@@ -932,7 +1167,9 @@ void SMiaIAEditorPanel::RefreshData()
         NetworkView->SetSnapshot(Network);
         NetworkView->SetOverview(NetworkOverview, bCompactTopology);
         NetworkView->SetDebugSnapshot(Debug);
-        NetworkView->SetSelectedNeuron(SelectedNeuronId);
+        NetworkView->SetSelectedNeurons(
+            SelectedNeuronIds,
+            SelectedNeuronId);
         NetworkView->SetSelectedConnection(SelectedConnectionId);
     }
 
@@ -943,7 +1180,9 @@ void SMiaIAEditorPanel::RefreshData()
             NetworkOverview,
             bCompactTopology);
         Network3DView->SetDebugSnapshot(Debug);
-        Network3DView->SetSelectedNeuron(SelectedNeuronId);
+        Network3DView->SetSelectedNeurons(
+            SelectedNeuronIds,
+            SelectedNeuronId);
         Network3DView->SetSelectedConnection(SelectedConnectionId);
     }
 
@@ -1094,6 +1333,35 @@ void SMiaIAEditorPanel::RebuildExplorer()
 void SMiaIAEditorPanel::SelectNeuron(int64 NeuronId)
 {
     SelectedNeuronId = NeuronId;
+    SelectedNeuronIds.Reset();
+
+    if (NeuronId >= 0)
+    {
+        SelectedNeuronIds.Add(NeuronId);
+    }
+
+    SelectedConnectionId = -1;
+    RefreshData();
+}
+
+void SMiaIAEditorPanel::SelectNeurons(
+    const TSet<int64>& NeuronIds,
+    int64 PrimaryNeuronId)
+{
+    SelectedNeuronIds = NeuronIds;
+    SelectedNeuronId = SelectedNeuronIds.Contains(PrimaryNeuronId)
+        ? PrimaryNeuronId
+        : -1;
+
+    if (SelectedNeuronId < 0)
+    {
+        for (const int64 selectedId : SelectedNeuronIds)
+        {
+            SelectedNeuronId = selectedId;
+            break;
+        }
+    }
+
     SelectedConnectionId = -1;
     RefreshData();
 }
@@ -1102,6 +1370,7 @@ void SMiaIAEditorPanel::SelectConnection(int64 ConnectionId)
 {
     SelectedConnectionId = ConnectionId;
     SelectedNeuronId = -1;
+    SelectedNeuronIds.Reset();
     RefreshData();
 }
 
@@ -1136,9 +1405,15 @@ const FMiaIAConnectionSnapshot* SMiaIAEditorPanel::FindConnection(
 
 EActiveTimerReturnType SMiaIAEditorPanel::HandleRefreshTimer(
     double,
-    float)
+    float DeltaTime)
 {
-    RefreshData();
+    PeriodicRefreshElapsedSeconds += DeltaTime;
+
+    if (PeriodicRefreshElapsedSeconds >= DataRefreshInterval())
+    {
+        RefreshData();
+    }
+
     return EActiveTimerReturnType::Continue;
 }
 
@@ -1365,6 +1640,186 @@ FReply SMiaIAEditorPanel::SelectTheme(EMiaIAEditorTheme InTheme)
     FSlateApplication::Get().DismissAllMenus();
     Invalidate(EInvalidateWidgetReason::Paint);
     return FReply::Handled();
+}
+
+TSharedRef<SWidget> SMiaIAEditorPanel::BuildDataRefreshMenu()
+{
+    return SNew(SVerticalBox)
+        + SVerticalBox::Slot()
+        .AutoHeight()
+        [
+            SNew(SButton)
+            .ButtonStyle(&ButtonStyle)
+            .Text(DataRefreshModeDisplayName(
+                EMiaIADataRefreshMode::Adaptive))
+            .ToolTipText(LOCTEXT(
+                "AdaptiveDataRefreshTooltip",
+                "Refresh at 4 Hz while training runs and at 1 Hz while idle or paused."))
+            .OnClicked(
+                this,
+                &SMiaIAEditorPanel::SelectDataRefreshMode,
+                EMiaIADataRefreshMode::Adaptive)
+        ]
+        + SVerticalBox::Slot()
+        .AutoHeight()
+        [
+            SNew(SButton)
+            .ButtonStyle(&ButtonStyle)
+            .Text(DataRefreshModeDisplayName(
+                EMiaIADataRefreshMode::OneHz))
+            .OnClicked(
+                this,
+                &SMiaIAEditorPanel::SelectDataRefreshMode,
+                EMiaIADataRefreshMode::OneHz)
+        ]
+        + SVerticalBox::Slot()
+        .AutoHeight()
+        [
+            SNew(SButton)
+            .ButtonStyle(&ButtonStyle)
+            .Text(DataRefreshModeDisplayName(
+                EMiaIADataRefreshMode::TwoHz))
+            .OnClicked(
+                this,
+                &SMiaIAEditorPanel::SelectDataRefreshMode,
+                EMiaIADataRefreshMode::TwoHz)
+        ]
+        + SVerticalBox::Slot()
+        .AutoHeight()
+        [
+            SNew(SButton)
+            .ButtonStyle(&ButtonStyle)
+            .Text(DataRefreshModeDisplayName(
+                EMiaIADataRefreshMode::FourHz))
+            .OnClicked(
+                this,
+                &SMiaIAEditorPanel::SelectDataRefreshMode,
+                EMiaIADataRefreshMode::FourHz)
+        ]
+        + SVerticalBox::Slot()
+        .AutoHeight()
+        [
+            SNew(SButton)
+            .ButtonStyle(&ButtonStyle)
+            .Text(DataRefreshModeDisplayName(
+                EMiaIADataRefreshMode::TenHz))
+            .ToolTipText(LOCTEXT(
+                "TenHzDataRefreshTooltip",
+                "Use for highly responsive monitoring at a higher CPU cost."))
+            .OnClicked(
+                this,
+                &SMiaIAEditorPanel::SelectDataRefreshMode,
+                EMiaIADataRefreshMode::TenHz)
+        ];
+}
+
+FReply SMiaIAEditorPanel::SelectDataRefreshMode(
+    EMiaIADataRefreshMode InMode)
+{
+    DataRefreshMode = InMode;
+    PeriodicRefreshElapsedSeconds = 0.0;
+    SaveDataRefreshMode(DataRefreshMode);
+    FSlateApplication::Get().DismissAllMenus();
+    return FReply::Handled();
+}
+
+TSharedRef<SWidget> SMiaIAEditorPanel::BuildHelpMenu()
+{
+    return SNew(SVerticalBox)
+        + SVerticalBox::Slot()
+        .AutoHeight()
+        [
+            SNew(SButton)
+            .ButtonStyle(&ButtonStyle)
+            .Text(LOCTEXT("QuickHelpMenuItem", "Quick help"))
+            .OnClicked(this, &SMiaIAEditorPanel::HandleQuickHelp)
+        ]
+        + SVerticalBox::Slot()
+        .AutoHeight()
+        [
+            SNew(SButton)
+            .ButtonStyle(&ButtonStyle)
+            .Text(LOCTEXT(
+                "AboutMiaIAStudioMenuItem",
+                "About MiaIA Studio"))
+            .OnClicked(this, &SMiaIAEditorPanel::HandleAbout)
+        ];
+}
+
+FReply SMiaIAEditorPanel::HandleQuickHelp()
+{
+    ShowDialog(
+        LOCTEXT("QuickHelpTitle", "MiaIA Studio Quick Help"),
+        LOCTEXT(
+            "QuickHelpContent",
+            "GETTING STARTED\n"
+            "Use the Console to create or import a network, then choose 2D or 3D from View.\n\n"
+            "SELECTION AND LAYOUT\n"
+            "Left click: select a neuron or connection.\n"
+            "Ctrl + left click: add or remove a neuron from the selection.\n"
+            "Drag empty space: select neurons with a rectangle.\n"
+            "Ctrl + rectangle: add neurons to the current selection.\n"
+            "Drag a selected neuron: move the complete selected group.\n"
+            "Mouse wheel: zoom. Middle drag: pan. Right drag in 3D: orbit.\n\n"
+            "INSPECTION AND DEBUG\n"
+            "The Inspector follows the current element or group. Use Start debug and Step phase to inspect forward, backward, update, verify, and commit states.\n\n"
+            "Type 'help' in the Console to list every shared CLI command."));
+    return FReply::Handled();
+}
+
+FReply SMiaIAEditorPanel::HandleAbout()
+{
+    FString version = TEXT("0.1.0");
+    FString configuredVersion;
+
+    if (GConfig && GConfig->GetString(
+        TEXT("/Script/EngineSettings.GeneralProjectSettings"),
+        TEXT("ProjectVersion"),
+        configuredVersion,
+        GGameIni) &&
+        !configuredVersion.IsEmpty())
+    {
+        version = MoveTemp(configuredVersion);
+    }
+
+    ShowDialog(
+        LOCTEXT("AboutMiaIAStudioTitle", "About MiaIA Studio"),
+        FText::Format(
+            LOCTEXT(
+                "AboutMiaIAStudioContent",
+                "MiaIA Studio {0}\n\n"
+                "VISUALIZE | EXPERIMENT | INSPECT | DEBUG\n\n"
+                "An interactive development environment for understanding neural networks through visualization, experimentation, and step-by-step debugging.\n\n"
+                "This Unreal frontend uses the shared MiaIA Engine, SDK, and CLI application services.\n\n"
+                "Early development build."),
+            FText::FromString(version)));
+    return FReply::Handled();
+}
+
+FReply SMiaIAEditorPanel::HandleCloseDialog()
+{
+    bDialogVisible = false;
+    Invalidate(EInvalidateWidgetReason::PaintAndVolatility);
+    return FReply::Handled();
+}
+
+void SMiaIAEditorPanel::ShowDialog(
+    const FText& Title,
+    const FText& Content)
+{
+    DialogTitle = Title;
+    DialogContent = Content;
+    bDialogVisible = true;
+    FSlateApplication::Get().DismissAllMenus();
+    FSlateApplication::Get().ClearKeyboardFocus(EFocusCause::Cleared);
+    Invalidate(EInvalidateWidgetReason::PaintAndVolatility);
+}
+
+EVisibility SMiaIAEditorPanel::DialogVisibility() const
+{
+    return bDialogVisible
+        ? EVisibility::Visible
+        : EVisibility::Collapsed;
 }
 
 void SMiaIAEditorPanel::RefreshWidgetStyles()
@@ -1720,6 +2175,15 @@ FText SMiaIAEditorPanel::SelectionTitle() const
             FText::AsNumber(SelectedConnectionId));
     }
 
+    if (SelectedNeuronIds.Num() > 1)
+    {
+        return FText::Format(
+            LOCTEXT(
+                "SelectedNeuronGroup",
+                "{0} neurons selected"),
+            FText::AsNumber(SelectedNeuronIds.Num()));
+    }
+
     return SelectedNeuronId < 0
         ? LOCTEXT("NoSelection", "No item selected")
         : FText::Format(
@@ -1738,6 +2202,27 @@ FText SMiaIAEditorPanel::SelectionContextText() const
             FText::AsNumber(connection->ToNeuron));
     }
 
+    if (SelectedNeuronIds.Num() > 1)
+    {
+        int32 selectedLayerCount = 0;
+
+        for (const FMiaIALayerSnapshot& layer : Network.Layers)
+        {
+            if (layer.Neurons.ContainsByPredicate(
+                [this](const FMiaIANeuronSnapshot& neuron)
+                {
+                    return SelectedNeuronIds.Contains(neuron.Id);
+                }))
+            {
+                ++selectedLayerCount;
+            }
+        }
+
+        return FText::Format(
+            LOCTEXT("SelectedLayerCount", "Layers: {0}"),
+            FText::AsNumber(selectedLayerCount));
+    }
+
     return FText::Format(
         LOCTEXT("SelectedLayer", "Layer: {0}"),
         FText::FromString(SelectedLayerName));
@@ -1754,6 +2239,28 @@ FText SMiaIAEditorPanel::SelectionPrimaryText() const
         return FText::Format(
             LOCTEXT("SelectedPublicWeight", "Public weight: {0}"),
             FText::AsNumber(weight));
+    }
+
+    if (SelectedNeuronIds.Num() > 1)
+    {
+        double activationTotal = 0.0;
+        int32 neuronCount = 0;
+
+        for (const int64 neuronId : SelectedNeuronIds)
+        {
+            if (const FMiaIANeuronSnapshot* neuron = FindNeuron(neuronId))
+            {
+                activationTotal += neuron->Activation;
+                ++neuronCount;
+            }
+        }
+
+        return FText::Format(
+            LOCTEXT(
+                "SelectedAverageActivation",
+                "Average activation: {0}"),
+            FText::AsNumber(
+                neuronCount > 0 ? activationTotal / neuronCount : 0.0));
     }
 
     const FMiaIANeuronSnapshot* neuron = FindNeuron(SelectedNeuronId);
@@ -1780,6 +2287,26 @@ FText SMiaIAEditorPanel::SelectionSecondaryText() const
                 "Candidate weight: unavailable");
     }
 
+    if (SelectedNeuronIds.Num() > 1)
+    {
+        double biasTotal = 0.0;
+        int32 neuronCount = 0;
+
+        for (const int64 neuronId : SelectedNeuronIds)
+        {
+            if (const FMiaIANeuronSnapshot* neuron = FindNeuron(neuronId))
+            {
+                biasTotal += neuron->Bias;
+                ++neuronCount;
+            }
+        }
+
+        return FText::Format(
+            LOCTEXT("SelectedAverageBias", "Average bias: {0}"),
+            FText::AsNumber(
+                neuronCount > 0 ? biasTotal / neuronCount : 0.0));
+    }
+
     const FMiaIANeuronSnapshot* neuron = FindNeuron(SelectedNeuronId);
     const double bias = bHasDebugNeuron
         ? DebugNeuron.CandidateBias
@@ -1791,6 +2318,13 @@ FText SMiaIAEditorPanel::SelectionSecondaryText() const
 
 FText SMiaIAEditorPanel::SelectionGradientText() const
 {
+    if (SelectedNeuronIds.Num() > 1)
+    {
+        return LOCTEXT(
+            "GroupGradientHint",
+            "Select one neuron to inspect its gradients.");
+    }
+
     if (SelectedConnectionId >= 0)
     {
         return bHasDebugConnection && DebugConnection.bHasGradient
@@ -1811,6 +2345,13 @@ FText SMiaIAEditorPanel::SelectionGradientText() const
 
 FText SMiaIAEditorPanel::SelectionUpdateText() const
 {
+    if (SelectedNeuronIds.Num() > 1)
+    {
+        return LOCTEXT(
+            "GroupDragHint",
+            "Drag any selected neuron to move the group.");
+    }
+
     if (SelectedConnectionId >= 0)
     {
         return bHasDebugConnection && DebugConnection.bHasUpdate
@@ -1868,6 +2409,31 @@ FText SMiaIAEditorPanel::ViewModeText() const
 FText SMiaIAEditorPanel::ThemeText() const
 {
     return FMiaIAEditorTheme::DisplayName(Theme);
+}
+
+FText SMiaIAEditorPanel::DataRefreshText() const
+{
+    return DataRefreshModeDisplayName(DataRefreshMode);
+}
+
+double SMiaIAEditorPanel::DataRefreshInterval() const
+{
+    switch (DataRefreshMode)
+    {
+    case EMiaIADataRefreshMode::OneHz:
+        return 1.0;
+    case EMiaIADataRefreshMode::TwoHz:
+        return 0.5;
+    case EMiaIADataRefreshMode::FourHz:
+        return 0.25;
+    case EMiaIADataRefreshMode::TenHz:
+        return 0.1;
+    case EMiaIADataRefreshMode::Adaptive:
+    default:
+        return Session.Status == EMiaIATrainingSessionStatus::Running
+            ? 0.25
+            : 1.0;
+    }
 }
 
 FText SMiaIAEditorPanel::TopologyWorkspaceText() const

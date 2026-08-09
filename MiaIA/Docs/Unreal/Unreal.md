@@ -104,6 +104,7 @@ The animation is slowed down for documentation. The demonstration itself advance
 - **Console** is the first and initially selected lower tab. It uses a narrow command-suggestion column on the left and a larger output/input workspace on the right. It accepts the same commands as `Console.exe` and operates on the same process-local state displayed by the panel and used by Blueprint nodes.
 - **Training timeline** follows the Console and summarizes the forward, backward, update, verification, and commit sequence.
 - **Breakpoints** reserves the location of the future breakpoint authoring interface.
+- **Help** opens the built-in interaction reference or the versioned About dialog in both hosts.
 
 MiaIA Studio requests a lightweight network overview before requesting the complete topology. Networks with at most 2,000 neurons and 5,000 connections use detailed mode. Larger networks automatically use compact mode: the topology draws one aggregate node per layer, the explorer lists layer counts instead of every element, and the panel avoids repeatedly copying or painting the complete connection set. The compact header always reports the exact layer, neuron, and connection totals.
 
@@ -114,6 +115,12 @@ Compact mode is a visualization guardrail rather than an Engine limit. The nativ
 Use the `Theme` selector in the panel toolbar to choose `Follow Unreal`, `Dark`, or `Light`. `Follow Unreal` is the default and derives its semantic colors from the active Unreal Slate style. The explicit dark and light palettes remain stable independently of the surrounding editor theme.
 
 The selection is stored in the local Unreal game-user settings configuration and restored by both hosts. It is a per-user preference and does not modify tracked project configuration. The selected palette consistently controls panel surfaces, splitters, buttons, menus, inputs, scrollbars, text, neuron activation, positive and negative weights, selection, and debug-phase emphasis.
+
+### Data refresh and application help
+
+`Data refresh` controls automatic model polling without changing rendering frame rate. `Adaptive` is the recommended default: it polls at 4 Hz while training is running and at 1 Hz while the session is idle or paused. Fixed 1, 2, 4, and 10 Hz choices support slower inspection or more responsive monitoring. The preference is stored in local game-user settings and restored at the next launch. Console commands, toolbar operations, and phase-debug steps bypass the periodic delay and update the interface immediately.
+
+The `Help` menu contains `Quick help` and `About MiaIA Studio`. Quick help summarizes Console startup, 2D and 3D navigation, multiple selection, layout editing, Inspector use, and phase debugging. About reads `ProjectVersion` from Unreal project configuration and identifies this application as the Unreal frontend over the shared MiaIA Engine, SDK, and CLI services. Both open as themed, scrollable overlays inside the Studio panel, ensuring identical behavior in Unreal Editor and the packaged application without an external platform dialog.
 
 ### Topology view mode
 
@@ -144,7 +151,10 @@ The 2D topology view supports navigation and layout editing:
 
 - use the mouse wheel to zoom around the pointer;
 - drag with the middle mouse button to pan the view;
-- drag a neuron with the left mouse button to assign a manual position;
+- click a neuron or connection with the left mouse button to select it;
+- use `Ctrl + left click` to add or remove neurons from the selection;
+- drag on empty space to select every enclosed neuron, or hold `Ctrl` to add the rectangle to the current selection;
+- drag any selected neuron to move the complete selected group while preserving its relative layout;
 - select `Fit view` to recover the complete topology after zooming, panning, or moving neurons;
 - select `Reset layout` to remove every manual position and restore the original automatic arrangement.
 
@@ -156,11 +166,12 @@ The 3D topology view uses these controls:
 - drag with the middle mouse button to pan the camera target;
 - use the mouse wheel to move closer to or farther from the network across the extended near-to-far camera range;
 - click a neuron marker or connection with the left mouse button to select it and update the shared Inspector;
-- drag a neuron marker with the left mouse button to assign a manual position on the camera-facing plane at its current depth;
+- use `Ctrl + left click` or an optional `Ctrl` selection rectangle to build a multiple-neuron selection;
+- drag any selected neuron marker to move the complete selected group on the camera-facing plane while preserving relative positions;
 - select `Fit view` to restore the complete front-facing camera framing without discarding manual positions;
 - select `Reset layout` to discard manual positions and restore the automatic arrangement and default framing.
 
-The 3D renderer uses solid shaded sphere geometry in a real Unreal scene. It starts with the same front-facing topology reading as 2D; orbiting reveals the pre-existing depth. Detailed views project neuron identifiers back into the Slate overlay, preserving the readable `#id` labels from 2D, and show selection as an antialiased yellow circular outline without replacing the sphere's activation or debug color. The outline is derived from sampled projection bounds around the real sphere and retains a minimum screen-space radius, so it stays aligned at extreme close zoom and recognizable after zooming far away. Labels are omitted above 500 visible neurons to keep larger scenes legible. Dragging changes only the visualization layout held by the open Studio panel: it does not alter topology, weights, activation values, or Engine mathematics.
+The 3D renderer uses solid shaded sphere geometry in a real Unreal scene. It starts with the same front-facing, coplanar topology reading as 2D; orbiting exposes perspective, while camera-relative manual dragging can introduce depth. Detailed views project neuron identifiers back into the Slate overlay, preserving the readable `#id` labels from 2D, and show every selected neuron with an antialiased yellow circular outline without replacing the sphere's activation or debug color. The outline is derived from sampled projection bounds around the real sphere and retains a minimum screen-space radius, so it stays aligned at extreme close zoom and recognizable after zooming far away. Labels are omitted above 500 visible neurons to keep larger scenes legible. Multiple selection and the primary Inspector item persist when switching between 2D and 3D. Dragging changes only the visualization layout held by the open Studio panel: it does not alter topology, weights, activation values, or Engine mathematics.
 
 In compact mode, 2D zoom and pan and 3D camera navigation remain available. `Fit view` and `Reset layout` restore the aggregate layer graph. Individual layer nodes are summaries rather than real neurons and are not draggable in this increment; aggregate-layout editing will be reconsidered with the future layout design.
 
@@ -288,10 +299,11 @@ The script prints the precise path to `MiaIAStudio.exe`. Run that executable wit
 
 1. the application starts directly as MiaIA Studio;
 2. it opens in a resizable 1600 x 900 window rather than fullscreen;
-3. the model explorer, topology, inspector, theme selector, Console, and standalone `Exit` action are visible;
+3. the model explorer, topology, inspector, theme selector, data-refresh selector, Help menu, Console, and standalone `Exit` action are visible;
 4. `create 2 2 1 1` updates the complete interface;
 5. `predict 1 1` returns an output;
-6. the `Exit` button, title-bar close action, or `Alt+F4` terminates it without leaving an Unreal process running.
+6. `Quick help` and `About MiaIA Studio` open and close correctly;
+7. the `Exit` button, title-bar close action, or `Alt+F4` terminates it without leaving an Unreal process running.
 
 Keep the whole archived directory when copying the application to another machine. `MiaIAStudio.exe` depends on the staged Unreal runtime, cooked content, and container files beside it. Numeric CSV datasets are user data and are intentionally not embedded in this first package; pass an absolute path to `dataset import csv` or copy the dataset into a user-selected external folder.
 

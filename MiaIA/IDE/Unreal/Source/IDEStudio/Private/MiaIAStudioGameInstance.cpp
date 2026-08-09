@@ -4,6 +4,7 @@
 #include "Engine/GameViewportClient.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/GameUserSettings.h"
+#include "Kismet/GameplayStatics.h"
 #include "Widgets/SMiaIAEditorPanel.h"
 
 void UMiaIAStudioGameInstance::OnStart()
@@ -15,15 +16,22 @@ void UMiaIAStudioGameInstance::OnStart()
         return;
     }
 
-    if (UGameUserSettings* settings = GEngine->GetGameUserSettings();
-        settings && settings->GetFullscreenMode() != EWindowMode::Windowed)
+    if (UGameUserSettings* settings = GEngine->GetGameUserSettings())
     {
-        settings->SetFullscreenMode(EWindowMode::Windowed);
-        settings->SetScreenResolution(FIntPoint(1600, 900));
-        settings->ApplyResolutionSettings(false);
+        if (settings->GetFullscreenMode() != EWindowMode::Windowed)
+        {
+            settings->SetFullscreenMode(EWindowMode::Windowed);
+            settings->SetScreenResolution(FIntPoint(1600, 900));
+        }
+
+        settings->SetVSyncEnabled(true);
+        settings->SetFrameRateLimit(60.0f);
+        settings->ApplySettings(false);
         settings->ConfirmVideoMode();
         settings->SaveSettings();
     }
+
+    UGameplayStatics::SetEnableWorldRendering(this, false);
 
     StudioWidget = SNew(SMiaIAEditorPanel)
         .StandaloneMode(true);
@@ -42,6 +50,8 @@ void UMiaIAStudioGameInstance::OnStart()
 
 void UMiaIAStudioGameInstance::Shutdown()
 {
+    UGameplayStatics::SetEnableWorldRendering(this, true);
+
     if (StudioWidget.IsValid() && GEngine && GEngine->GameViewport)
     {
         GEngine->GameViewport->RemoveViewportWidgetContent(

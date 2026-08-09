@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Containers/Set.h"
 #include "MiaIABlueprintTypes.h"
 #include "Styling/MiaIAEditorTheme.h"
 #include "Widgets/SCompoundWidget.h"
@@ -18,6 +19,15 @@ enum class EMiaIAStudioViewMode : uint8
     ThreeDimensional
 };
 
+enum class EMiaIADataRefreshMode : uint8
+{
+    Adaptive,
+    OneHz,
+    TwoHz,
+    FourHz,
+    TenHz
+};
+
 class IDESTUDIO_API SMiaIAEditorPanel final : public SCompoundWidget
 {
 public:
@@ -34,6 +44,9 @@ private:
     void RefreshData();
     void RebuildExplorer();
     void SelectNeuron(int64 NeuronId);
+    void SelectNeurons(
+        const TSet<int64>& NeuronIds,
+        int64 PrimaryNeuronId);
     void SelectConnection(int64 ConnectionId);
     const FMiaIANeuronSnapshot* FindNeuron(int64 NeuronId) const;
     const FMiaIAConnectionSnapshot* FindConnection(
@@ -60,6 +73,14 @@ private:
     FReply SelectViewMode(EMiaIAStudioViewMode InViewMode);
     TSharedRef<SWidget> BuildThemeMenu();
     FReply SelectTheme(EMiaIAEditorTheme InTheme);
+    TSharedRef<SWidget> BuildDataRefreshMenu();
+    FReply SelectDataRefreshMode(EMiaIADataRefreshMode InMode);
+    TSharedRef<SWidget> BuildHelpMenu();
+    FReply HandleQuickHelp();
+    FReply HandleAbout();
+    FReply HandleCloseDialog();
+    void ShowDialog(const FText& Title, const FText& Content);
+    EVisibility DialogVisibility() const;
     void RefreshWidgetStyles();
     void HandleConsoleCommandCommitted(
         const FText& Text,
@@ -98,7 +119,9 @@ private:
     FSlateColor TextColor() const;
     FText ViewModeText() const;
     FText ThemeText() const;
+    FText DataRefreshText() const;
     FText TopologyWorkspaceText() const;
+    double DataRefreshInterval() const;
 
     FMiaIANetworkSnapshot Network;
     FMiaIANetworkOverview NetworkOverview;
@@ -108,16 +131,21 @@ private:
     FMiaIATrainingDebugConnection DebugConnection;
     int64 SelectedNeuronId{-1};
     int64 SelectedConnectionId{-1};
+    TSet<int64> SelectedNeuronIds;
     FString SelectedLayerName;
     FString TopologyKey;
     FString ConsoleHistory;
     TArray<FString> ConsoleCommandHistory;
     FString ConsoleHistoryDraft;
     FString FirstConsoleSuggestion;
+    FText DialogTitle;
+    FText DialogContent;
     int32 ConsoleHistoryIndex{};
     EMiaIAStudioViewMode ViewMode{
         EMiaIAStudioViewMode::TwoDimensional};
     EMiaIAEditorTheme Theme{EMiaIAEditorTheme::FollowUnreal};
+    EMiaIADataRefreshMode DataRefreshMode{
+        EMiaIADataRefreshMode::Adaptive};
     FButtonStyle ButtonStyle;
     FButtonStyle ExplorerButtonStyle;
     FComboButtonStyle ComboButtonStyle;
@@ -130,6 +158,8 @@ private:
     bool bCompactTopology{};
     bool bStandaloneMode{};
     bool bTopologyWorkspaceExpanded{};
+    bool bDialogVisible{};
+    double PeriodicRefreshElapsedSeconds{};
 
     TSharedPtr<SVerticalBox> ExplorerContent;
     TSharedPtr<SVerticalBox> ConsoleSuggestionsContent;

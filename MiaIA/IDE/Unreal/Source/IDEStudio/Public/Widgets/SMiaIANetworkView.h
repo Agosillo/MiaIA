@@ -1,11 +1,15 @@
 #pragma once
 
 #include "Brushes/SlateRoundedBoxBrush.h"
+#include "Containers/Set.h"
 #include "MiaIABlueprintTypes.h"
 #include "Styling/MiaIAEditorTheme.h"
 #include "Widgets/SLeafWidget.h"
 
-DECLARE_DELEGATE_OneParam(FOnMiaIANeuronSelected, int64)
+DECLARE_DELEGATE_TwoParams(
+    FOnMiaIANeuronSelectionChanged,
+    const TSet<int64>&,
+    int64)
 DECLARE_DELEGATE_OneParam(FOnMiaIAConnectionSelected, int64)
 
 class IDESTUDIO_API SMiaIANetworkView final : public SLeafWidget
@@ -14,7 +18,9 @@ public:
     SLATE_BEGIN_ARGS(SMiaIANetworkView)
     {
     }
-        SLATE_EVENT(FOnMiaIANeuronSelected, OnNeuronSelected)
+        SLATE_EVENT(
+            FOnMiaIANeuronSelectionChanged,
+            OnNeuronSelectionChanged)
         SLATE_EVENT(FOnMiaIAConnectionSelected, OnConnectionSelected)
     SLATE_END_ARGS()
 
@@ -26,7 +32,9 @@ public:
         const FMiaIANetworkOverview& InOverview,
         bool bInCompactMode);
     void SetDebugSnapshot(const FMiaIATrainingDebugSnapshot& InDebug);
-    void SetSelectedNeuron(int64 InNeuronId);
+    void SetSelectedNeurons(
+        const TSet<int64>& InNeuronIds,
+        int64 InPrimaryNeuronId);
     void SetSelectedConnection(int64 InConnectionId);
     void SetTheme(EMiaIAEditorTheme InTheme);
     void FitView();
@@ -84,6 +92,8 @@ private:
         const FVector2D& Point,
         const FVector2D& Start,
         const FVector2D& End);
+    void CompleteMarqueeSelection();
+    void NotifyNeuronSelectionChanged();
 
     FMiaIANetworkSnapshot Snapshot;
     FMiaIANetworkOverview Overview;
@@ -95,17 +105,24 @@ private:
     int64 SelectedNeuronId{-1};
     int64 SelectedConnectionId{-1};
     int64 DraggedNeuronId{-1};
+    TSet<int64> SelectedNeuronIds;
     EMiaIAEditorTheme Theme{EMiaIAEditorTheme::FollowUnreal};
     FString LayoutKey;
     TMap<int64, FVector2D> ManualNeuronPositions;
     FVector2D ViewOffset{FVector2D::ZeroVector};
     FVector2D LastPointerPosition{FVector2D::ZeroVector};
+    FVector2D DragStartNormalizedPointer{FVector2D::ZeroVector};
+    FVector2D MarqueeStart{FVector2D::ZeroVector};
+    FVector2D MarqueeEnd{FVector2D::ZeroVector};
     mutable FVector2D ViewportSize{FVector2D::ZeroVector};
+    TMap<int64, FVector2D> DragStartPositions;
     float Zoom{1.0f};
     bool bCompactMode{};
     bool bPanning{};
+    bool bMarqueeSelecting{};
+    bool bMarqueeAdditive{};
     mutable TMap<int64, FVector2D> NeuronPositions;
-    FOnMiaIANeuronSelected OnNeuronSelected;
+    FOnMiaIANeuronSelectionChanged OnNeuronSelectionChanged;
     FOnMiaIAConnectionSelected OnConnectionSelected;
     FSlateRoundedBoxBrush NeuronBrush;
     FSlateRoundedBoxBrush SelectionBrush;

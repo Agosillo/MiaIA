@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Containers/Set.h"
 #include "MiaIABlueprintTypes.h"
 #include "Styling/MiaIAEditorTheme.h"
 #include "Widgets/SMiaIANetworkView.h"
@@ -15,7 +16,9 @@ public:
     SLATE_BEGIN_ARGS(SMiaIA3DNetworkView)
     {
     }
-        SLATE_EVENT(FOnMiaIANeuronSelected, OnNeuronSelected)
+        SLATE_EVENT(
+            FOnMiaIANeuronSelectionChanged,
+            OnNeuronSelectionChanged)
         SLATE_EVENT(FOnMiaIAConnectionSelected, OnConnectionSelected)
     SLATE_END_ARGS()
 
@@ -27,7 +30,9 @@ public:
         const FMiaIANetworkOverview& InOverview,
         bool bInCompactMode);
     void SetDebugSnapshot(const FMiaIATrainingDebugSnapshot& InDebug);
-    void SetSelectedNeuron(int64 InNeuronId);
+    void SetSelectedNeurons(
+        const TSet<int64>& InNeuronIds,
+        int64 InPrimaryNeuronId);
     void SetSelectedConnection(int64 InConnectionId);
     void SetTheme(EMiaIAEditorTheme InTheme);
     void FitView();
@@ -92,11 +97,14 @@ private:
         FVector& OutDirection) const;
     const FNodeRenderData* FindNodeAt(
         const FVector2D& ViewportPosition) const;
+    const FConnectionRenderData* FindConnectionAt(
+        const FVector2D& ViewportPosition) const;
     bool BeginNodeDrag(
         const FVector2D& ViewportPosition,
         const FNodeRenderData& Node);
     void UpdateNodeDrag(const FVector2D& ViewportPosition);
-    void SelectAt(const FVector2D& ViewportPosition);
+    void CompleteMarqueeSelection(const FGeometry& Geometry);
+    void NotifyNeuronSelectionChanged();
     FLinearColor ActivationColor(double Activation) const;
     FLinearColor SignedNeuronColor(double Value, double Maximum) const;
     FLinearColor SignedConnectionColor(
@@ -121,14 +129,18 @@ private:
     TUniquePtr<FPreviewScene> PreviewScene;
     TSharedPtr<FMiaIAViewportClient> ViewportClient;
     TSharedPtr<FSceneViewport> SceneViewport;
-    FOnMiaIANeuronSelected OnNeuronSelected;
+    FOnMiaIANeuronSelectionChanged OnNeuronSelectionChanged;
     FOnMiaIAConnectionSelected OnConnectionSelected;
     EMiaIAEditorTheme Theme{EMiaIAEditorTheme::FollowUnreal};
     FVector LookAt{FVector::ZeroVector};
     FVector DragPlaneOrigin{FVector::ZeroVector};
     FVector DragPlaneNormal{FVector::ForwardVector};
-    FVector DragOffset{FVector::ZeroVector};
+    FVector DragStartIntersection{FVector::ZeroVector};
     FVector2D LastPointerPosition{FVector2D::ZeroVector};
+    FVector2D MarqueeStart{FVector2D::ZeroVector};
+    FVector2D MarqueeEnd{FVector2D::ZeroVector};
+    TMap<int64, FVector> DragStartPositions;
+    TSet<int64> SelectedNeuronIds;
     double MaximumNeuronMetric{1.0};
     double MaximumConnectionMetric{1.0};
     float CameraYaw{-90.0f};
@@ -142,4 +154,6 @@ private:
     bool bOrbiting{};
     bool bPanning{};
     bool bDraggingNode{};
+    bool bMarqueeSelecting{};
+    bool bMarqueeAdditive{};
 };

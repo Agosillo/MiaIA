@@ -26,7 +26,7 @@ SMiaIANetworkView::SMiaIANetworkView()
 
 void SMiaIANetworkView::Construct(const FArguments& InArgs)
 {
-    OnNeuronSelected = InArgs._OnNeuronSelected;
+    OnNeuronSelectionChanged = InArgs._OnNeuronSelectionChanged;
     OnConnectionSelected = InArgs._OnConnectionSelected;
     SetClipping(EWidgetClipping::ClipToBoundsAlways);
     SetCanTick(false);
@@ -97,15 +97,33 @@ void SMiaIANetworkView::SetDebugSnapshot(
     Invalidate(EInvalidateWidgetReason::Paint);
 }
 
-void SMiaIANetworkView::SetSelectedNeuron(int64 InNeuronId)
+void SMiaIANetworkView::SetSelectedNeurons(
+    const TSet<int64>& InNeuronIds,
+    int64 InPrimaryNeuronId)
 {
-    SelectedNeuronId = InNeuronId;
+    SelectedNeuronIds = InNeuronIds;
+    SelectedNeuronId = SelectedNeuronIds.Contains(InPrimaryNeuronId)
+        ? InPrimaryNeuronId
+        : -1;
+
+    if (SelectedNeuronIds.Num() > 0)
+    {
+        SelectedConnectionId = -1;
+    }
+
     Invalidate(EInvalidateWidgetReason::Paint);
 }
 
 void SMiaIANetworkView::SetSelectedConnection(int64 InConnectionId)
 {
     SelectedConnectionId = InConnectionId;
+
+    if (SelectedConnectionId >= 0)
+    {
+        SelectedNeuronIds.Reset();
+        SelectedNeuronId = -1;
+    }
+
     Invalidate(EInvalidateWidgetReason::Paint);
 }
 
@@ -649,7 +667,7 @@ int32 SMiaIANetworkView::OnPaint(
                 continue;
             }
 
-            if (neuron.Id == SelectedNeuronId)
+            if (SelectedNeuronIds.Contains(neuron.Id))
             {
                 FSlateDrawElement::MakeBox(
                     OutDrawElements,
@@ -709,7 +727,47 @@ int32 SMiaIANetworkView::OnPaint(
         }
     }
 
-    return nodeLayer + 2;
+    int32 finalLayer = nodeLayer + 2;
+
+    if (bMarqueeSelecting)
+    {
+        const FVector2D minimum(
+            FMath::Min(MarqueeStart.X, MarqueeEnd.X),
+            FMath::Min(MarqueeStart.Y, MarqueeEnd.Y));
+        const FVector2D maximum(
+            FMath::Max(MarqueeStart.X, MarqueeEnd.X),
+            FMath::Max(MarqueeStart.Y, MarqueeEnd.Y));
+        const FVector2D marqueeSize = maximum - minimum;
+        const int32 marqueeLayer = finalLayer + 1;
+        FSlateDrawElement::MakeBox(
+            OutDrawElements,
+            marqueeLayer,
+            AllottedGeometry.ToPaintGeometry(
+                marqueeSize,
+                FSlateLayoutTransform(minimum)),
+            FAppStyle::GetBrush(TEXT("WhiteBrush")),
+            ESlateDrawEffect::None,
+            palette.Selection.CopyWithNewOpacity(0.10f));
+        const TArray<FVector2D> borderPoints{
+            minimum,
+            FVector2D(maximum.X, minimum.Y),
+            maximum,
+            FVector2D(minimum.X, maximum.Y),
+            minimum
+        };
+        FSlateDrawElement::MakeLines(
+            OutDrawElements,
+            marqueeLayer + 1,
+            AllottedGeometry.ToPaintGeometry(),
+            borderPoints,
+            ESlateDrawEffect::None,
+            palette.Selection,
+            true,
+            1.5f);
+        finalLayer = marqueeLayer + 1;
+    }
+
+    return finalLayer;
 }
 
 FReply SMiaIANetworkView::OnMouseButtonDown(
@@ -732,17 +790,81 @@ FReply SMiaIANetworkView::OnMouseButtonDown(
         return FReply::Unhandled();
     }
 
+    if (bCompactMode)
+    {
+        return FReply::Handled();
+    }
+
     for (const TPair<int64, FVector2D>& entry : NeuronPositions)
     {
         if (FVector2D::Distance(localPosition, entry.Value) <=
             SelectionDiameter * 0.5f)
         {
-            SelectedNeuronId = entry.Key;
+            const bool additive = MouseEvent.IsControlDown();
+
+            if (additive)
+            {
+                if (SelectedNeuronIds.Contains(entry.Key))
+                {
+                    SelectedNeuronIds.Remove(entry.Key);
+
+                    if (SelectedNeuronId == entry.Key)
+                    {
+                        SelectedNeuronId = -1;
+
+                        for (const int64 selectedId : SelectedNeuronIds)
+                        {
+                            SelectedNeuronId = selectedId;
+                            break;
+                        }
+                    }
+                }
+                else
+                {
+                    SelectedNeuronIds.Add(entry.Key);
+                    SelectedNeuronId = entry.Key;
+                }
+            }
+            else
+            {
+                if (!SelectedNeuronIds.Contains(entry.Key))
+                {
+                    SelectedNeuronIds.Reset();
+                    SelectedNeuronIds.Add(entry.Key);
+                }
+
+                SelectedNeuronId = entry.Key;
+            }
+
             SelectedConnectionId = -1;
+            NotifyNeuronSelectionChanged();
+            Invalidate(EInvalidateWidgetReason::Paint);
+
+            if (additive || !SelectedNeuronIds.Contains(entry.Key))
+            {
+                return FReply::Handled();
+            }
+
             DraggedNeuronId = entry.Key;
             LastPointerPosition = localPosition;
-            OnNeuronSelected.ExecuteIfBound(entry.Key);
-            Invalidate(EInvalidateWidgetReason::Paint);
+            DragStartNormalizedPointer = LocalToNormalized(
+                localPosition,
+                MyGeometry.GetLocalSize());
+            DragStartPositions.Reset();
+
+            for (const int64 selectedId : SelectedNeuronIds)
+            {
+                if (const FVector2D* selectedPosition =
+                    NeuronPositions.Find(selectedId))
+                {
+                    DragStartPositions.Add(
+                        selectedId,
+                        LocalToNormalized(
+                            *selectedPosition,
+                            MyGeometry.GetLocalSize()));
+                }
+            }
+
             return FReply::Handled().CaptureMouse(SharedThis(this));
         }
     }
@@ -777,6 +899,7 @@ FReply SMiaIANetworkView::OnMouseButtonDown(
 
     if (closestConnection)
     {
+        SelectedNeuronIds.Reset();
         SelectedNeuronId = -1;
         SelectedConnectionId = closestConnection->Id;
         OnConnectionSelected.ExecuteIfBound(closestConnection->Id);
@@ -784,7 +907,13 @@ FReply SMiaIANetworkView::OnMouseButtonDown(
         return FReply::Handled();
     }
 
-    return FReply::Unhandled();
+    SelectedConnectionId = -1;
+    bMarqueeSelecting = true;
+    bMarqueeAdditive = MouseEvent.IsControlDown();
+    MarqueeStart = localPosition;
+    MarqueeEnd = localPosition;
+    Invalidate(EInvalidateWidgetReason::Paint);
+    return FReply::Handled().CaptureMouse(SharedThis(this));
 }
 
 FReply SMiaIANetworkView::OnMouseButtonUp(
@@ -796,14 +925,23 @@ FReply SMiaIANetworkView::OnMouseButtonUp(
         button == EKeys::LeftMouseButton && DraggedNeuronId >= 0;
     const bool completesPan =
         button == EKeys::MiddleMouseButton && bPanning;
+    const bool completesMarquee =
+        button == EKeys::LeftMouseButton && bMarqueeSelecting;
 
-    if (!completesNeuronDrag && !completesPan)
+    if (!completesNeuronDrag && !completesPan && !completesMarquee)
     {
         return FReply::Unhandled();
     }
 
+    if (completesMarquee)
+    {
+        CompleteMarqueeSelection();
+    }
+
     DraggedNeuronId = -1;
+    DragStartPositions.Reset();
     bPanning = false;
+    bMarqueeSelecting = false;
     return FReply::Handled().ReleaseMouseCapture();
 }
 
@@ -819,11 +957,28 @@ FReply SMiaIANetworkView::OnMouseMove(
     const FVector2D localPosition = MyGeometry.AbsoluteToLocal(
         MouseEvent.GetScreenSpacePosition());
 
+    if (bMarqueeSelecting)
+    {
+        MarqueeEnd = localPosition;
+        Invalidate(EInvalidateWidgetReason::Paint);
+        return FReply::Handled();
+    }
+
     if (DraggedNeuronId >= 0)
     {
-        ManualNeuronPositions.Add(
-            DraggedNeuronId,
-            LocalToNormalized(localPosition, MyGeometry.GetLocalSize()));
+        const FVector2D currentNormalized = LocalToNormalized(
+            localPosition,
+            MyGeometry.GetLocalSize());
+        const FVector2D translation =
+            currentNormalized - DragStartNormalizedPointer;
+
+        for (const TPair<int64, FVector2D>& entry : DragStartPositions)
+        {
+            ManualNeuronPositions.Add(
+                entry.Key,
+                entry.Value + translation);
+        }
+
         LastPointerPosition = localPosition;
         Invalidate(EInvalidateWidgetReason::Paint);
         return FReply::Handled();
@@ -870,6 +1025,51 @@ void SMiaIANetworkView::OnMouseCaptureLost(
     const FCaptureLostEvent& CaptureLostEvent)
 {
     DraggedNeuronId = -1;
+    DragStartPositions.Reset();
     bPanning = false;
+    bMarqueeSelecting = false;
+    Invalidate(EInvalidateWidgetReason::Paint);
     SLeafWidget::OnMouseCaptureLost(CaptureLostEvent);
+}
+
+void SMiaIANetworkView::CompleteMarqueeSelection()
+{
+    const FVector2D minimum(
+        FMath::Min(MarqueeStart.X, MarqueeEnd.X),
+        FMath::Min(MarqueeStart.Y, MarqueeEnd.Y));
+    const FVector2D maximum(
+        FMath::Max(MarqueeStart.X, MarqueeEnd.X),
+        FMath::Max(MarqueeStart.Y, MarqueeEnd.Y));
+    TSet<int64> selection = bMarqueeAdditive
+        ? SelectedNeuronIds
+        : TSet<int64>{};
+    int64 primaryNeuronId = bMarqueeAdditive
+        ? SelectedNeuronId
+        : -1;
+
+    for (const TPair<int64, FVector2D>& entry : NeuronPositions)
+    {
+        if (entry.Value.X >= minimum.X &&
+            entry.Value.X <= maximum.X &&
+            entry.Value.Y >= minimum.Y &&
+            entry.Value.Y <= maximum.Y)
+        {
+            selection.Add(entry.Key);
+            primaryNeuronId = entry.Key;
+        }
+    }
+
+    SelectedNeuronIds = MoveTemp(selection);
+    SelectedNeuronId = SelectedNeuronIds.Contains(primaryNeuronId)
+        ? primaryNeuronId
+        : -1;
+    NotifyNeuronSelectionChanged();
+    Invalidate(EInvalidateWidgetReason::Paint);
+}
+
+void SMiaIANetworkView::NotifyNeuronSelectionChanged()
+{
+    OnNeuronSelectionChanged.ExecuteIfBound(
+        SelectedNeuronIds,
+        SelectedNeuronId);
 }
