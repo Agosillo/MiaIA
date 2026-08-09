@@ -13,6 +13,8 @@
 #include "SceneView.h"
 #include "Slate/SceneViewport.h"
 #include "Styling/AppStyle.h"
+#include "UObject/StrongObjectPtr.h"
+#include "UObject/UObjectGlobals.h"
 
 namespace
 {
@@ -103,9 +105,10 @@ public:
         const FSceneView*,
         FPrimitiveDrawInterface* PDI) override
     {
+        UMaterial* vertexColorMaterial = ResolveVertexColorMaterial();
+
         if ((Spheres.IsEmpty() && Lines.IsEmpty()) ||
-            !GEngine ||
-            !GEngine->VertexColorMaterial)
+            !vertexColorMaterial)
         {
             return;
         }
@@ -146,13 +149,39 @@ public:
         meshBuilder.Draw(
             PDI,
             FMatrix::Identity,
-            GEngine->VertexColorMaterial->GetRenderProxy(),
+            vertexColorMaterial->GetRenderProxy(),
             SDPG_World,
             false,
             false);
     }
 
 private:
+    UMaterial* ResolveVertexColorMaterial()
+    {
+        if (GEngine && GEngine->VertexColorMaterial)
+        {
+            return GEngine->VertexColorMaterial;
+        }
+
+        if (!bAttemptedRuntimeMaterialLoad)
+        {
+            bAttemptedRuntimeMaterialLoad = true;
+            RuntimeVertexColorMaterial.Reset(LoadObject<UMaterial>(
+                nullptr,
+                TEXT("/Engine/EngineDebugMaterials/VertexColorMaterial.VertexColorMaterial")));
+
+            if (!RuntimeVertexColorMaterial.IsValid())
+            {
+                UE_LOG(
+                    LogTemp,
+                    Warning,
+                    TEXT("MiaIA Studio could not load the runtime vertex-color material; 3D topology geometry is unavailable."));
+            }
+        }
+
+        return RuntimeVertexColorMaterial.Get();
+    }
+
     static void AddSphereGeometry(
         FDynamicMeshBuilder& MeshBuilder,
         const FMiaIAViewportSphere& Sphere,
@@ -311,6 +340,8 @@ private:
 
     TArray<FMiaIAViewportSphere> Spheres;
     TArray<FMiaIAViewportLine> Lines;
+    TStrongObjectPtr<UMaterial> RuntimeVertexColorMaterial;
+    bool bAttemptedRuntimeMaterialLoad{};
 };
 
 namespace
