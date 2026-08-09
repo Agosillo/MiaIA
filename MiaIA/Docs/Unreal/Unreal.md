@@ -125,6 +125,7 @@ The selection is stored in the local Unreal game-user settings configuration and
 - `Start debug` attaches a new phase inspection to the next pending training sample. It can start from an idle debug state or after the previous step was committed.
 - `Step phase` advances an active debug inspection by exactly one phase.
 - `Cancel debug` discards the active candidate before commit and leaves the public network unchanged.
+- `Exit` is visible only in the standalone application and requests a clean process shutdown. The Unreal Editor panel continues to use its normal dock-tab close control.
 
 Buttons are enabled only when their operation is valid for the current session and debug state. During the automatic Blueprint demonstration, phase progression is controlled by `BP_MiaIADemo`; the panel buttons are intended for later manual and Console-driven workflows.
 
@@ -235,7 +236,70 @@ To test the independent host without opening Unreal Editor:
 3. run `Binaries/Win64/MiaIAStudio.exe` from the Unreal project directory;
 4. confirm that the Studio panel covers the game viewport and accepts the same Console commands as the editor panel.
 
-This development executable still reads cooked or editor project content according to the selected Unreal build workflow. It is not yet the final redistributable package. Packaging will copy the required Unreal runtime and cooked project content so the destination computer does not need Unreal Editor installed.
+This development executable still reads cooked or editor project content according to the selected Unreal build workflow. Use the packaged application below when testing the complete redistributable directory without Unreal Editor.
+
+## Packaged Windows application
+
+The project packaging settings select the `MiaIAStudio` target, cook `/Game/Maps/MiaIAMain`, use Pak and IoStore containers, and include the supported Windows prerequisites. The editor-only `IDEEditor` module is not part of the game target.
+
+Close Unreal Editor and Visual Studio before the first packaging test, then run:
+
+```powershell
+cd C:\Users\agosi\Documents\Codex\2026-08-06\esplora\work\MiaIA\MiaIA\IDE\Unreal
+& .\Build\Package-Windows.ps1 -Configuration Development
+```
+
+If Windows PowerShell reports that script execution is disabled, run the same script in a one-process bypass. This does not change the machine or user execution policy permanently and does not require an administrator terminal:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass `
+    -File .\Build\Package-Windows.ps1 `
+    -Configuration Development
+```
+
+The default archive is created under:
+
+```text
+MiaIA/Artifacts/MiaIAStudio/Windows-Development
+```
+
+The script prints the precise path to `MiaIAStudio.exe`. Run that executable with Unreal Editor closed and verify:
+
+1. the application starts directly as MiaIA Studio;
+2. it opens in a resizable 1600 x 900 window rather than fullscreen;
+3. the model explorer, topology, inspector, theme selector, Console, and standalone `Exit` action are visible;
+4. `create 2 2 1 1` updates the complete interface;
+5. `predict 1 1` returns an output;
+6. the `Exit` button, title-bar close action, or `Alt+F4` terminates it without leaving an Unreal process running.
+
+Keep the whole archived directory when copying the application to another machine. `MiaIAStudio.exe` depends on the staged Unreal runtime, cooked content, and container files beside it. Numeric CSV datasets are user data and are intentionally not embedded in this first package; pass an absolute path to `dataset import csv` or copy the dataset into a user-selected external folder.
+
+For a Shipping archive, use:
+
+```powershell
+& .\Build\Package-Windows.ps1 -Configuration Shipping
+```
+
+If Unreal Engine is installed elsewhere, pass the installation root explicitly:
+
+```powershell
+& .\Build\Package-Windows.ps1 `
+    -EngineRoot "E:\Epic Games\UE_5.8" `
+    -Configuration Development
+```
+
+The packaging script never launches the application and never removes an existing archive. Unreal Automation Tool updates files below the selected output directory. Use `-OutputDirectory` to keep separate experimental packages.
+
+### Provisional application branding
+
+The current package uses provisional raster assets derived from the MiaIA Studio brand board:
+
+- `Build/Windows/Application.ico` is the multi-resolution Windows executable icon;
+- `Content/Splash/Splash.bmp` is the startup splash staged by Unreal;
+- `Build/Brand/MiaIAStudio-AppIcon.png` and `MiaIAStudio-Splash.png` are the normalized PNG masters;
+- files ending in `-Source.png` retain the high-resolution generated sources.
+
+The icon uses the cyan, teal, lime, and amber neural-network mark without text. The splash uses the complete `MiaIA Studio` lockup and the exact `VISUALIZE | EXPERIMENT | INSPECT | DEBUG` payoff. These files are intentionally replaceable when final vector or higher-resolution brand assets become available; their Unreal-facing filenames should remain stable.
 
 ## Planned Unreal work
 

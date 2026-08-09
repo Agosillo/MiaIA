@@ -4,6 +4,7 @@
 #include "MiaIABlueprintLibrary.h"
 #include "StudioTopology.h"
 #include "Framework/Application/SlateApplication.h"
+#include "HAL/PlatformMisc.h"
 #include "InputCoreTypes.h"
 #include "Styling/AppStyle.h"
 #include "Widgets/Input/SButton.h"
@@ -138,6 +139,7 @@ namespace
 void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
 {
     const auto panelBorder = FAppStyle::GetBrush(TEXT("WhiteBrush"));
+    bStandaloneMode = InArgs._StandaloneMode;
     Theme = FMiaIAEditorTheme::Load();
     RefreshWidgetStyles();
     ConsoleHistory = TEXT(
@@ -304,6 +306,25 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
                         return FSlateColor(
                             FMiaIAEditorTheme::Palette(Theme).Debug);
                     })
+                ]
+                + SHorizontalBox::Slot()
+                .AutoWidth()
+                .VAlign(VAlign_Center)
+                .Padding(8.0f, 0.0f, 2.0f, 0.0f)
+                [
+                    SNew(SButton)
+                    .ButtonStyle(&ButtonStyle)
+                    .Visibility_Lambda([this]()
+                    {
+                        return bStandaloneMode
+                            ? EVisibility::Visible
+                            : EVisibility::Collapsed;
+                    })
+                    .Text(LOCTEXT("Exit", "Exit"))
+                    .ToolTipText(LOCTEXT(
+                        "ExitTooltip",
+                        "Close MiaIA Studio."))
+                    .OnClicked(this, &SMiaIAEditorPanel::HandleExit)
                 ]
             ]
         ]
@@ -1095,6 +1116,16 @@ FReply SMiaIAEditorPanel::HandleCancelDebug()
 {
     UMiaIABlueprintLibrary::CancelDebug();
     RefreshData();
+    return FReply::Handled();
+}
+
+FReply SMiaIAEditorPanel::HandleExit()
+{
+    if (bStandaloneMode)
+    {
+        FPlatformMisc::RequestExit(false);
+    }
+
     return FReply::Handled();
 }
 

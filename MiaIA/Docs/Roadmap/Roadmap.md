@@ -50,7 +50,8 @@ The roadmap is organized by dependency rather than by a fixed release date. Math
 - shared contextual command catalog plus Unreal suggestion filtering, Tab completion, and session-local command history.
 - renderer-neutral StudioCore with shared detailed/compact policies, selection state, command execution, and normalized 2D/3D topology scenes;
 - initial Unreal consumption of StudioCore scalability and two-dimensional layout rules;
-- runtime-capable Unreal Studio UI shared by the editor panel and the `MiaIAStudio` game target.
+- runtime-capable Unreal Studio UI shared by the editor panel and the `MiaIAStudio` game target;
+- verified Win64 BuildCookRun archive with provisional application branding.
 
 ## Implemented optimizer foundation
 
@@ -134,12 +135,10 @@ The `.mia` format is planned and does not exist in the current implementation.
 
 ## MiaIA Studio delivery
 
-The platform-neutral Studio application foundation and shared Unreal runtime host are implemented. The next delivery steps are:
+The platform-neutral Studio application foundation, shared Unreal runtime host, and Win64 packaging workflow are implemented. The next delivery steps are:
 
-- verify the `MiaIAStudio` game target as the independent development host;
 - add a user-selectable 2D/3D topology mode;
 - implement the first interactive three-dimensional renderer over StudioCore coordinates;
-- package and verify a Windows `MiaIAStudio.exe` that does not require Unreal Editor;
 - retain StudioCore as the shared application boundary for a possible future Qt frontend.
 
 ## Additional clients

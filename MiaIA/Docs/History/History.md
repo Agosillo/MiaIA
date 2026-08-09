@@ -108,6 +108,12 @@ Focused inspector snapshots subsequently made individual neurons and connections
 
 The phase transaction was then attached to controlled sessions. A session can open its current sample in the debugger, inspect or cancel it without moving progress, and promote a verified commit into network state, history, and the next cursor exactly once. Ordinary and debugged steps share the same guarded recording operation.
 
+### MiaIA Studio runtime and standalone host
+
+The first graphical shell grew from an Unreal Editor tab into a shared runtime UI. Renderer-neutral `StudioCore` owns command, refresh, selection, scalability, and normalized 2D/3D scene policies. The Unreal `IDEStudio` runtime module owns the Slate panel, topology view, theme, and game-instance host, while `IDEEditor` retains only editor tab registration and demonstration installation.
+
+The `MiaIAStudio` game target now launches the same interface without Unreal Editor. A reproducible Win64 packaging script selects that target, cooks the main map, stages Pak and IoStore content, includes Windows prerequisites, and archives the complete application outside tracked source files. The first Development archive was built and executed successfully. The standalone host subsequently gained an explicit windowed default and clean `Exit` action while preserving the editor panel's native tab behavior.
+
 ## Current position
 
 MiaIA can now represent, execute, interchange, inspect, evaluate, differentiate, debug one training step phase by phase, train through controlled foreground or background sessions, and navigate the complete history of successful steps. It cannot yet persist a `.mia` workspace or deliver the planned complete graphical debugging experience.

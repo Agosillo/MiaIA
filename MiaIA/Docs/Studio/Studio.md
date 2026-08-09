@@ -2,9 +2,9 @@
 
 ## Purpose
 
-MiaIA Studio is the graphical application for creating, observing, training, and debugging neural networks. The same Slate experience is now hosted both by an Unreal Editor panel and by an Unreal game target intended to become the standalone Windows application. A future native frontend, such as Qt, may present the same application model without depending on Unreal.
+MiaIA Studio is the graphical application for creating, observing, training, and debugging neural networks. The same Slate experience is hosted both by an Unreal Editor panel and by the packaged standalone Windows application. A future native frontend, such as Qt, may present the same application model without depending on Unreal.
 
-The repository contains the platform-neutral application foundation in `IDE/StudioCore`, the shared Unreal runtime UI in `IDE/Unreal/Source/IDEStudio`, and the `MiaIAStudio` game target. The target is buildable and directly launchable for development; a distributable packaged build has not yet been verified.
+The repository contains the platform-neutral application foundation in `IDE/StudioCore`, the shared Unreal runtime UI in `IDE/Unreal/Source/IDEStudio`, and the `MiaIAStudio` game target. The editor, game target, and archived Development package have been verified with the same runtime experience.
 
 ## Frontend architecture
 
@@ -63,14 +63,12 @@ Compact two-dimensional scenes place one node per layer along X. Compact three-d
 
 The reusable Slate panel, topology view, and theme implementation live in the runtime-capable `IDEStudio` module. `IDEEditor` contains only editor integration such as dock-tab registration and installation of the Blueprint demonstration. The native `UMiaIAStudioGameInstance` places the same panel over the game viewport, so editor and standalone hosts do not maintain separate IDE implementations.
 
-The `MiaIAStudio` game target is the development entry point for the independent host. The remaining delivery steps are:
+The `MiaIAStudio` game target is the development entry point for the independent host. `IDE/Unreal/Build/Package-Windows.ps1` builds, cooks, stages, and archives that target for Win64. The next graphical delivery steps are:
 
-1. verify the standalone target in Development configuration;
-2. add a 2D/3D selector backed by `StudioCore`;
-3. implement the first three-dimensional renderer;
-4. package and verify a distributable Windows `MiaIAStudio.exe`.
+1. add a 2D/3D selector backed by `StudioCore`;
+2. implement the first three-dimensional renderer.
 
-The packaged executable will not require Unreal Editor to be installed. It will still contain the Unreal runtime. A future Qt frontend would instead render the same `StudioCore` state through Qt and its selected graphics backend.
+The packaged executable does not require Unreal Editor to run. It still contains the Unreal runtime. A future Qt frontend would instead render the same `StudioCore` state through Qt and its selected graphics backend.
 
 ## Development locations
 
@@ -81,3 +79,19 @@ The packaged executable will not require Unreal Editor to be installed. It will 
 - `Docs/Studio`: frontend-independent Studio documentation.
 
 `StudioCore` is part of `MiaIA.sln` and is built with the other C++20 static libraries. The Unreal build consumes the Release x64 `StudioCore.lib` alongside CLI, SDK, and Engine.
+
+## Windows packaging
+
+From the Unreal project directory, create the default Development package with:
+
+```powershell
+& .\Build\Package-Windows.ps1
+```
+
+Use `-Configuration Shipping` for a Shipping package or `-EngineRoot` when Unreal Engine is installed somewhere other than `D:\Epic Games\UE_5.8`. By default, the archive is written below `MiaIA/Artifacts/MiaIAStudio/Windows-<Configuration>`, which is ignored by Git.
+
+The script does not launch or delete anything. It reports the final `MiaIAStudio.exe` path after Unreal Automation Tool completes successfully. The complete archived directory is the distributable unit; copying only the executable omits required Unreal runtime and cooked-content files.
+
+The standalone application starts in a 1600 x 900 resizable window. A saved legacy fullscreen preference is converted to windowed mode at startup. The standard window close action, `Alt+F4`, and the Studio toolbar `Exit` button all close the application; the editor-hosted panel does not display `Exit`.
+
+The packaged application currently has a provisional MiaIA Studio icon and startup splash derived from the initial brand board. Their source and normalized PNG files live under `IDE/Unreal/Build/Brand`; Unreal consumes the stable Windows icon and splash paths documented in the [Unreal integration guide](../Unreal/Unreal.md#provisional-application-branding).

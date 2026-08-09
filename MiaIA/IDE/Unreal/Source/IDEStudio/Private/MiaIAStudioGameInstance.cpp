@@ -3,6 +3,7 @@
 #include "Engine/Engine.h"
 #include "Engine/GameViewportClient.h"
 #include "GameFramework/PlayerController.h"
+#include "GameFramework/GameUserSettings.h"
 #include "Widgets/SMiaIAEditorPanel.h"
 
 void UMiaIAStudioGameInstance::OnStart()
@@ -14,7 +15,18 @@ void UMiaIAStudioGameInstance::OnStart()
         return;
     }
 
-    StudioWidget = SNew(SMiaIAEditorPanel);
+    if (UGameUserSettings* settings = GEngine->GetGameUserSettings();
+        settings && settings->GetFullscreenMode() != EWindowMode::Windowed)
+    {
+        settings->SetFullscreenMode(EWindowMode::Windowed);
+        settings->SetScreenResolution(FIntPoint(1600, 900));
+        settings->ApplyResolutionSettings(false);
+        settings->ConfirmVideoMode();
+        settings->SaveSettings();
+    }
+
+    StudioWidget = SNew(SMiaIAEditorPanel)
+        .StandaloneMode(true);
     GEngine->GameViewport->AddViewportWidgetContent(
         StudioWidget.ToSharedRef(),
         1000);

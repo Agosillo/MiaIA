@@ -15,8 +15,10 @@ class IDESTUDIO_API SMiaIAEditorPanel final : public SCompoundWidget
 {
 public:
     SLATE_BEGIN_ARGS(SMiaIAEditorPanel)
+        : _StandaloneMode(false)
     {
     }
+        SLATE_ARGUMENT(bool, StandaloneMode)
     SLATE_END_ARGS()
 
     void Construct(const FArguments& InArgs);
@@ -41,6 +43,7 @@ private:
     FReply HandleStartDebug();
     FReply HandleAdvanceDebug();
     FReply HandleCancelDebug();
+    FReply HandleExit();
     FReply SelectBottomTab(int32 TabIndex);
     TSharedRef<SWidget> BuildThemeMenu();
     FReply SelectTheme(EMiaIAEditorTheme InTheme);
@@ -108,6 +111,7 @@ private:
     bool bHasDebugConnection{};
     bool bUpdatingConsoleInput{};
     bool bCompactTopology{};
+    bool bStandaloneMode{};
 
     TSharedPtr<SVerticalBox> ExplorerContent;
     TSharedPtr<SVerticalBox> ConsoleSuggestionsContent;

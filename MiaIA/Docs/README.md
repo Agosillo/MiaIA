@@ -2,7 +2,7 @@
 
 MiaIA is an Interactive Development Environment for Artificial Intelligence. Its purpose is not to compete with large training frameworks on throughput. Its purpose is to make a neural network observable: users should be able to build a model, execute it, inspect its state, evaluate samples, follow gradients, and eventually control training step by step.
 
-The project is currently in its foundation stage. The C++ engine, public SDK facade, shared command processor, terminal and Unreal command consoles, test harness, ONNX interchange, CSV dataset pipeline, fixed-model dataset evaluation, non-mutating gradient inspection, phase-by-phase SGD debugging, controlled sessions, background pause/resume, navigable training history, first interactive topology panel, renderer-neutral Studio application foundation, and shared Unreal editor/standalone runtime UI are implemented. Persistent MiaIA project files, a verified distributable Studio package, and the complete 2D/3D visualization experience are planned work.
+The project is currently in its foundation stage. The C++ engine, public SDK facade, shared command processor, terminal and Unreal command consoles, test harness, ONNX interchange, CSV dataset pipeline, fixed-model dataset evaluation, non-mutating gradient inspection, phase-by-phase SGD debugging, controlled sessions, background pause/resume, navigable training history, first interactive topology panel, renderer-neutral Studio application foundation, shared Unreal editor/standalone runtime UI, and verified Win64 packaging workflow are implemented. Persistent MiaIA project files and the complete 2D/3D visualization experience are planned work.
 
 ## Documentation map
 
@@ -69,6 +69,8 @@ The primary development configuration is x64. The solution also contains x86 con
 5. Set `Console` as the startup project to experiment interactively.
 
 For a complete console session, see the [Console guide](Console/Console.md).
+
+The Unreal-based standalone application is packaged through `IDE/Unreal/Build/Package-Windows.ps1`. See the [Unreal integration guide](Unreal/Unreal.md#packaged-windows-application) for the complete build and verification workflow.
 
 ## Architectural direction
 
