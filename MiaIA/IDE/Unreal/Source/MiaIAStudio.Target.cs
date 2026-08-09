@@ -3,13 +3,13 @@
 using UnrealBuildTool;
 using System.Collections.Generic;
 
-public class IDETarget : TargetRules
+public class MiaIAStudioTarget : TargetRules
 {
-	public IDETarget(TargetInfo Target) : base(Target)
+	public MiaIAStudioTarget(TargetInfo Target) : base(Target)
 	{
 		Type = TargetType.Game;
 		DefaultBuildSettings = BuildSettingsVersion.V7;
 		IncludeOrderVersion = EngineIncludeOrderVersion.Unreal5_8;
-		ExtraModuleNames.Add("IDE");
+		ExtraModuleNames.AddRange(new string[] { "IDE", "IDEStudio" });
 	}
 }

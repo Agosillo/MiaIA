@@ -49,7 +49,8 @@ The roadmap is organized by dependency rather than by a fixed release date. Math
 - first dockable Unreal topology, explorer, focused inspector, phase controls, and interactive command console;
 - shared contextual command catalog plus Unreal suggestion filtering, Tab completion, and session-local command history.
 - renderer-neutral StudioCore with shared detailed/compact policies, selection state, command execution, and normalized 2D/3D topology scenes;
-- initial Unreal consumption of StudioCore scalability and two-dimensional layout rules.
+- initial Unreal consumption of StudioCore scalability and two-dimensional layout rules;
+- runtime-capable Unreal Studio UI shared by the editor panel and the `MiaIAStudio` game target.
 
 ## Implemented optimizer foundation
 
@@ -133,10 +134,9 @@ The `.mia` format is planned and does not exist in the current implementation.
 
 ## MiaIA Studio delivery
 
-The platform-neutral Studio application foundation is implemented. The next delivery steps are:
+The platform-neutral Studio application foundation and shared Unreal runtime host are implemented. The next delivery steps are:
 
-- move reusable Slate widgets from the editor-only module into a runtime-capable Studio UI module;
-- embed the same runtime UI in the Unreal Editor panel and a game target;
+- verify the `MiaIAStudio` game target as the independent development host;
 - add a user-selectable 2D/3D topology mode;
 - implement the first interactive three-dimensional renderer over StudioCore coordinates;
 - package and verify a Windows `MiaIAStudio.exe` that does not require Unreal Editor;

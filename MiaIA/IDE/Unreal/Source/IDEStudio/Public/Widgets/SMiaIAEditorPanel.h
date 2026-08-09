@@ -11,7 +11,7 @@ class SScrollBar;
 class SVerticalBox;
 class SWidgetSwitcher;
 
-class SMiaIAEditorPanel final : public SCompoundWidget
+class IDESTUDIO_API SMiaIAEditorPanel final : public SCompoundWidget
 {
 public:
     SLATE_BEGIN_ARGS(SMiaIAEditorPanel)

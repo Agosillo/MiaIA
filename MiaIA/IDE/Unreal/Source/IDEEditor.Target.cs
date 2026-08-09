@@ -10,6 +10,6 @@ public class IDEEditorTarget : TargetRules
 		Type = TargetType.Editor;
 		DefaultBuildSettings = BuildSettingsVersion.V7;
 		IncludeOrderVersion = EngineIncludeOrderVersion.Unreal5_8;
-		ExtraModuleNames.AddRange(new string[] { "IDE", "IDEEditor" });
+		ExtraModuleNames.AddRange(new string[] { "IDE", "IDEStudio", "IDEEditor" });
 	}
 }

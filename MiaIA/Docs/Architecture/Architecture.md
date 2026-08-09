@@ -86,9 +86,9 @@ The topology builder converts full or overview network snapshots into normalized
 
 `Console.exe` is a thin terminal host around the shared CLI command processor. It is both a usable diagnostic client and a reference for other integrations.
 
-The Unreal Engine project is the first graphical integration. Its runtime Blueprint function library converts native session, phase, neuron, and connection snapshots into Unreal-reflected types while keeping every operation behind `MiaIAClient`. It also exposes the shared command processor to Blueprint and to the editor panel. The current editor topology already consumes StudioCore scalability and normalized 2D layout policy.
+The Unreal Engine project is the first graphical integration. Its runtime Blueprint function library converts native session, phase, neuron, and connection snapshots into Unreal-reflected types while keeping every operation behind `MiaIAClient`. It also exposes the shared command processor to Blueprint and to MiaIA Studio. The runtime `IDEStudio` module owns the reusable Slate panel, topology view, theme, and game-instance host. The editor-only `IDEEditor` module owns dock-tab registration and Blueprint demonstration installation.
 
-The planned Unreal standalone target will package the Studio experience as a Windows executable that does not require Unreal Editor on the destination computer. It will still use the Unreal runtime. Reusable Slate widgets must therefore move out of the editor-only module before packaging. A future Qt or other native frontend can consume the same StudioCore state while supplying a different renderer and widget implementation.
+The `MiaIAStudio` Unreal game target hosts the same runtime UI independently of Unreal Editor. A future packaged build will not require Unreal Editor on the destination computer, but it will still contain the Unreal runtime. A future Qt or other native frontend can consume the same StudioCore state while supplying a different renderer and widget implementation.
 
 ## Network representation
 

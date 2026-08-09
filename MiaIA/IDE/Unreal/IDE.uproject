@@ -13,6 +13,11 @@
 			]
 		},
 		{
+			"Name": "IDEStudio",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
+		},
+		{
 			"Name": "IDEEditor",
 			"Type": "Editor",
 			"LoadingPhase": "PostEngineInit"

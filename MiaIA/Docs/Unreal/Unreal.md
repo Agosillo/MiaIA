@@ -4,7 +4,7 @@
 
 The Unreal project is a client of the same `MiaIAClient` facade used by the Console. The first Blueprint integration exposes a complete vertical slice from model and dataset setup to phase-by-phase inspection. Unreal does not own or duplicate Engine mathematics.
 
-The current integration includes a runtime Blueprint function library, the shared CLI command processor, and the first custom Unreal editor panel. **MiaIA Studio** is the product name of the graphical IDE, while this project is its Unreal client implementation. The panel is an initial functional shell, not the final visualization or interaction design.
+The current integration includes a runtime Blueprint function library, the shared CLI command processor, and one Slate interface hosted both by the custom Unreal editor panel and by the `MiaIAStudio` game target. **MiaIA Studio** is the product name of the graphical IDE, while this project is its Unreal client implementation. The panel is an initial functional shell, not the final visualization or interaction design.
 
 The complete Unreal project lives under `MiaIA/IDE/Unreal`. Future graphical IDE implementations can be added beside it, for example under `MiaIA/IDE/Unity`, without changing Core, Engine, SDK, CLI, or the native Console.
 
@@ -113,7 +113,7 @@ Compact mode is a visualization guardrail rather than an Engine limit. The nativ
 
 Use the `Theme` selector in the panel toolbar to choose `Follow Unreal`, `Dark`, or `Light`. `Follow Unreal` is the default and derives its semantic colors from the active Unreal Slate style. The explicit dark and light palettes remain stable independently of the surrounding editor theme.
 
-The selection is stored in the local Unreal `EditorPerProjectUserSettings` configuration and restored when the panel is opened again. It is a per-user preference and does not modify tracked project configuration. The selected palette consistently controls panel surfaces, splitters, buttons, menus, inputs, scrollbars, text, neuron activation, positive and negative weights, selection, and debug-phase emphasis.
+The selection is stored in the local Unreal game-user settings configuration and restored by both hosts. It is a per-user preference and does not modify tracked project configuration. The selected palette consistently controls panel surfaces, splitters, buttons, menus, inputs, scrollbars, text, neuron activation, positive and negative weights, selection, and debug-phase emphasis.
 
 ### Panel controls
 
@@ -218,10 +218,24 @@ The panel refreshes runtime values automatically while rebuilding its explorer o
 The Unreal module currently links the native Release libraries directly. After changing Core, Engine, or SDK:
 
 1. build the MiaIA native solution in `Release | x64`;
-2. confirm `x64/Release/Engine.lib`, `SDK.lib`, and `CLI.lib` are current;
+2. confirm `x64/Release/Engine.lib`, `SDK.lib`, `CLI.lib`, and `StudioCore.lib` are current;
 3. open or regenerate the Unreal solution from `MiaIA/IDE/Unreal/IDE.uproject`;
 4. build `IDEEditor | Win64 | Development`;
-5. open the project and locate the nodes under the `MiaIA` categories.
+5. build `MiaIAStudio | Win64 | Development`;
+6. open the project and locate the nodes under the `MiaIA` categories.
+
+## Standalone development host
+
+The `IDEStudio` runtime module owns the reusable panel, topology renderer, theme, and `UMiaIAStudioGameInstance`. The editor-only `IDEEditor` module registers the dockable tab and installs the demonstration Blueprint, but is not part of the game target.
+
+To test the independent host without opening Unreal Editor:
+
+1. build the native solution in `Release | x64`;
+2. build the Unreal `MiaIAStudio` target in `Development | Win64`;
+3. run `Binaries/Win64/MiaIAStudio.exe` from the Unreal project directory;
+4. confirm that the Studio panel covers the game viewport and accepts the same Console commands as the editor panel.
+
+This development executable still reads cooked or editor project content according to the selected Unreal build workflow. It is not yet the final redistributable package. Packaging will copy the required Unreal runtime and cooked project content so the destination computer does not need Unreal Editor installed.
 
 ## Planned Unreal work
 

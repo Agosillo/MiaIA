@@ -21,7 +21,7 @@
 #include "Widgets/SNullWidget.h"
 #include "Widgets/Text/STextBlock.h"
 
-#define LOCTEXT_NAMESPACE "MiaIAEditorPanel"
+#define LOCTEXT_NAMESPACE "MiaIAStudioPanel"
 
 namespace
 {

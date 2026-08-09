@@ -7,11 +7,11 @@
 #include "Styling/AppStyle.h"
 #include "Styling/StyleColors.h"
 
-#define LOCTEXT_NAMESPACE "MiaIAEditorTheme"
+#define LOCTEXT_NAMESPACE "MiaIAStudioTheme"
 
 namespace
 {
-    constexpr TCHAR SettingsSection[] = TEXT("MiaIA.Editor");
+    constexpr TCHAR SettingsSection[] = TEXT("MiaIA.Studio");
     constexpr TCHAR ThemeKey[] = TEXT("Theme");
 
     FString ThemeName(EMiaIAEditorTheme Theme)
@@ -35,7 +35,7 @@ EMiaIAEditorTheme FMiaIAEditorTheme::Load()
         SettingsSection,
         ThemeKey,
         value,
-        GEditorPerProjectIni);
+        GGameUserSettingsIni);
 
     if (value.Equals(TEXT("Dark"), ESearchCase::IgnoreCase))
     {
@@ -56,8 +56,8 @@ void FMiaIAEditorTheme::Save(EMiaIAEditorTheme Theme)
         SettingsSection,
         ThemeKey,
         *ThemeName(Theme),
-        GEditorPerProjectIni);
-    GConfig->Flush(false, GEditorPerProjectIni);
+        GGameUserSettingsIni);
+    GConfig->Flush(false, GGameUserSettingsIni);
 }
 
 FMiaIAEditorPalette FMiaIAEditorTheme::Palette(

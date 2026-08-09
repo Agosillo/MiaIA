@@ -25,7 +25,7 @@ struct FMiaIAEditorPalette
     FLinearColor Debug;
 };
 
-class FMiaIAEditorTheme
+class IDESTUDIO_API FMiaIAEditorTheme
 {
 public:
     static EMiaIAEditorTheme Load();

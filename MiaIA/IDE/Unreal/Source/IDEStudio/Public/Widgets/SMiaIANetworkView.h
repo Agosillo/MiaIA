@@ -8,7 +8,7 @@
 DECLARE_DELEGATE_OneParam(FOnMiaIANeuronSelected, int64)
 DECLARE_DELEGATE_OneParam(FOnMiaIAConnectionSelected, int64)
 
-class SMiaIANetworkView final : public SLeafWidget
+class IDESTUDIO_API SMiaIANetworkView final : public SLeafWidget
 {
 public:
     SLATE_BEGIN_ARGS(SMiaIANetworkView)

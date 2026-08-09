@@ -2,7 +2,7 @@
 
 MiaIA is an Interactive Development Environment for Artificial Intelligence. Its purpose is not to compete with large training frameworks on throughput. Its purpose is to make a neural network observable: users should be able to build a model, execute it, inspect its state, evaluate samples, follow gradients, and eventually control training step by step.
 
-The project is currently in its foundation stage. The C++ engine, public SDK facade, shared command processor, terminal and Unreal command consoles, test harness, ONNX interchange, CSV dataset pipeline, fixed-model dataset evaluation, non-mutating gradient inspection, phase-by-phase SGD debugging, controlled sessions, background pause/resume, navigable training history, first interactive topology panel, and renderer-neutral Studio application foundation are implemented. Persistent MiaIA project files, a packaged Studio executable, and the complete 2D/3D visualization experience are planned work.
+The project is currently in its foundation stage. The C++ engine, public SDK facade, shared command processor, terminal and Unreal command consoles, test harness, ONNX interchange, CSV dataset pipeline, fixed-model dataset evaluation, non-mutating gradient inspection, phase-by-phase SGD debugging, controlled sessions, background pause/resume, navigable training history, first interactive topology panel, renderer-neutral Studio application foundation, and shared Unreal editor/standalone runtime UI are implemented. Persistent MiaIA project files, a verified distributable Studio package, and the complete 2D/3D visualization experience are planned work.
 
 ## Documentation map
 
@@ -30,7 +30,7 @@ The project is currently in its foundation stage. The C++ engine, public SDK fac
 | Evaluation | Per-sample details and fixed-model mean squared error across a complete dataset |
 | Differentiation | Per-neuron, per-bias, and per-connection gradients without parameter updates |
 | Optimization | Standalone and session-attached phase debugging, atomic SGD, ordered epochs, history, bounded runs, and background control |
-| Clients | Shared CLI hosted by Console.exe and Unreal, Blueprint nodes, an interactive topology/debug panel, and renderer-neutral StudioCore |
+| Clients | Shared CLI hosted by Console.exe and Unreal, Blueprint nodes, a shared editor/standalone topology panel, and renderer-neutral StudioCore |
 | Verification | Named Debug- and Release-capable C++ test harness, including numerical gradient checks |
 
 ## Solution structure
@@ -45,7 +45,7 @@ MiaIA/
 |-- Tests/      Named integration and mathematical correctness tests
 |-- IDE/        Graphical IDE client implementations
 |   |-- StudioCore/ Platform-neutral Studio state and 2D/3D topology scenes
-|   `-- Unreal/     Current Unreal Engine client and editor integration
+|   `-- Unreal/     Runtime Studio host, Unreal Engine client, and editor integration
 `-- Docs/       Project documentation
 ```
 

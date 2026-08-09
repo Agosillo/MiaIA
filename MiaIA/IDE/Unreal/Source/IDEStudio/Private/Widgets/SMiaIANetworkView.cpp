@@ -317,7 +317,7 @@ int32 SMiaIANetworkView::PaintCompactOverview(
             FSlateLayoutTransform(FVector2D(16.0f, 12.0f))),
         FText::Format(
             NSLOCTEXT(
-                "MiaIAEditor",
+                "MiaIAStudio",
                 "CompactTopologyNotice",
                 "Compact topology  |  {0} layers  |  {1} neurons  |  {2} connections"),
             FText::AsNumber(layerCount),
@@ -415,7 +415,7 @@ int32 SMiaIANetworkView::PaintCompactOverview(
                         position + FVector2D(-45.0f, 21.0f))),
                 FText::Format(
                     NSLOCTEXT(
-                        "MiaIAEditor",
+                        "MiaIAStudio",
                         "CompactLayerLabel",
                         "L{0}  |  {1}"),
                     FText::AsNumber(layer.Order),
@@ -551,7 +551,7 @@ int32 SMiaIANetworkView::OnPaint(
                 FVector2D(320.0f, 24.0f),
                 FSlateLayoutTransform(FVector2D(24.0f, 24.0f))),
             NSLOCTEXT(
-                "MiaIAEditor",
+                "MiaIAStudio",
                 "EmptyNetwork",
                 "Create or import a network to inspect its topology."),
             FAppStyle::GetFontStyle(TEXT("NormalFont")),
@@ -701,7 +701,7 @@ int32 SMiaIANetworkView::OnPaint(
                     FSlateLayoutTransform(
                         *position + FVector2D(-35.0f, 22.0f))),
                 FText::Format(
-                    NSLOCTEXT("MiaIAEditor", "NeuronId", "#{0}"),
+                    NSLOCTEXT("MiaIAStudio", "NeuronId", "#{0}"),
                     FText::AsNumber(neuron.Id)),
                 FAppStyle::GetFontStyle(TEXT("SmallFont")),
                 ESlateDrawEffect::None,

@@ -2,9 +2,9 @@
 
 ## Purpose
 
-MiaIA Studio is the planned graphical application for creating, observing, training, and debugging neural networks. The same experience is intended to be available as an Unreal Editor panel and as a packaged Windows executable. A future native frontend, such as Qt, may present the same application model without depending on Unreal.
+MiaIA Studio is the graphical application for creating, observing, training, and debugging neural networks. The same Slate experience is now hosted both by an Unreal Editor panel and by an Unreal game target intended to become the standalone Windows application. A future native frontend, such as Qt, may present the same application model without depending on Unreal.
 
-The current repository contains the first platform-neutral application foundation in `IDE/StudioCore`. It does not yet contain a packaged standalone application.
+The repository contains the platform-neutral application foundation in `IDE/StudioCore`, the shared Unreal runtime UI in `IDE/Unreal/Source/IDEStudio`, and the `MiaIAStudio` game target. The target is buildable and directly launchable for development; a distributable packaged build has not yet been verified.
 
 ## Frontend architecture
 
@@ -18,7 +18,7 @@ Core / Engine
  StudioCore
       |-- Unreal Slate frontend
       |     |-- Unreal Editor panel
-      |     `-- planned packaged MiaIAStudio.exe
+      |     `-- MiaIAStudio game target
       |
       `-- possible future native frontend
             `-- Qt or another desktop toolkit
@@ -61,20 +61,22 @@ Compact two-dimensional scenes place one node per layer along X. Compact three-d
 
 ## Unreal delivery path
 
-The current panel is implemented inside the editor-only `IDEEditor` module. An Unreal-packaged executable cannot include that module. The next structural steps are therefore:
+The reusable Slate panel, topology view, and theme implementation live in the runtime-capable `IDEStudio` module. `IDEEditor` contains only editor integration such as dock-tab registration and installation of the Blueprint demonstration. The native `UMiaIAStudioGameInstance` places the same panel over the game viewport, so editor and standalone hosts do not maintain separate IDE implementations.
 
-1. move reusable Slate widgets into a runtime-capable Studio UI module;
-2. keep editor registration and editor-only commands inside `IDEEditor`;
-3. host the same runtime UI in a game target;
-4. add a 2D/3D selector backed by `StudioCore`;
-5. package and verify a Windows `MiaIAStudio.exe`.
+The `MiaIAStudio` game target is the development entry point for the independent host. The remaining delivery steps are:
+
+1. verify the standalone target in Development configuration;
+2. add a 2D/3D selector backed by `StudioCore`;
+3. implement the first three-dimensional renderer;
+4. package and verify a distributable Windows `MiaIAStudio.exe`.
 
 The packaged executable will not require Unreal Editor to be installed. It will still contain the Unreal runtime. A future Qt frontend would instead render the same `StudioCore` state through Qt and its selected graphics backend.
 
 ## Development locations
 
 - `IDE/StudioCore`: portable application and visualization logic;
-- `IDE/Unreal`: Unreal runtime, editor, and future packaged frontend;
+- `IDE/Unreal/Source/IDEStudio`: reusable runtime Slate frontend and standalone host;
+- `IDE/Unreal/Source/IDEEditor`: Unreal Editor-only tab and demonstration integration;
 - `IDE/Qt`: reserved naming for a possible future native Qt frontend;
 - `Docs/Studio`: frontend-independent Studio documentation.
 

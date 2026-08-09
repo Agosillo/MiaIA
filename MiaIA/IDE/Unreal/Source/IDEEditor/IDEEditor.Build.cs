@@ -13,7 +13,8 @@ public class IDEEditor : ModuleRules
             "Core",
             "CoreUObject",
             "Engine",
-            "IDE"
+            "IDE",
+            "IDEStudio"
         });
 
         PrivateDependencyModuleNames.AddRange(new string[]
