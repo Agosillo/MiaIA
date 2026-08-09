@@ -48,6 +48,24 @@ void SMiaIANetworkView::SetSnapshot(
     Invalidate(EInvalidateWidgetReason::Paint);
 }
 
+void SMiaIANetworkView::SetOverview(
+    const FMiaIANetworkOverview& InOverview,
+    bool bInCompactMode)
+{
+    const bool modeChanged = bCompactMode != bInCompactMode;
+    Overview = InOverview;
+    bCompactMode = bInCompactMode;
+
+    if (modeChanged)
+    {
+        ManualNeuronPositions.Reset();
+        ViewOffset = FVector2D::ZeroVector;
+        Zoom = 1.0f;
+    }
+
+    Invalidate(EInvalidateWidgetReason::Paint);
+}
+
 void SMiaIANetworkView::SetDebugSnapshot(
     const FMiaIATrainingDebugSnapshot& InDebug)
 {
@@ -98,6 +116,14 @@ void SMiaIANetworkView::SetTheme(EMiaIAEditorTheme InTheme)
 
 void SMiaIANetworkView::FitView()
 {
+    if (bCompactMode)
+    {
+        ViewOffset = FVector2D::ZeroVector;
+        Zoom = 1.0f;
+        Invalidate(EInvalidateWidgetReason::Paint);
+        return;
+    }
+
     if (ViewportSize.X <= 0.0f || ViewportSize.Y <= 0.0f ||
         Snapshot.Layers.IsEmpty())
     {
@@ -272,6 +298,136 @@ double SMiaIANetworkView::ConnectionMetric(
     return Telemetry.CandidateWeight;
 }
 
+int32 SMiaIANetworkView::PaintCompactOverview(
+    const FGeometry& AllottedGeometry,
+    FSlateWindowElementList& OutDrawElements,
+    int32 LayerId) const
+{
+    const FMiaIAEditorPalette palette =
+        FMiaIAEditorTheme::Palette(Theme);
+    const FVector2D size = AllottedGeometry.GetLocalSize();
+    const int32 layerCount = Overview.Layers.Num();
+
+    FSlateDrawElement::MakeText(
+        OutDrawElements,
+        LayerId,
+        AllottedGeometry.ToPaintGeometry(
+            FVector2D(FMath::Max(1.0, size.X - 32.0), 22.0),
+            FSlateLayoutTransform(FVector2D(16.0f, 12.0f))),
+        FText::Format(
+            NSLOCTEXT(
+                "MiaIAEditor",
+                "CompactTopologyNotice",
+                "Compact topology  |  {0} layers  |  {1} neurons  |  {2} connections"),
+            FText::AsNumber(layerCount),
+            FText::AsNumber(Overview.NeuronCount),
+            FText::AsNumber(Overview.ConnectionCount)),
+        FAppStyle::GetFontStyle(TEXT("NormalFontBold")),
+        ESlateDrawEffect::None,
+        palette.SubduedText);
+
+    if (layerCount == 0)
+    {
+        return LayerId;
+    }
+
+    const float aspect = FMath::Max(
+        0.5f,
+        static_cast<float>(size.X / FMath::Max(1.0, size.Y)));
+    const int32 columns = FMath::Max(
+        1,
+        FMath::CeilToInt(FMath::Sqrt(layerCount * aspect)));
+    const int32 rows = FMath::Max(
+        1,
+        FMath::CeilToInt(
+            static_cast<float>(layerCount) /
+            static_cast<float>(columns)));
+    TArray<FVector2D> positions;
+    positions.Reserve(layerCount);
+
+    for (int32 index = 0; index < layerCount; ++index)
+    {
+        const int32 row = index / columns;
+        const int32 positionInRow = index % columns;
+        const int32 column = row % 2 == 0
+            ? positionInRow
+            : columns - positionInRow - 1;
+        const FVector2D normalized(
+            columns <= 1
+                ? 0.5f
+                : static_cast<float>(column) /
+                    static_cast<float>(columns - 1),
+            rows <= 1
+                ? 0.5f
+                : static_cast<float>(row) /
+                    static_cast<float>(rows - 1));
+        FVector2D position = ViewPosition(normalized, size);
+        position.Y += 18.0f;
+        positions.Add(position);
+
+        if (index > 0)
+        {
+            const TArray<FVector2D> points{
+                positions[index - 1],
+                position
+            };
+            FSlateDrawElement::MakeLines(
+                OutDrawElements,
+                LayerId,
+                AllottedGeometry.ToPaintGeometry(),
+                points,
+                ESlateDrawEffect::None,
+                palette.PositiveWeight.CopyWithNewOpacity(0.45f),
+                true,
+                2.0f);
+        }
+    }
+
+    const bool showLabels = layerCount <= 40 || Zoom >= 1.5f;
+    const int32 nodeLayer = LayerId + 1;
+
+    for (int32 index = 0; index < layerCount; ++index)
+    {
+        const FVector2D position = positions[index];
+        const FMiaIALayerOverview& layer = Overview.Layers[index];
+        FSlateDrawElement::MakeBox(
+            OutDrawElements,
+            nodeLayer,
+            AllottedGeometry.ToPaintGeometry(
+                FVector2D(NeuronDiameter, NeuronDiameter),
+                FSlateLayoutTransform(
+                    position - FVector2D(
+                        NeuronDiameter * 0.5f,
+                        NeuronDiameter * 0.5f))),
+            &NeuronBrush,
+            ESlateDrawEffect::None,
+            palette.ActiveNeuron);
+
+        if (showLabels)
+        {
+            FSlateDrawElement::MakeText(
+                OutDrawElements,
+                nodeLayer + 1,
+                AllottedGeometry.ToPaintGeometry(
+                    FVector2D(90.0f, 18.0f),
+                    FSlateLayoutTransform(
+                        position + FVector2D(-45.0f, 21.0f))),
+                FText::Format(
+                    NSLOCTEXT(
+                        "MiaIAEditor",
+                        "CompactLayerLabel",
+                        "L{0}  |  {1}"),
+                    FText::AsNumber(layer.Order),
+                    FText::AsNumber(layer.NeuronCount)),
+                FAppStyle::GetFontStyle(TEXT("SmallFont")),
+                ESlateDrawEffect::None,
+                palette.SubduedText);
+        }
+    }
+
+    return nodeLayer + 1;
+}
+
 FVector2D SMiaIANetworkView::AutomaticPosition(
     int32 LayerIndex,
     int32 NeuronIndex) const
@@ -376,6 +532,14 @@ int32 SMiaIANetworkView::OnPaint(
     ViewportSize = AllottedGeometry.GetLocalSize();
     const FMiaIAEditorPalette palette =
         FMiaIAEditorTheme::Palette(Theme);
+
+    if (bCompactMode)
+    {
+        return PaintCompactOverview(
+            AllottedGeometry,
+            OutDrawElements,
+            LayerId);
+    }
 
     if (Snapshot.Layers.IsEmpty())
     {

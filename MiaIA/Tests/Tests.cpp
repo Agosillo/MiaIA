@@ -3062,6 +3062,25 @@ int main()
     assert(directSnapshot.Layers[1].Name == "Output");
     assert(directSnapshot.Connections.size() == 2);
 
+    const auto directOverview = MiaIAClient::GetNetworkOverview();
+    assert(directOverview.Layers.size() == 2);
+    assert(directOverview.NeuronCount == 3);
+    assert(directOverview.ConnectionCount == 2);
+
+    assert(MiaIAClient::CreateDenseNetwork(64, 64, 16, 2));
+
+    const auto largeOverview = MiaIAClient::GetNetworkOverview();
+    assert(largeOverview.Layers.size() == 18);
+    assert(largeOverview.NeuronCount == 1090);
+    assert(largeOverview.ConnectionCount == 65664);
+    assert(largeOverview.Layers.front().NeuronCount == 64);
+    assert(largeOverview.Layers.back().NeuronCount == 2);
+
+    MiaIA::Core::ConnectionSnapshot finalConnection;
+    assert(MiaIAClient::TryGetConnection(65664, finalConnection));
+    assert(finalConnection.FromNeuron == 2088);
+    assert(finalConnection.ToNeuron == 2090);
+
     });
 
     runner.Run("Connection weights", [&]()

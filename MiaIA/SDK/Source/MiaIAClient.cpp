@@ -71,6 +71,12 @@ bool MiaIA::SDK::Detail::IsClientMutationBlocked()
 
 namespace MiaIA::SDK
 {
+    Core::NetworkOverviewSnapshot MiaIAClient::GetNetworkOverview()
+    {
+        const std::scoped_lock lock(Detail::ClientMutex());
+        return Engine::NetworkInspector::Overview(CurrentNetwork);
+    }
+
     bool MiaIAClient::ClearNetwork()
     {
         const std::scoped_lock lock(Detail::ClientMutex());

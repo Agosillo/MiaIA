@@ -22,6 +22,9 @@ public:
 
     void Construct(const FArguments& InArgs);
     void SetSnapshot(const FMiaIANetworkSnapshot& InSnapshot);
+    void SetOverview(
+        const FMiaIANetworkOverview& InOverview,
+        bool bInCompactMode);
     void SetDebugSnapshot(const FMiaIATrainingDebugSnapshot& InDebug);
     void SetSelectedNeuron(int64 InNeuronId);
     void SetSelectedConnection(int64 InConnectionId);
@@ -60,6 +63,10 @@ private:
     double NeuronMetric(const FMiaIADebugNeuronTelemetry& Telemetry) const;
     double ConnectionMetric(
         const FMiaIADebugConnectionTelemetry& Telemetry) const;
+    int32 PaintCompactOverview(
+        const FGeometry& AllottedGeometry,
+        FSlateWindowElementList& OutDrawElements,
+        int32 LayerId) const;
     FVector2D AutomaticPosition(
         int32 LayerIndex,
         int32 NeuronIndex) const;
@@ -79,6 +86,7 @@ private:
         const FVector2D& End);
 
     FMiaIANetworkSnapshot Snapshot;
+    FMiaIANetworkOverview Overview;
     EMiaIATrainingDebugPhase DebugPhase{EMiaIATrainingDebugPhase::Idle};
     TMap<int64, FMiaIADebugNeuronTelemetry> NeuronTelemetry;
     TMap<int64, FMiaIADebugConnectionTelemetry> ConnectionTelemetry;
@@ -94,6 +102,7 @@ private:
     FVector2D LastPointerPosition{FVector2D::ZeroVector};
     mutable FVector2D ViewportSize{FVector2D::ZeroVector};
     float Zoom{1.0f};
+    bool bCompactMode{};
     bool bPanning{};
     mutable TMap<int64, FVector2D> NeuronPositions;
     FOnMiaIANeuronSelected OnNeuronSelected;

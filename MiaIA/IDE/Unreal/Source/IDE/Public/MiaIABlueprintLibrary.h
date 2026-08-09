@@ -26,6 +26,9 @@ public:
     UFUNCTION(BlueprintPure, Category = "MiaIA|Network")
     static FMiaIANetworkSnapshot GetNetworkSnapshot();
 
+    UFUNCTION(BlueprintPure, Category = "MiaIA|Network")
+    static FMiaIANetworkOverview GetNetworkOverview();
+
     UFUNCTION(BlueprintCallable, Category = "MiaIA|Dataset")
     static bool ImportCsvDataset(
         const FString& Path,

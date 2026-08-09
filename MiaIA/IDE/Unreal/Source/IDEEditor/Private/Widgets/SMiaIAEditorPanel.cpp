@@ -24,6 +24,9 @@
 
 namespace
 {
+    constexpr int64 DetailedNeuronLimit = 2000;
+    constexpr int64 DetailedConnectionLimit = 5000;
+
     FText SessionStatusName(EMiaIATrainingSessionStatus Status)
     {
         switch (Status)
@@ -108,6 +111,26 @@ namespace
                 connection.Id,
                 connection.FromNeuron,
                 connection.ToNeuron);
+        }
+
+        return key;
+    }
+
+    FString BuildOverviewKey(const FMiaIANetworkOverview& Overview)
+    {
+        FString key = FString::Printf(
+            TEXT("Compact:L%dN%lldC%lld"),
+            Overview.Layers.Num(),
+            Overview.NeuronCount,
+            Overview.ConnectionCount);
+
+        for (const FMiaIALayerOverview& layer : Overview.Layers)
+        {
+            key += FString::Printf(
+                TEXT("|%lld:%lld:%lld"),
+                layer.Id,
+                layer.Order,
+                layer.NeuronCount);
         }
 
         return key;
@@ -347,6 +370,12 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
                         .Padding(8.0f, 4.0f, 8.0f, 6.0f)
                         [
                             SNew(SHorizontalBox)
+                            .Visibility_Lambda([this]()
+                            {
+                                return bCompactTopology
+                                    ? EVisibility::Collapsed
+                                    : EVisibility::Visible;
+                            })
                             + SHorizontalBox::Slot()
                             .AutoWidth()
                             .Padding(0.0f, 0.0f, 14.0f, 0.0f)
@@ -730,17 +759,32 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
 
 void SMiaIAEditorPanel::RefreshData()
 {
-    Network = UMiaIABlueprintLibrary::GetNetworkSnapshot();
+    NetworkOverview = UMiaIABlueprintLibrary::GetNetworkOverview();
+    bCompactTopology =
+        NetworkOverview.NeuronCount > DetailedNeuronLimit ||
+        NetworkOverview.ConnectionCount > DetailedConnectionLimit;
     Session = UMiaIABlueprintLibrary::GetTrainingSession();
-    Debug = UMiaIABlueprintLibrary::GetDebugStatus();
 
-    if (Debug.Phase != EMiaIATrainingDebugPhase::Idle &&
-        !Debug.CandidateNetwork.Layers.IsEmpty())
+    if (bCompactTopology)
     {
-        Network = Debug.CandidateNetwork;
+        Network = FMiaIANetworkSnapshot{};
+        Debug = FMiaIATrainingDebugSnapshot{};
+    }
+    else
+    {
+        Network = UMiaIABlueprintLibrary::GetNetworkSnapshot();
+        Debug = UMiaIABlueprintLibrary::GetDebugStatus();
+
+        if (Debug.Phase != EMiaIATrainingDebugPhase::Idle &&
+            !Debug.CandidateNetwork.Layers.IsEmpty())
+        {
+            Network = Debug.CandidateNetwork;
+        }
     }
 
-    const FString newTopologyKey = BuildTopologyKey(Network);
+    const FString newTopologyKey = bCompactTopology
+        ? BuildOverviewKey(NetworkOverview)
+        : BuildTopologyKey(Network);
     const bool topologyChanged = newTopologyKey != TopologyKey;
     TopologyKey = newTopologyKey;
 
@@ -791,6 +835,7 @@ void SMiaIAEditorPanel::RefreshData()
     if (NetworkView.IsValid())
     {
         NetworkView->SetSnapshot(Network);
+        NetworkView->SetOverview(NetworkOverview, bCompactTopology);
         NetworkView->SetDebugSnapshot(Debug);
         NetworkView->SetSelectedNeuron(SelectedNeuronId);
         NetworkView->SetSelectedConnection(SelectedConnectionId);
@@ -818,6 +863,44 @@ void SMiaIAEditorPanel::RebuildExplorer()
         .Text(LOCTEXT("Explorer", "Model explorer"))
         .Font(FAppStyle::GetFontStyle(TEXT("NormalFontBold")))
     ];
+
+    if (bCompactTopology)
+    {
+        ExplorerContent->AddSlot()
+        .AutoHeight()
+        .Padding(2.0f, 0.0f, 2.0f, 8.0f)
+        [
+            SNew(STextBlock)
+            .Text(LOCTEXT(
+                "CompactExplorerNotice",
+                "Compact mode keeps large models responsive. Element-level entries are hidden."))
+            .AutoWrapText(true)
+            .ColorAndOpacity_Lambda([this]()
+            {
+                return FSlateColor(
+                    FMiaIAEditorTheme::Palette(Theme).SubduedText);
+            })
+        ];
+
+        for (const FMiaIALayerOverview& layer : NetworkOverview.Layers)
+        {
+            ExplorerContent->AddSlot()
+            .AutoHeight()
+            .Padding(2.0f, 3.0f)
+            [
+                SNew(STextBlock)
+                .Text(FText::Format(
+                    LOCTEXT(
+                        "CompactLayerEntry",
+                        "L{0}  |  {1}  |  {2} neurons"),
+                    FText::AsNumber(layer.Order),
+                    FText::FromString(layer.Name),
+                    FText::AsNumber(layer.NeuronCount)))
+            ];
+        }
+
+        return;
+    }
 
     for (const FMiaIALayerSnapshot& layer : Network.Layers)
     {
@@ -1334,7 +1417,8 @@ bool SMiaIAEditorPanel::CanPause() const
 
 bool SMiaIAEditorPanel::CanStartDebug() const
 {
-    return Session.Status == EMiaIATrainingSessionStatus::Active &&
+    return !bCompactTopology &&
+        Session.Status == EMiaIATrainingSessionStatus::Active &&
         Session.CompletedSteps < Session.TotalSteps &&
         (Debug.Phase == EMiaIATrainingDebugPhase::Idle ||
             Debug.Phase == EMiaIATrainingDebugPhase::Committed);
@@ -1342,7 +1426,8 @@ bool SMiaIAEditorPanel::CanStartDebug() const
 
 bool SMiaIAEditorPanel::CanAdvanceDebug() const
 {
-    return Debug.Phase != EMiaIATrainingDebugPhase::Idle &&
+    return !bCompactTopology &&
+        Debug.Phase != EMiaIATrainingDebugPhase::Idle &&
         Debug.Phase != EMiaIATrainingDebugPhase::Committed;
 }
 
@@ -1370,20 +1455,21 @@ FText SMiaIAEditorPanel::DebugPhaseText() const
 
 FText SMiaIAEditorPanel::NetworkSummaryText() const
 {
-    int32 neuronCount = 0;
-
-    for (const FMiaIALayerSnapshot& layer : Network.Layers)
-    {
-        neuronCount += layer.Neurons.Num();
-    }
-
-    return FText::Format(
-        LOCTEXT(
-            "NetworkSummary",
-            "Network topology  ·  {0} layers  ·  {1} neurons  ·  {2} connections"),
-        FText::AsNumber(Network.Layers.Num()),
-        FText::AsNumber(neuronCount),
-        FText::AsNumber(Network.Connections.Num()));
+    return bCompactTopology
+        ? FText::Format(
+            LOCTEXT(
+                "CompactNetworkSummary",
+                "Network topology  |  Compact  |  {0} layers  |  {1} neurons  |  {2} connections"),
+            FText::AsNumber(NetworkOverview.Layers.Num()),
+            FText::AsNumber(NetworkOverview.NeuronCount),
+            FText::AsNumber(NetworkOverview.ConnectionCount))
+        : FText::Format(
+            LOCTEXT(
+                "NetworkSummary",
+                "Network topology  |  {0} layers  |  {1} neurons  |  {2} connections"),
+            FText::AsNumber(NetworkOverview.Layers.Num()),
+            FText::AsNumber(NetworkOverview.NeuronCount),
+            FText::AsNumber(NetworkOverview.ConnectionCount));
 }
 
 FText SMiaIAEditorPanel::PositiveMetricLegendText() const

@@ -13,6 +13,9 @@ namespace MiaIA::Engine
         static Core::NetworkSnapshot Snapshot(
             const Core::Network& network);
 
+        static Core::NetworkOverviewSnapshot Overview(
+            const Core::Network& network);
+
         static bool TryGetNeuron(
             const Core::Network& network,
             std::uint64_t neuronId,

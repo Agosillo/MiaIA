@@ -105,6 +105,10 @@ The animation is slowed down for documentation. The demonstration itself advance
 - **Training timeline** follows the Console and summarizes the forward, backward, update, verification, and commit sequence.
 - **Breakpoints** reserves the location of the future breakpoint authoring interface.
 
+MiaIA Studio requests a lightweight network overview before requesting the complete topology. Networks with at most 2,000 neurons and 5,000 connections use detailed mode. Larger networks automatically use compact mode: the topology draws one aggregate node per layer, the explorer lists layer counts instead of every element, and the panel avoids repeatedly copying or painting the complete connection set. The compact header always reports the exact layer, neuron, and connection totals.
+
+Compact mode is a visualization guardrail rather than an Engine limit. The native network remains complete and available through `MiaIAClient`. Element-level visual inspection and phase controls are disabled in compact mode until paged large-model inspection is implemented; use a smaller network when testing the current graphical phase debugger.
+
 ### Color theme
 
 Use the `Theme` selector in the panel toolbar to choose `Follow Unreal`, `Dark`, or `Light`. `Follow Unreal` is the default and derives its semantic colors from the active Unreal Slate style. The explicit dark and light palettes remain stable independently of the surrounding editor theme.
@@ -135,6 +139,8 @@ The topology view supports direct 2D navigation and layout editing:
 - select `Reset layout` to remove every manual position and restore the original automatic arrangement.
 
 Manual positions use normalized layout coordinates rather than Slate pixel coordinates. They remain stable while the panel is open and can later be reused by another renderer, including a 3D view. They are intentionally not written to ONNX or project configuration. Persistent visualization layouts belong to future MiaIA-specific model metadata.
+
+In compact mode, the mouse wheel and middle-button pan remain available. `Fit view` and `Reset layout` restore the aggregate layer graph. Individual layer nodes are summaries and are not presented as real neurons.
 
 ### Interactive command console
 

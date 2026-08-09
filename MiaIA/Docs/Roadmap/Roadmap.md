@@ -119,9 +119,10 @@ The `.mia` format is planned and does not exist in the current implementation.
 - added Unreal-reflected phase, session, neuron, and connection snapshots without leaking STL types;
 - exposed reusable SDK and shared CLI operations through Unreal C++ wrappers;
 - added a dockable topology panel with neuron and connection selection, candidate values, phase controls, and a shared interactive command console;
+- added a lightweight network overview and automatic compact layer rendering for large topologies;
 - broaden Blueprint coverage to the remaining appropriate SDK operations;
 - refine the IDE command console with persistent history and asynchronous long-running execution;
-- scale layer, neuron, and weighted-connection visualization to larger models;
+- add paged drill-down from compact layer summaries into large-model neurons and connections;
 - expand neuron coloring beyond activation and current debug state;
 - animate forward signal flow and backward gradient flow;
 - navigate from network overview to an individual neuron or connection;

@@ -83,6 +83,7 @@ private:
     FText ThemeText() const;
 
     FMiaIANetworkSnapshot Network;
+    FMiaIANetworkOverview NetworkOverview;
     FMiaIATrainingSessionSnapshot Session;
     FMiaIATrainingDebugSnapshot Debug;
     FMiaIATrainingDebugNeuron DebugNeuron;
@@ -106,6 +107,7 @@ private:
     bool bHasDebugNeuron{};
     bool bHasDebugConnection{};
     bool bUpdatingConsoleInput{};
+    bool bCompactTopology{};
 
     TSharedPtr<SVerticalBox> ExplorerContent;
     TSharedPtr<SVerticalBox> ConsoleSuggestionsContent;

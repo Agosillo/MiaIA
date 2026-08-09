@@ -135,6 +135,8 @@ This describes the shape:
 
 The dense factory initializes connection weights to `0.1`, biases to `0.0`, and non-input layer activations to Sigmoid. The current Console command does not expose weight initialization or activation selection; those capabilities exist at the SDK level and will eventually receive richer client controls.
 
+Dense size grows primarily with connections. For `I` inputs, hidden width `H`, `L` hidden layers, and `O` outputs, a network with hidden layers contains `I*H + (L-1)*H*H + H*O` connections. For example, `create 100 100 100 1` creates 10,101 neurons and 1,000,100 connections. The factory builds this graph in a preallocated linear batch and publishes it only after final validation. Graphical clients may intentionally switch to an aggregate layer view rather than drawing every connection.
+
 Calling `create` without arguments currently uses the Console defaults `10 32 2 3`. Supplying all four values explicitly is recommended because it makes the experiment reproducible and clear.
 
 ### `input`

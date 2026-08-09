@@ -93,6 +93,12 @@ The dense network factory currently creates:
 - initial biases and activations of `0.0`;
 - Sigmoid as the default activation for created non-input layers.
 
+Dense creation is a transactional batch operation. The factory calculates neuron and connection counts with checked arithmetic, reserves the required storage, constructs the graph directly, validates it once, and only then replaces the public network. The atomic `NetworkEditor` methods retain their stricter per-operation checks for interactive edits; repeatedly calling them is intentionally not the implementation path for generated dense graphs.
+
+For `I` inputs, hidden width `H`, `L` hidden layers, and `O` outputs, the neuron count is `I + L*H + O`. With at least one hidden layer, the connection count is `I*H + (L-1)*H*H + H*O`; without hidden layers it is `I*O`.
+
+`NetworkSnapshot` contains every neuron and connection. `NetworkOverviewSnapshot` is the lightweight inspection boundary for clients that first need layer metadata and aggregate counts before deciding whether a complete graph copy is appropriate.
+
 Supported activation functions are Sigmoid, ReLU, Tanh, and Linear.
 
 ## Runtime data flows

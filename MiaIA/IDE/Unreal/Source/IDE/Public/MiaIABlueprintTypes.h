@@ -103,6 +103,42 @@ struct IDE_API FMiaIANetworkSnapshot
 };
 
 USTRUCT(BlueprintType)
+struct IDE_API FMiaIALayerOverview
+{
+    GENERATED_BODY()
+
+    UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
+    int64 Id{};
+
+    UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
+    FString Name;
+
+    UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
+    int64 Order{};
+
+    UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
+    int64 NeuronCount{};
+
+    UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
+    EMiaIAActivationType Activation{EMiaIAActivationType::Sigmoid};
+};
+
+USTRUCT(BlueprintType)
+struct IDE_API FMiaIANetworkOverview
+{
+    GENERATED_BODY()
+
+    UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
+    TArray<FMiaIALayerOverview> Layers;
+
+    UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
+    int64 NeuronCount{};
+
+    UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
+    int64 ConnectionCount{};
+};
+
+USTRUCT(BlueprintType)
 struct IDE_API FMiaIADebugNeuronTelemetry
 {
     GENERATED_BODY()

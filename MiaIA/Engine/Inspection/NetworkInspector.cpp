@@ -12,6 +12,28 @@ namespace MiaIA::Engine
         return Core::SnapshotBuilder::Build(network);
     }
 
+    Core::NetworkOverviewSnapshot NetworkInspector::Overview(
+        const Core::Network& network)
+    {
+        Core::NetworkOverviewSnapshot result;
+        result.Layers.reserve(network.Layers.size());
+        result.ConnectionCount = network.Connections.size();
+
+        for (const Core::Layer& layer : network.Layers)
+        {
+            result.NeuronCount += layer.Neurons.size();
+            result.Layers.push_back(Core::LayerOverviewSnapshot{
+                layer.Id,
+                layer.Name,
+                layer.Order,
+                layer.Neurons.size(),
+                layer.Activation
+            });
+        }
+
+        return result;
+    }
+
     bool NetworkInspector::TryGetNeuron(
         const Core::Network& network,
         std::uint64_t neuronId,

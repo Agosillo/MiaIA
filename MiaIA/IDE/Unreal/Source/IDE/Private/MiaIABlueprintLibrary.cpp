@@ -74,6 +74,30 @@ namespace
         return result;
     }
 
+    FMiaIANetworkOverview ToBlueprint(
+        const MiaIA::Core::NetworkOverviewSnapshot& source)
+    {
+        FMiaIANetworkOverview result;
+        result.NeuronCount = static_cast<int64>(source.NeuronCount);
+        result.ConnectionCount = static_cast<int64>(
+            source.ConnectionCount);
+        result.Layers.Reserve(static_cast<int32>(source.Layers.size()));
+
+        for (const auto& sourceLayer : source.Layers)
+        {
+            FMiaIALayerOverview layer;
+            layer.Id = static_cast<int64>(sourceLayer.Id);
+            layer.Name = UTF8_TO_TCHAR(sourceLayer.Name.c_str());
+            layer.Order = static_cast<int64>(sourceLayer.Order);
+            layer.NeuronCount = static_cast<int64>(
+                sourceLayer.NeuronCount);
+            layer.Activation = ToBlueprint(sourceLayer.Activation);
+            result.Layers.Add(MoveTemp(layer));
+        }
+
+        return result;
+    }
+
     EMiaIATrainingDebugPhase ToBlueprint(
         MiaIA::Core::TrainingDebugPhase phase)
     {
@@ -342,6 +366,11 @@ bool UMiaIABlueprintLibrary::CreateDenseNetwork(
 FMiaIANetworkSnapshot UMiaIABlueprintLibrary::GetNetworkSnapshot()
 {
     return ToBlueprint(MiaIA::SDK::MiaIAClient::GetSnapshot());
+}
+
+FMiaIANetworkOverview UMiaIABlueprintLibrary::GetNetworkOverview()
+{
+    return ToBlueprint(MiaIA::SDK::MiaIAClient::GetNetworkOverview());
 }
 
 bool UMiaIABlueprintLibrary::ImportCsvDataset(
