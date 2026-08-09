@@ -34,6 +34,14 @@ public class IDE : ModuleRules
             Path.Combine(MiaIARoot, "CLI", "Include")
         );
 
+        PublicIncludePaths.Add(
+            Path.Combine(MiaIARoot, "IDE", "StudioCore", "Include")
+        );
+
+        PublicAdditionalLibraries.Add(
+            Path.Combine(MiaIARoot, "x64", "Release", "StudioCore.lib")
+        );
+
         PublicAdditionalLibraries.Add(
             Path.Combine(MiaIARoot, "x64", "Release", "CLI.lib")
         );

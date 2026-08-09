@@ -9,6 +9,7 @@
 #include <onnx/onnx_pb.h>
 #include "TestHarness.h"
 #include "../CLI/Include/MiaIACommandProcessor.h"
+#include "../IDE/StudioCore/Include/StudioController.h"
 #include "../SDK/Include/MiaIAClient.h"
 #include "../Core/Execution/Activation.h"
 #include "../Engine/Validation/NetworkValidator.h"
@@ -42,6 +43,106 @@ int main()
     using MiaIA::SDK::MiaIAClient;
 
     MiaIA::Tests::TestRunner runner;
+
+    runner.Run("Studio topology scenes", [&]()
+    {
+        using namespace MiaIA::Studio;
+
+        MiaIA::Core::NetworkSnapshot network;
+        network.Layers = {
+            { 1, "Input", 0, { { 1001 }, { 1002 } } },
+            { 2, "Output", 1, { { 1003 } } }
+        };
+        network.Connections = {
+            { 1, 1001, 1003, 0.25 },
+            { 2, 1002, 1003, -0.5 }
+        };
+
+        const auto twoDimensional =
+            StudioTopologyBuilder::BuildDetailed(
+                network,
+                StudioViewMode::TwoDimensional);
+        assert(twoDimensional.Detail ==
+            StudioTopologyDetail::Detailed);
+        assert(twoDimensional.Nodes.size() == 3);
+        assert(twoDimensional.Links.size() == 2);
+        assert(twoDimensional.Nodes[0].Position.X == 0.0);
+        assert(twoDimensional.Nodes[0].Position.Y == 0.0);
+        assert(twoDimensional.Nodes[1].Position.Y == 1.0);
+        assert(twoDimensional.Nodes[2].Position.X == 1.0);
+        assert(twoDimensional.Nodes[2].Position.Z == 0.0);
+
+        const auto threeDimensional =
+            StudioTopologyBuilder::BuildDetailed(
+                network,
+                StudioViewMode::ThreeDimensional);
+        assert(threeDimensional.ViewMode ==
+            StudioViewMode::ThreeDimensional);
+        assert(threeDimensional.Nodes[0].Position.Z == 0.0);
+        assert(threeDimensional.Nodes[2].Position.Z == 1.0);
+        assert(threeDimensional.Nodes[0].Position.X == 0.0);
+        assert(threeDimensional.Nodes[1].Position.X == 1.0);
+
+        MiaIA::Core::NetworkOverviewSnapshot overview;
+        overview.NeuronCount =
+            StudioTopologyBuilder::DetailedNeuronLimit + 1;
+        overview.ConnectionCount = 100;
+        overview.Layers = {
+            { 1, "Input", 0, 1000 },
+            { 2, "Hidden", 1, 1000 },
+            { 3, "Output", 2, 1 }
+        };
+
+        assert(StudioTopologyBuilder::ChooseDetail(overview) ==
+            StudioTopologyDetail::Compact);
+
+        const auto compact = StudioTopologyBuilder::BuildCompact(
+            overview,
+            StudioViewMode::ThreeDimensional);
+        assert(compact.Detail == StudioTopologyDetail::Compact);
+        assert(compact.Nodes.size() == 3);
+        assert(compact.Links.size() == 2);
+        assert(compact.Nodes[0].Kind == StudioNodeKind::Layer);
+        assert(compact.Nodes[0].NeuronCount == 1000);
+        assert(compact.Nodes[0].Position.Z == 0.0);
+        assert(compact.Nodes[2].Position.Z == 1.0);
+        assert(compact.Links[0].Aggregate);
+    });
+
+    runner.Run("Studio application controller", [&]()
+    {
+        using namespace MiaIA::Studio;
+
+        MiaIAClient::ClearNetwork();
+        StudioController controller;
+        controller.SetViewMode(StudioViewMode::ThreeDimensional);
+
+        const StudioCommandResult result =
+            controller.ExecuteCommand("create 2 2 1 1");
+        assert(result.Output.find("Dense network created") !=
+            std::string::npos);
+        assert(!result.ExitRequested);
+        assert(controller.State().Overview.Layers.size() == 3);
+        assert(controller.State().Topology.Nodes.size() == 5);
+        assert(controller.State().Topology.Links.size() == 6);
+        assert(controller.State().Topology.ViewMode ==
+            StudioViewMode::ThreeDimensional);
+        assert(controller.SelectNeuron(1001));
+        assert(controller.State().Selection.Kind ==
+            StudioSelectionKind::Neuron);
+        assert(!controller.SelectNeuron(999999));
+        assert(controller.SelectConnection(1));
+
+        const auto suggestions = controller.GetSuggestions("pred");
+        assert(suggestions.size() == 1);
+        assert(suggestions[0].Completion == "predict");
+
+        MiaIAClient::ClearNetwork();
+        controller.Refresh();
+        assert(controller.State().Topology.Nodes.empty());
+        assert(controller.State().Selection.Kind ==
+            StudioSelectionKind::None);
+    });
 
     runner.Run("Shared CLI command processor", [&]()
     {

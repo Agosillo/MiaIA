@@ -52,9 +52,16 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Elementi di soluzione", "El
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "SDK", "SDK\SDK.vcxproj", "{E71364B4-EE83-4BFE-8DFB-A620701873CF}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "StudioCore", "IDE\StudioCore\StudioCore.vcxproj", "{4D284104-A115-4B86-A52B-C3813C59C42E}"
+EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Console Documentation", "Console Documentation", "{B6C6CBBA-6347-41BA-972E-72E3E10718F1}"
 	ProjectSection(SolutionItems) = preProject
 		Docs\Console\Console.md = Docs\Console\Console.md
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Studio Documentation", "Studio Documentation", "{5AE690E7-2CA5-4BE8-B7AB-F96EC893225D}"
+	ProjectSection(SolutionItems) = preProject
+		Docs\Studio\Studio.md = Docs\Studio\Studio.md
 	EndProjectSection
 EndProject
 Global
@@ -113,6 +120,14 @@ Global
 		{E71364B4-EE83-4BFE-8DFB-A620701873CF}.Release|x64.Build.0 = Release|x64
 		{E71364B4-EE83-4BFE-8DFB-A620701873CF}.Release|x86.ActiveCfg = Release|Win32
 		{E71364B4-EE83-4BFE-8DFB-A620701873CF}.Release|x86.Build.0 = Release|Win32
+		{4D284104-A115-4B86-A52B-C3813C59C42E}.Debug|x64.ActiveCfg = Debug|x64
+		{4D284104-A115-4B86-A52B-C3813C59C42E}.Debug|x64.Build.0 = Debug|x64
+		{4D284104-A115-4B86-A52B-C3813C59C42E}.Debug|x86.ActiveCfg = Debug|Win32
+		{4D284104-A115-4B86-A52B-C3813C59C42E}.Debug|x86.Build.0 = Debug|Win32
+		{4D284104-A115-4B86-A52B-C3813C59C42E}.Release|x64.ActiveCfg = Release|x64
+		{4D284104-A115-4B86-A52B-C3813C59C42E}.Release|x64.Build.0 = Release|x64
+		{4D284104-A115-4B86-A52B-C3813C59C42E}.Release|x86.ActiveCfg = Release|Win32
+		{4D284104-A115-4B86-A52B-C3813C59C42E}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -124,6 +139,7 @@ Global
 		{69FE5595-C261-494A-AA24-C451469B3DBA} = {6C83A596-D32D-B35F-00DD-F0C99B673980}
 		{BF2CE80A-03A0-47F3-9C5C-908B17930689} = {6C83A596-D32D-B35F-00DD-F0C99B673980}
 		{B6C6CBBA-6347-41BA-972E-72E3E10718F1} = {6C83A596-D32D-B35F-00DD-F0C99B673980}
+		{5AE690E7-2CA5-4BE8-B7AB-F96EC893225D} = {6C83A596-D32D-B35F-00DD-F0C99B673980}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {C0D30360-10C0-4D5A-8A25-2939055AA658}

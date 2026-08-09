@@ -1,5 +1,6 @@
 #include "Widgets/SMiaIANetworkView.h"
 
+#include "StudioTopology.h"
 #include "Framework/Application/SlateApplication.h"
 #include "Input/Events.h"
 #include "Rendering/DrawElements.h"
@@ -436,15 +437,15 @@ FVector2D SMiaIANetworkView::AutomaticPosition(
     const int32 neuronCount = Snapshot.Layers.IsValidIndex(LayerIndex)
         ? Snapshot.Layers[LayerIndex].Neurons.Num()
         : 0;
-    const float x = layerCount <= 1
-        ? 0.5f
-        : static_cast<float>(LayerIndex) /
-            static_cast<float>(layerCount - 1);
-    const float y = neuronCount <= 1
-        ? 0.5f
-        : static_cast<float>(NeuronIndex) /
-            static_cast<float>(neuronCount - 1);
-    return FVector2D(x, y);
+    const MiaIA::Studio::StudioPosition position =
+        MiaIA::Studio::StudioTopologyBuilder::DetailedPosition2D(
+            static_cast<std::size_t>(LayerIndex),
+            static_cast<std::size_t>(layerCount),
+            static_cast<std::size_t>(NeuronIndex),
+            static_cast<std::size_t>(neuronCount));
+    return FVector2D(
+        static_cast<float>(position.X),
+        static_cast<float>(position.Y));
 }
 
 FVector2D SMiaIANetworkView::LayoutPosition(

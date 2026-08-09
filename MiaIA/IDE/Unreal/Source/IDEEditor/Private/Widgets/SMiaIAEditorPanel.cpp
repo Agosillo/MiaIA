@@ -2,6 +2,7 @@
 
 #include "MiaIACommandProcessor.h"
 #include "MiaIABlueprintLibrary.h"
+#include "StudioTopology.h"
 #include "Framework/Application/SlateApplication.h"
 #include "InputCoreTypes.h"
 #include "Styling/AppStyle.h"
@@ -24,9 +25,6 @@
 
 namespace
 {
-    constexpr int64 DetailedNeuronLimit = 2000;
-    constexpr int64 DetailedConnectionLimit = 5000;
-
     FText SessionStatusName(EMiaIATrainingSessionStatus Status)
     {
         switch (Status)
@@ -761,8 +759,9 @@ void SMiaIAEditorPanel::RefreshData()
 {
     NetworkOverview = UMiaIABlueprintLibrary::GetNetworkOverview();
     bCompactTopology =
-        NetworkOverview.NeuronCount > DetailedNeuronLimit ||
-        NetworkOverview.ConnectionCount > DetailedConnectionLimit;
+        MiaIA::Studio::StudioTopologyBuilder::RequiresCompactMode(
+            static_cast<std::size_t>(NetworkOverview.NeuronCount),
+            static_cast<std::size_t>(NetworkOverview.ConnectionCount));
     Session = UMiaIABlueprintLibrary::GetTrainingSession();
 
     if (bCompactTopology)

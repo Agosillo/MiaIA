@@ -48,6 +48,8 @@ The roadmap is organized by dependency rather than by a fixed release date. Math
 - one reusable CLI command processor shared by the terminal and Unreal editor hosts;
 - first dockable Unreal topology, explorer, focused inspector, phase controls, and interactive command console;
 - shared contextual command catalog plus Unreal suggestion filtering, Tab completion, and session-local command history.
+- renderer-neutral StudioCore with shared detailed/compact policies, selection state, command execution, and normalized 2D/3D topology scenes;
+- initial Unreal consumption of StudioCore scalability and two-dimensional layout rules.
 
 ## Implemented optimizer foundation
 
@@ -128,6 +130,17 @@ The `.mia` format is planned and does not exist in the current implementation.
 - navigate from network overview to an individual neuron or connection;
 - compare snapshots and training checkpoints;
 - keep Unreal-specific rendering data outside the mathematical Core.
+
+## MiaIA Studio delivery
+
+The platform-neutral Studio application foundation is implemented. The next delivery steps are:
+
+- move reusable Slate widgets from the editor-only module into a runtime-capable Studio UI module;
+- embed the same runtime UI in the Unreal Editor panel and a game target;
+- add a user-selectable 2D/3D topology mode;
+- implement the first interactive three-dimensional renderer over StudioCore coordinates;
+- package and verify a Windows `MiaIAStudio.exe` that does not require Unreal Editor;
+- retain StudioCore as the shared application boundary for a possible future Qt frontend.
 
 ## Additional clients
 

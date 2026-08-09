@@ -12,6 +12,9 @@ The architecture is intended to support multiple front ends. Unreal Engine is th
 flowchart LR
     Console["Console.exe"] --> CLI["CLI command processor"]
     UnrealConsole["Unreal command console"] --> CLI
+    Studio["Studio frontends"] --> StudioCore["StudioCore"]
+    StudioCore --> CLI
+    StudioCore --> SDK
     CLI --> SDK["SDK / MiaIAClient"]
     Unreal["Unreal structured UI and Blueprint"] --> SDK
     Future["Future clients: Unity or custom tools"] --> SDK
@@ -73,11 +76,19 @@ The module also owns the structured command catalog used for contextual discover
 
 `Console.exe` and the Unreal editor console use this same processor in the same process as their SDK state. Unreal does not launch `Console.exe`: a separate process would own a separate process-local network, dataset, and training session. Command execution is serialized because the current processor captures the existing command handlers' standard output during dispatch.
 
+### StudioCore
+
+`StudioCore` is the renderer-neutral application layer for graphical clients. It is a C++20 static library and does not depend on Unreal, Slate, Qt, or a graphics API. Its controller composes the shared CLI and SDK into refresh, command, suggestion, view-mode, and selection operations.
+
+The topology builder converts full or overview network snapshots into normalized logical scenes. Detailed 2D scenes arrange layers on X and neurons on Y. Detailed 3D scenes arrange layers on Z and distribute each layer on an X/Y grid. Compact scenes retain aggregate layer counts without copying every neuron and connection. Frontends remain responsible for pixels, meshes, camera behavior, input events, and toolkit-specific styling.
+
 ### Clients
 
 `Console.exe` is a thin terminal host around the shared CLI command processor. It is both a usable diagnostic client and a reference for other integrations.
 
-The Unreal Engine project is the first graphical integration. Its runtime Blueprint function library converts native session, phase, neuron, and connection snapshots into Unreal-reflected types while keeping every operation behind `MiaIAClient`. It also exposes the shared command processor to Blueprint and to the editor panel. It provides the first end-to-end Blueprint debug flow, but it is not yet the complete MiaIA editor experience.
+The Unreal Engine project is the first graphical integration. Its runtime Blueprint function library converts native session, phase, neuron, and connection snapshots into Unreal-reflected types while keeping every operation behind `MiaIAClient`. It also exposes the shared command processor to Blueprint and to the editor panel. The current editor topology already consumes StudioCore scalability and normalized 2D layout policy.
+
+The planned Unreal standalone target will package the Studio experience as a Windows executable that does not require Unreal Editor on the destination computer. It will still use the Unreal runtime. Reusable Slate widgets must therefore move out of the editor-only module before packaging. A future Qt or other native frontend can consume the same StudioCore state while supplying a different renderer and widget implementation.
 
 ## Network representation
 

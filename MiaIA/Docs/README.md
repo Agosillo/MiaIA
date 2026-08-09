@@ -2,13 +2,14 @@
 
 MiaIA is an Interactive Development Environment for Artificial Intelligence. Its purpose is not to compete with large training frameworks on throughput. Its purpose is to make a neural network observable: users should be able to build a model, execute it, inspect its state, evaluate samples, follow gradients, and eventually control training step by step.
 
-The project is currently in its foundation stage. The C++ engine, public SDK facade, shared command processor, terminal and Unreal command consoles, test harness, ONNX interchange, CSV dataset pipeline, fixed-model dataset evaluation, non-mutating gradient inspection, phase-by-phase SGD debugging, controlled sessions, background pause/resume, navigable training history, and first interactive topology panel are implemented. Persistent MiaIA project files and the complete Unreal visualization experience are planned work.
+The project is currently in its foundation stage. The C++ engine, public SDK facade, shared command processor, terminal and Unreal command consoles, test harness, ONNX interchange, CSV dataset pipeline, fixed-model dataset evaluation, non-mutating gradient inspection, phase-by-phase SGD debugging, controlled sessions, background pause/resume, navigable training history, first interactive topology panel, and renderer-neutral Studio application foundation are implemented. Persistent MiaIA project files, a packaged Studio executable, and the complete 2D/3D visualization experience are planned work.
 
 ## Documentation map
 
 - [Architecture](Architecture/Architecture.md) describes module boundaries, supported data flows, and current technical constraints.
 - [Console guide](Console/Console.md) documents every interactive command and introduces the neural-network concepts behind them.
 - [Unreal integration](Unreal/Unreal.md) documents the current Blueprint-facing SDK adapter and build workflow.
+- [MiaIA Studio](Studio/Studio.md) documents the shared graphical application model and standalone delivery path.
 - [Coding guidelines](Coding/Coding.md) records the conventions used by the C++ codebase.
 - [Architectural decisions](ADR/ADR.md) summarizes the decisions that currently shape the project.
 - [History](History/History.md) tracks the implemented foundation in chronological order.
@@ -29,7 +30,7 @@ The project is currently in its foundation stage. The C++ engine, public SDK fac
 | Evaluation | Per-sample details and fixed-model mean squared error across a complete dataset |
 | Differentiation | Per-neuron, per-bias, and per-connection gradients without parameter updates |
 | Optimization | Standalone and session-attached phase debugging, atomic SGD, ordered epochs, history, bounded runs, and background control |
-| Clients | One shared CLI command processor hosted by Console.exe and Unreal, plus Blueprint nodes and an interactive topology/debug panel |
+| Clients | Shared CLI hosted by Console.exe and Unreal, Blueprint nodes, an interactive topology/debug panel, and renderer-neutral StudioCore |
 | Verification | Named Debug- and Release-capable C++ test harness, including numerical gradient checks |
 
 ## Solution structure
@@ -43,7 +44,8 @@ MiaIA/
 |-- Console/    Thin terminal host for the shared command processor
 |-- Tests/      Named integration and mathematical correctness tests
 |-- IDE/        Graphical IDE client implementations
-|   `-- Unreal/ Current Unreal Engine client and editor integration
+|   |-- StudioCore/ Platform-neutral Studio state and 2D/3D topology scenes
+|   `-- Unreal/     Current Unreal Engine client and editor integration
 `-- Docs/       Project documentation
 ```
 

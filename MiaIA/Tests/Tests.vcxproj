@@ -146,6 +146,9 @@
     <ClInclude Include="TestHarness.h" />
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\IDE\StudioCore\StudioCore.vcxproj">
+      <Project>{4d284104-a115-4b86-a52b-c3813c59c42e}</Project>
+    </ProjectReference>
     <ProjectReference Include="..\CLI\CLI.vcxproj">
       <Project>{a66d809e-658d-486d-9488-fd4d8b05d15c}</Project>
     </ProjectReference>
