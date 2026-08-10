@@ -430,3 +430,6 @@ FodyWeavers.xsd
 
 # vcpkg manifest dependencies
 **/vcpkg_installed/
+
+# Local NONOP website deployment package (not part of the MiaIA repository)
+Website/

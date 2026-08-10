@@ -72,7 +72,7 @@ The primary development configuration is x64. The solution also contains x86 con
 
 For a complete console session, see the [Console guide](Console/Console.md).
 
-The Unreal-based standalone application is packaged through `IDE/Unreal/Build/Package-Windows.ps1`. See the [Unreal integration guide](Unreal/Unreal.md#packaged-windows-application) for the complete build and verification workflow.
+The Unreal-based standalone application is packaged through `IDE/Unreal/Build/Package-Windows.ps1`. A Shipping archive can then be converted into an unsigned Microsoft Store MSIX through `IDE/Unreal/Build/Package-StoreMsix.ps1`. See the [Unreal integration guide](Unreal/Unreal.md#packaged-windows-application) for the complete build, Store, and verification workflows.
 
 ## Architectural direction
 

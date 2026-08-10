@@ -345,6 +345,22 @@ If Unreal Engine is installed elsewhere, pass the installation root explicitly:
 
 The packaging script never launches the application and never removes an existing archive. Unreal Automation Tool updates files below the selected output directory. Use `-OutputDirectory` to keep separate experimental packages.
 
+### Microsoft Store package
+
+The repository also contains a manual MSIX workflow for the Microsoft Store. It uses the product identity reserved in Partner Center, declares the desktop full-trust capability and Visual C++ runtime dependency, preserves the collected license material, and launches the real packaged executable instead of the Unreal bootstrap launcher.
+
+Create a fresh Shipping archive first, then run:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass `
+    -File .\Build\Package-StoreMsix.ps1 `
+    -PackageVersion 1.0.0.0 `
+    -SourceDirectory "D:\MiaIA-Releases\Windows-Shipping" `
+    -OutputDirectory "D:\MiaIA-Releases\Store-1.0.0.0"
+```
+
+The output `.msix` is intentionally unsigned because Microsoft Store validates and signs an accepted submission. Do not distribute that unsigned file directly from the project website. For the precise identity values, version rules, local registration procedure, and Partner Center checklist, see [`Build/Store/README.md`](../../IDE/Unreal/Build/Store/README.md).
+
 ### Provisional application branding
 
 The current package uses provisional raster assets derived from the MiaIA Studio brand board:
