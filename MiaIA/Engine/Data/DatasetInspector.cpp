@@ -12,7 +12,8 @@ namespace MiaIA::Engine
             dataset.Source,
             dataset.Samples.size(),
             dataset.InputCount,
-            dataset.TargetCount
+            dataset.TargetCount,
+            dataset.HasHeader
         };
     }
 

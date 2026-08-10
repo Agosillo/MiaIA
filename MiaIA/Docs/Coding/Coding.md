@@ -141,7 +141,7 @@ Snapshots are public data-transfer values. They should be:
 - free of client-specific rendering state;
 - assigned atomically after successful inspection or calculation.
 
-MiaIA-specific editor state will eventually belong to dedicated project or visualization structures rather than being inserted into the mathematical network model without a clear boundary.
+MiaIA-specific persistent state belongs to dedicated project or visualization structures rather than being inserted into the mathematical network model without a clear boundary. The `.mai` v1 implementation follows this rule through `ProjectArchive` and `ProjectInfoSnapshot`; future visualization sections should preserve the same separation.
 
 ## Tests
 

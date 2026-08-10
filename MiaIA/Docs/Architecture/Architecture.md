@@ -64,7 +64,7 @@ This separation allows a mathematical subsystem to evolve without requiring clie
 
 ### SDK
 
-`MiaIAClient` is the public facade used by clients. It exposes network creation and editing, snapshots, ONNX interchange, datasets, forward execution, sample and full-dataset evaluation, gradient evaluation, atomic sample training, and an ordered dataset epoch.
+`MiaIAClient` is the public facade used by clients. It exposes network creation and editing, snapshots, ONNX interchange, versioned `.mai` project persistence, datasets, forward execution, sample and full-dataset evaluation, gradient evaluation, atomic sample training, and an ordered dataset epoch.
 
 The current SDK owns one process-local network and one process-local dataset through its internal client state. This is sufficient for the present console and integration tests. Multiple sessions, explicit contexts, concurrency, and persisted workspace state are future concerns and should not be assumed to exist today.
 
@@ -269,9 +269,11 @@ CSV is the current sample interchange format. The caller explicitly supplies `N`
 
 CSV contains samples, not MiaIA editor or debug metadata.
 
-### Future `.mia` format
+### `.mai` project format
 
-The planned `.mia` format will represent a MiaIA workspace rather than only an inference graph. Candidate data includes visualization layout, annotations, debug state, training checkpoints, history, and editor settings. This format is not implemented yet.
+`ProjectArchive` implements the versioned `.mai` container independently of any frontend. Version 1 embeds the supported ONNX model and tagged metadata sections for a CSV dataset reference, training configuration, and breakpoint definitions. Writes use a sibling temporary file followed by replacement, and reads construct validated replacement state before `MiaIAClient` publishes it.
+
+Dataset samples remain external. If their recorded path is unavailable, opening still restores the model, training configuration, and breakpoints while reporting the dataset as unavailable. Current training progress, retained history, active phase-debug state, visualization layout, and user preferences are not part of version 1. See the [project format contract](../Project/Project.md).
 
 ## Validation and failure behavior
 
@@ -288,7 +290,7 @@ Clients should treat a `false` result as a rejected operation and should not inf
 - SGD is the only optimizer;
 - background execution uses one cooperative worker and one process-local state lock;
 - no mini-batches, checkpoints, or configurable sample ordering yet;
-- no `.mia` persistence yet;
+- `.mai` v1 does not yet persist training progress, history, or visualization layout;
 - Unreal visualization and Blueprint coverage are incomplete.
 
 These constraints describe the current implementation, not the intended final scope.

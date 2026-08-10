@@ -8,6 +8,7 @@
 #include "InputCoreTypes.h"
 #include "Containers/UnrealString.h"
 #include "Misc/ConfigCacheIni.h"
+#include "Misc/Paths.h"
 #include "Styling/AppStyle.h"
 #include "Widgets/Input/SButton.h"
 #include "Widgets/Input/SComboButton.h"
@@ -383,6 +384,25 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
                 .AutoHeight()
                 [
                 SNew(SHorizontalBox)
+                + SHorizontalBox::Slot()
+                .AutoWidth()
+                .VAlign(VAlign_Center)
+                .Padding(2.0f, 0.0f, 12.0f, 0.0f)
+                [
+                    SNew(SComboButton)
+                    .ComboButtonStyle(&ComboButtonStyle)
+                    .ToolTipText(LOCTEXT(
+                        "ProjectMenuTooltip",
+                        "Create, open, save, or inspect a versioned .mai project."))
+                    .ButtonContent()
+                    [
+                        SNew(STextBlock)
+                        .Text(LOCTEXT("ProjectMenuLabel", "Project"))
+                    ]
+                    .OnGetMenuContent(
+                        this,
+                        &SMiaIAEditorPanel::BuildProjectMenu)
+                ]
                 + SHorizontalBox::Slot()
                 .AutoWidth()
                 .VAlign(VAlign_Center)
@@ -1316,6 +1336,9 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
                     .FillHeight(1.0f)
                     [
                         SNew(SScrollBox)
+                        .Visibility(
+                            this,
+                            &SMiaIAEditorPanel::DialogContentVisibility)
                         + SScrollBox::Slot()
                         [
                             SNew(STextBlock)
@@ -1325,15 +1348,104 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
                     ]
                     + SVerticalBox::Slot()
                     .AutoHeight()
+                    .Padding(0.0f, 12.0f, 0.0f, 0.0f)
+                    [
+                        SAssignNew(ProjectPathInput, SEditableTextBox)
+                        .Visibility(
+                            this,
+                            &SMiaIAEditorPanel::ProjectPathVisibility)
+                        .Style(&InputStyle)
+                        .HintText_Lambda([this]()
+                        {
+                            return ProjectPathAction ==
+                                    EMiaIAProjectPathAction::ImportOnnx ||
+                                ProjectPathAction ==
+                                    EMiaIAProjectPathAction::ExportOnnx
+                                ? LOCTEXT(
+                                    "OnnxPathHint",
+                                    "Full path to an .onnx model")
+                                : LOCTEXT(
+                                    "ProjectPathHint",
+                                    "Full path to a .mai project");
+                        })
+                        .OnTextCommitted_Lambda(
+                            [this](const FText&, ETextCommit::Type CommitType)
+                            {
+                                if (CommitType == ETextCommit::OnEnter)
+                                {
+                                    HandleConfirmProjectPath();
+                                }
+                            })
+                    ]
+                    + SVerticalBox::Slot()
+                    .AutoHeight()
                     .HAlign(HAlign_Right)
                     .Padding(0.0f, 16.0f, 0.0f, 0.0f)
                     [
-                        SNew(SButton)
-                        .ButtonStyle(&ButtonStyle)
-                        .Text(LOCTEXT("CloseStudioDialog", "Close"))
-                        .OnClicked(
-                            this,
-                            &SMiaIAEditorPanel::HandleCloseDialog)
+                        SNew(SHorizontalBox)
+                        + SHorizontalBox::Slot()
+                        .AutoWidth()
+                        .Padding(2.0f)
+                        [
+                            SNew(SButton)
+                            .Visibility(
+                                this,
+                                &SMiaIAEditorPanel::ProjectPathVisibility)
+                            .ButtonStyle(&ButtonStyle)
+                            .Text(LOCTEXT("CancelProjectPath", "Cancel"))
+                            .OnClicked(
+                                this,
+                                &SMiaIAEditorPanel::HandleCancelProjectPath)
+                        ]
+                        + SHorizontalBox::Slot()
+                        .AutoWidth()
+                        .Padding(2.0f)
+                        [
+                            SNew(SButton)
+                            .Visibility(
+                                this,
+                                &SMiaIAEditorPanel::ProjectPathVisibility)
+                            .ButtonStyle(&ButtonStyle)
+                            .Text_Lambda([this]()
+                            {
+                                switch (ProjectPathAction)
+                                {
+                                case EMiaIAProjectPathAction::Open:
+                                    return LOCTEXT(
+                                        "OpenProjectConfirm",
+                                        "Open");
+                                case EMiaIAProjectPathAction::ImportOnnx:
+                                    return LOCTEXT(
+                                        "ImportOnnxConfirm",
+                                        "Import");
+                                case EMiaIAProjectPathAction::ExportOnnx:
+                                    return LOCTEXT(
+                                        "ExportOnnxConfirm",
+                                        "Export");
+                                default:
+                                    return LOCTEXT(
+                                        "SaveProjectConfirm",
+                                        "Save");
+                                }
+                            })
+                            .OnClicked(
+                                this,
+                                &SMiaIAEditorPanel::HandleConfirmProjectPath)
+                        ]
+                        + SHorizontalBox::Slot()
+                        .AutoWidth()
+                        .Padding(2.0f)
+                        [
+                            SNew(SButton)
+                            .Visibility(
+                                this,
+                                &SMiaIAEditorPanel::DialogContentVisibility)
+                            .ButtonStyle(&ButtonStyle)
+                            .Text(LOCTEXT("CloseStudioDialog", "Close"))
+                            .OnClicked(
+                                this,
+                                &SMiaIAEditorPanel::HandleCloseDialog)
+                        ]
                     ]
                 ]
             ]
@@ -2453,6 +2565,403 @@ FReply SMiaIAEditorPanel::HandleResetTopologyLimits()
     return FReply::Handled();
 }
 
+TSharedRef<SWidget> SMiaIAEditorPanel::BuildProjectMenu()
+{
+    return SNew(SVerticalBox)
+        + SVerticalBox::Slot()
+        .AutoHeight()
+        [
+            SNew(SButton)
+            .ButtonStyle(&ButtonStyle)
+            .Text(LOCTEXT("NewProjectMenuItem", "New"))
+            .OnClicked(this, &SMiaIAEditorPanel::HandleNewProject)
+        ]
+        + SVerticalBox::Slot()
+        .AutoHeight()
+        [
+            SNew(SButton)
+            .ButtonStyle(&ButtonStyle)
+            .Text(LOCTEXT("OpenProjectMenuItem", "Open..."))
+            .OnClicked(this, &SMiaIAEditorPanel::HandleOpenProject)
+        ]
+        + SVerticalBox::Slot()
+        .AutoHeight()
+        [
+            SNew(SButton)
+            .ButtonStyle(&ButtonStyle)
+            .Text(LOCTEXT("SaveProjectMenuItem", "Save"))
+            .OnClicked(this, &SMiaIAEditorPanel::HandleSaveProject)
+        ]
+        + SVerticalBox::Slot()
+        .AutoHeight()
+        [
+            SNew(SButton)
+            .ButtonStyle(&ButtonStyle)
+            .Text(LOCTEXT("SaveProjectAsMenuItem", "Save as..."))
+            .OnClicked(this, &SMiaIAEditorPanel::HandleSaveProjectAs)
+        ]
+        + SVerticalBox::Slot()
+        .AutoHeight()
+        [
+            SNew(SButton)
+            .ButtonStyle(&ButtonStyle)
+            .Text(LOCTEXT("ImportOnnxMenuItem", "Import ONNX..."))
+            .OnClicked(this, &SMiaIAEditorPanel::HandleImportOnnx)
+        ]
+        + SVerticalBox::Slot()
+        .AutoHeight()
+        [
+            SNew(SButton)
+            .ButtonStyle(&ButtonStyle)
+            .Text(LOCTEXT("ExportOnnxMenuItem", "Export ONNX..."))
+            .OnClicked(this, &SMiaIAEditorPanel::HandleExportOnnx)
+        ]
+        + SVerticalBox::Slot()
+        .AutoHeight()
+        [
+            SNew(SButton)
+            .ButtonStyle(&ButtonStyle)
+            .Text(LOCTEXT("ProjectInfoMenuItem", "Info"))
+            .OnClicked(this, &SMiaIAEditorPanel::HandleProjectInfo)
+        ];
+}
+
+FReply SMiaIAEditorPanel::HandleNewProject()
+{
+    FSlateApplication::Get().DismissAllMenus();
+
+    if (!UMiaIABlueprintLibrary::NewProject())
+    {
+        ShowDialog(
+            LOCTEXT("NewProjectFailedTitle", "New Project Failed"),
+            LOCTEXT(
+                "NewProjectFailedContent",
+                "Pause training or cancel phase debugging before replacing the current project."));
+        return FReply::Handled();
+    }
+
+    ConsoleHistory += TEXT("\n> project new\nNew MiaIA project created.\n");
+    UpdateConsoleOutput();
+    RefreshData();
+    return FReply::Handled();
+}
+
+FReply SMiaIAEditorPanel::HandleOpenProject()
+{
+    ShowProjectPathDialog(EMiaIAProjectPathAction::Open);
+    return FReply::Handled();
+}
+
+FReply SMiaIAEditorPanel::HandleSaveProject()
+{
+    FSlateApplication::Get().DismissAllMenus();
+
+    if (UMiaIABlueprintLibrary::GetNetworkOverview().Layers.Num() == 0)
+    {
+        ShowDialog(
+            LOCTEXT(
+                "SaveProjectWithoutModelTitle",
+                "No Model to Save"),
+            LOCTEXT(
+                "SaveProjectWithoutModelContent",
+                "Create or import a valid network before saving a .mai project. Version 1 always contains an embedded model."));
+        return FReply::Handled();
+    }
+
+    const FMiaIAProjectInfo info =
+        UMiaIABlueprintLibrary::GetProjectInfo();
+
+    if (info.Path.IsEmpty())
+    {
+        ShowProjectPathDialog(EMiaIAProjectPathAction::SaveAs);
+        return FReply::Handled();
+    }
+
+    if (!UMiaIABlueprintLibrary::SaveProject(info.Path))
+    {
+        ShowDialog(
+            LOCTEXT("SaveProjectFailedTitle", "Save Project Failed"),
+            LOCTEXT(
+                "SaveProjectFailedContent",
+                "The .mai project could not be saved. Check the path and pause active training or phase debugging."));
+        return FReply::Handled();
+    }
+
+    ConsoleHistory += FString::Printf(
+        TEXT("\n> project save\nMiaIA project saved to %s.\n"),
+        *info.Path);
+    UpdateConsoleOutput();
+    return FReply::Handled();
+}
+
+FReply SMiaIAEditorPanel::HandleSaveProjectAs()
+{
+    if (UMiaIABlueprintLibrary::GetNetworkOverview().Layers.Num() == 0)
+    {
+        FSlateApplication::Get().DismissAllMenus();
+        ShowDialog(
+            LOCTEXT(
+                "SaveProjectAsWithoutModelTitle",
+                "No Model to Save"),
+            LOCTEXT(
+                "SaveProjectAsWithoutModelContent",
+                "Create or import a valid network before saving a .mai project. Version 1 always contains an embedded model."));
+        return FReply::Handled();
+    }
+
+    ShowProjectPathDialog(EMiaIAProjectPathAction::SaveAs);
+    return FReply::Handled();
+}
+
+FReply SMiaIAEditorPanel::HandleImportOnnx()
+{
+    ShowProjectPathDialog(EMiaIAProjectPathAction::ImportOnnx);
+    return FReply::Handled();
+}
+
+FReply SMiaIAEditorPanel::HandleExportOnnx()
+{
+    if (UMiaIABlueprintLibrary::GetNetworkOverview().Layers.Num() == 0)
+    {
+        FSlateApplication::Get().DismissAllMenus();
+        ShowDialog(
+            LOCTEXT(
+                "ExportOnnxWithoutModelTitle",
+                "No Model to Export"),
+            LOCTEXT(
+                "ExportOnnxWithoutModelContent",
+                "Create, import, or open a valid network before exporting an ONNX model."));
+        return FReply::Handled();
+    }
+
+    ShowProjectPathDialog(EMiaIAProjectPathAction::ExportOnnx);
+    return FReply::Handled();
+}
+
+FReply SMiaIAEditorPanel::HandleProjectInfo()
+{
+    FSlateApplication::Get().DismissAllMenus();
+    const FMiaIAProjectInfo info =
+        UMiaIABlueprintLibrary::GetProjectInfo();
+    FString content = FString::Printf(
+        TEXT("Path: %s\nFormat: .mai v%d\nModel: %s\nBreakpoints: %lld"),
+        info.Path.IsEmpty() ? TEXT("Unsaved") : *info.Path,
+        info.FormatVersion > 0 ? info.FormatVersion : 1,
+        info.bHasModel ? TEXT("Available") : TEXT("None"),
+        static_cast<long long>(info.BreakpointCount));
+
+    if (!info.bHasDatasetReference)
+    {
+        content += TEXT("\nDataset: None");
+    }
+    else
+    {
+        content += FString::Printf(
+            TEXT("\nDataset: %s\nDataset source: %s\nDataset inputs: %lld\nDataset targets: %lld\nDataset header: %s"),
+            info.bDatasetLoaded ? TEXT("Loaded") : TEXT("Unavailable"),
+            *info.DatasetSource,
+            static_cast<long long>(info.DatasetInputCount),
+            static_cast<long long>(info.DatasetTargetCount),
+            info.bDatasetHasHeader ? TEXT("Yes") : TEXT("No"));
+    }
+
+    if (info.bTrainingAvailable)
+    {
+        content += FString::Printf(
+            TEXT("\nTraining epochs: %lld\nLearning rate: %.12g\nLoss: MSE\nOptimizer: SGD"),
+            static_cast<long long>(info.TrainingEpochCount),
+            info.TrainingLearningRate);
+    }
+    else
+    {
+        content += TEXT("\nTraining configuration: None");
+    }
+
+    ShowDialog(
+        LOCTEXT("ProjectInfoTitle", "MiaIA Project"),
+        FText::FromString(content));
+    return FReply::Handled();
+}
+
+void SMiaIAEditorPanel::ShowProjectPathDialog(
+    EMiaIAProjectPathAction Action)
+{
+    ProjectPathAction = Action;
+
+    switch (Action)
+    {
+    case EMiaIAProjectPathAction::Open:
+        DialogTitle = LOCTEXT("OpenProjectTitle", "Open MiaIA Project");
+        break;
+    case EMiaIAProjectPathAction::SaveAs:
+        DialogTitle = LOCTEXT(
+            "SaveProjectAsTitle",
+            "Save MiaIA Project As");
+        break;
+    case EMiaIAProjectPathAction::ImportOnnx:
+        DialogTitle = LOCTEXT("ImportOnnxTitle", "Import ONNX Model");
+        break;
+    case EMiaIAProjectPathAction::ExportOnnx:
+        DialogTitle = LOCTEXT("ExportOnnxTitle", "Export ONNX Model");
+        break;
+    default:
+        DialogTitle = FText::GetEmpty();
+        break;
+    }
+
+    DialogContent = FText::GetEmpty();
+    bDialogVisible = true;
+    FSlateApplication::Get().DismissAllMenus();
+
+    const bool onnxAction =
+        Action == EMiaIAProjectPathAction::ImportOnnx ||
+        Action == EMiaIAProjectPathAction::ExportOnnx;
+    FString path = onnxAction
+        ? FString()
+        : UMiaIABlueprintLibrary::GetProjectInfo().Path;
+
+    if (path.IsEmpty())
+    {
+        path = FPaths::Combine(
+            FPaths::ProjectSavedDir(),
+            onnxAction
+                ? TEXT("MiaIAModel.onnx")
+                : TEXT("MiaIAProject.mai"));
+    }
+
+    if (ProjectPathInput.IsValid())
+    {
+        ProjectPathInput->SetText(FText::FromString(path));
+        FSlateApplication::Get().SetKeyboardFocus(
+            ProjectPathInput,
+            EFocusCause::SetDirectly);
+        ProjectPathInput->SelectAllText();
+    }
+
+    Invalidate(EInvalidateWidgetReason::PaintAndVolatility);
+}
+
+FReply SMiaIAEditorPanel::HandleConfirmProjectPath()
+{
+    if (!ProjectPathInput.IsValid() ||
+        ProjectPathAction == EMiaIAProjectPathAction::None)
+    {
+        return FReply::Handled();
+    }
+
+    FString path = ProjectPathInput->GetText().ToString();
+    path.TrimStartAndEndInline();
+
+    if (FPaths::GetExtension(path).IsEmpty())
+    {
+        if (ProjectPathAction == EMiaIAProjectPathAction::SaveAs)
+        {
+            path += TEXT(".mai");
+        }
+        else if (ProjectPathAction ==
+            EMiaIAProjectPathAction::ExportOnnx)
+        {
+            path += TEXT(".onnx");
+        }
+    }
+
+    if (path.IsEmpty())
+    {
+        return FReply::Handled();
+    }
+
+    path = FPaths::ConvertRelativePathToFull(path);
+    const EMiaIAProjectPathAction action = ProjectPathAction;
+    bool succeeded{};
+
+    switch (action)
+    {
+    case EMiaIAProjectPathAction::Open:
+        succeeded = UMiaIABlueprintLibrary::OpenProject(path);
+        break;
+    case EMiaIAProjectPathAction::SaveAs:
+        succeeded = UMiaIABlueprintLibrary::SaveProject(path);
+        break;
+    case EMiaIAProjectPathAction::ImportOnnx:
+        succeeded = UMiaIABlueprintLibrary::ImportOnnx(path);
+        break;
+    case EMiaIAProjectPathAction::ExportOnnx:
+        succeeded = UMiaIABlueprintLibrary::ExportOnnx(path);
+        break;
+    default:
+        break;
+    }
+
+    if (!succeeded)
+    {
+        ProjectPathAction = EMiaIAProjectPathAction::None;
+        const bool projectAction =
+            action == EMiaIAProjectPathAction::Open ||
+            action == EMiaIAProjectPathAction::SaveAs;
+        ShowDialog(
+            action == EMiaIAProjectPathAction::Open
+                ? LOCTEXT("OpenProjectFailedTitle", "Open Project Failed")
+                : action == EMiaIAProjectPathAction::SaveAs
+                    ? LOCTEXT(
+                        "SaveProjectAsFailedTitle",
+                        "Save Project Failed")
+                    : action == EMiaIAProjectPathAction::ImportOnnx
+                        ? LOCTEXT(
+                            "ImportOnnxFailedTitle",
+                            "Import ONNX Failed")
+                        : LOCTEXT(
+                            "ExportOnnxFailedTitle",
+                            "Export ONNX Failed"),
+            projectAction
+                ? LOCTEXT(
+                    "ProjectPathFailedContent",
+                    "The .mai project could not be processed. Check the path, file format, and current training/debug state.")
+                : LOCTEXT(
+                    "OnnxPathFailedContent",
+                    "The ONNX model could not be processed. Check the path, supported graph format, and current training/debug state."));
+        return FReply::Handled();
+    }
+
+    bDialogVisible = false;
+    ProjectPathAction = EMiaIAProjectPathAction::None;
+    switch (action)
+    {
+    case EMiaIAProjectPathAction::Open:
+        ConsoleHistory += FString::Printf(
+            TEXT("\n> project open \"%s\"\nMiaIA project opened.\n"),
+            *path);
+        break;
+    case EMiaIAProjectPathAction::SaveAs:
+        ConsoleHistory += FString::Printf(
+            TEXT("\n> project save \"%s\"\nMiaIA project saved.\n"),
+            *path);
+        break;
+    case EMiaIAProjectPathAction::ImportOnnx:
+        ConsoleHistory += FString::Printf(
+            TEXT("\n> import onnx \"%s\"\nONNX model imported.\n"),
+            *path);
+        break;
+    case EMiaIAProjectPathAction::ExportOnnx:
+        ConsoleHistory += FString::Printf(
+            TEXT("\n> export onnx \"%s\"\nONNX model exported.\n"),
+            *path);
+        break;
+    default:
+        break;
+    }
+    UpdateConsoleOutput();
+    RefreshData();
+    return FReply::Handled();
+}
+
+FReply SMiaIAEditorPanel::HandleCancelProjectPath()
+{
+    ProjectPathAction = EMiaIAProjectPathAction::None;
+    bDialogVisible = false;
+    Invalidate(EInvalidateWidgetReason::PaintAndVolatility);
+    return FReply::Handled();
+}
+
 TSharedRef<SWidget> SMiaIAEditorPanel::BuildHelpMenu()
 {
     return SNew(SVerticalBox)
@@ -2484,6 +2993,8 @@ FReply SMiaIAEditorPanel::HandleQuickHelp()
             "QuickHelpContent",
             "GETTING STARTED\n"
             "Use the Console to create or import a network, then choose 2D or 3D from View.\n\n"
+            "PROJECTS AND INTERCHANGE\n"
+            "Use Project to create, open, save, or inspect a .mai project. Import ONNX and Export ONNX exchange only the supported model portion.\n\n"
             "SELECTION AND LAYOUT\n"
             "Left click: select a neuron or connection.\n"
             "Ctrl + left click: add or remove a neuron from the selection.\n"
@@ -2542,6 +3053,7 @@ FReply SMiaIAEditorPanel::HandleAbout()
 
 FReply SMiaIAEditorPanel::HandleCloseDialog()
 {
+    ProjectPathAction = EMiaIAProjectPathAction::None;
     bDialogVisible = false;
     Invalidate(EInvalidateWidgetReason::PaintAndVolatility);
     return FReply::Handled();
@@ -2551,6 +3063,7 @@ void SMiaIAEditorPanel::ShowDialog(
     const FText& Title,
     const FText& Content)
 {
+    ProjectPathAction = EMiaIAProjectPathAction::None;
     DialogTitle = Title;
     DialogContent = Content;
     bDialogVisible = true;
@@ -2562,6 +3075,20 @@ void SMiaIAEditorPanel::ShowDialog(
 EVisibility SMiaIAEditorPanel::DialogVisibility() const
 {
     return bDialogVisible
+        ? EVisibility::Visible
+        : EVisibility::Collapsed;
+}
+
+EVisibility SMiaIAEditorPanel::DialogContentVisibility() const
+{
+    return ProjectPathAction == EMiaIAProjectPathAction::None
+        ? EVisibility::Visible
+        : EVisibility::Collapsed;
+}
+
+EVisibility SMiaIAEditorPanel::ProjectPathVisibility() const
+{
+    return ProjectPathAction != EMiaIAProjectPathAction::None
         ? EVisibility::Visible
         : EVisibility::Collapsed;
 }

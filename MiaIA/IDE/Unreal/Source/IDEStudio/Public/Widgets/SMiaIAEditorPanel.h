@@ -28,6 +28,15 @@ enum class EMiaIADataRefreshMode : uint8
     TenHz
 };
 
+enum class EMiaIAProjectPathAction : uint8
+{
+    None,
+    Open,
+    SaveAs,
+    ImportOnnx,
+    ExportOnnx
+};
+
 class IDESTUDIO_API SMiaIAEditorPanel final : public SCompoundWidget
 {
 public:
@@ -70,6 +79,16 @@ private:
     FReply HandleCancelDebug();
     FReply HandleExit();
     FReply SelectBottomTab(int32 TabIndex);
+    TSharedRef<SWidget> BuildProjectMenu();
+    FReply HandleNewProject();
+    FReply HandleOpenProject();
+    FReply HandleSaveProject();
+    FReply HandleSaveProjectAs();
+    FReply HandleImportOnnx();
+    FReply HandleExportOnnx();
+    FReply HandleProjectInfo();
+    FReply HandleConfirmProjectPath();
+    FReply HandleCancelProjectPath();
     TSharedRef<SWidget> BuildViewModeMenu();
     FReply SelectViewMode(EMiaIAStudioViewMode InViewMode);
     TSharedRef<SWidget> BuildThemeMenu();
@@ -95,7 +114,10 @@ private:
     FReply HandleRemoveBreakpoint(int64 BreakpointId);
     FReply HandleClearBreakpoints();
     void ShowDialog(const FText& Title, const FText& Content);
+    void ShowProjectPathDialog(EMiaIAProjectPathAction Action);
     EVisibility DialogVisibility() const;
+    EVisibility DialogContentVisibility() const;
+    EVisibility ProjectPathVisibility() const;
     void RefreshWidgetStyles();
     void HandleConsoleCommandCommitted(
         const FText& Text,
@@ -173,6 +195,8 @@ private:
     EMiaIAEditorTheme Theme{EMiaIAEditorTheme::FollowUnreal};
     EMiaIADataRefreshMode DataRefreshMode{
         EMiaIADataRefreshMode::Adaptive};
+    EMiaIAProjectPathAction ProjectPathAction{
+        EMiaIAProjectPathAction::None};
     EMiaIATrainingBreakpointKind BreakpointKind{
         EMiaIATrainingBreakpointKind::Phase};
     EMiaIATrainingDebugPhase BreakpointPhase{
@@ -204,4 +228,5 @@ private:
     TSharedPtr<SEditableTextBox> ConsoleInput;
     TSharedPtr<SEditableTextBox> BreakpointTargetInput;
     TSharedPtr<SEditableTextBox> BreakpointThresholdInput;
+    TSharedPtr<SEditableTextBox> ProjectPathInput;
 };

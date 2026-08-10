@@ -12,5 +12,6 @@ namespace MiaIA::Core
         std::size_t SampleCount{};
         std::size_t InputCount{};
         std::size_t TargetCount{};
+        bool HasHeader{ true };
     };
 }

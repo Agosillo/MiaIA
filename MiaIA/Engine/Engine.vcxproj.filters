@@ -60,6 +60,9 @@
     <ClInclude Include="Parameters\NetworkParameters.h">
       <Filter>File di intestazione</Filter>
     </ClInclude>
+    <ClInclude Include="Project\ProjectArchive.h">
+      <Filter>File di intestazione</Filter>
+    </ClInclude>
     <ClInclude Include="Weights\NetworkWeights.h">
       <Filter>File di intestazione</Filter>
     </ClInclude>
@@ -147,6 +150,9 @@
       <Filter>File di origine</Filter>
     </ClCompile>
     <ClCompile Include="Parameters\NetworkParameters.cpp">
+      <Filter>File di origine</Filter>
+    </ClCompile>
+    <ClCompile Include="Project\ProjectArchive.cpp">
       <Filter>File di origine</Filter>
     </ClCompile>
     <ClCompile Include="Weights\NetworkWeights.cpp">

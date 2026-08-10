@@ -174,6 +174,7 @@ namespace MiaIA::Engine
         importedDataset.Source = path;
         importedDataset.InputCount = inputCount;
         importedDataset.TargetCount = targetCount;
+        importedDataset.HasHeader = hasHeader;
 
         std::string line;
         bool firstContentLine = true;

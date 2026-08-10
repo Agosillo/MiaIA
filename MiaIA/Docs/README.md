@@ -2,7 +2,7 @@
 
 MiaIA is an Interactive Development Environment for Artificial Intelligence. Its purpose is not to compete with large training frameworks on throughput. Its purpose is to make a neural network observable: users should be able to build a model, execute it, inspect its state, evaluate samples, follow gradients, and eventually control training step by step.
 
-The project is currently in its foundation stage. The C++ engine, public SDK facade, shared command processor, terminal and Unreal command consoles, test harness, ONNX interchange, CSV dataset pipeline, fixed-model dataset evaluation, non-mutating gradient inspection, phase-by-phase SGD debugging, controlled sessions, background pause/resume, navigable training history, interactive 2D and first runtime 3D topology views, renderer-neutral Studio application foundation, shared Unreal editor/standalone runtime UI, and verified Win64 packaging workflow are implemented. Persistent MiaIA project files and the complete production visualization experience are planned work.
+The project is currently in its foundation stage. The C++ engine, public SDK facade, shared command processor, terminal and Unreal command consoles, test harness, ONNX interchange, CSV dataset pipeline, versioned `.mai` project persistence, fixed-model dataset evaluation, non-mutating gradient inspection, phase-by-phase SGD debugging, controlled sessions, background pause/resume, navigable training history, interactive 2D and first runtime 3D topology views, renderer-neutral Studio application foundation, shared Unreal editor/standalone runtime UI, and verified Win64 packaging workflow are implemented. The complete production visualization experience remains planned work.
 
 ## Documentation map
 
@@ -10,6 +10,7 @@ The project is currently in its foundation stage. The C++ engine, public SDK fac
 - [Console guide](Console/Console.md) documents every interactive command and introduces the neural-network concepts behind them.
 - [Unreal integration](Unreal/Unreal.md) documents the current Blueprint-facing SDK adapter and build workflow.
 - [MiaIA Studio](Studio/Studio.md) documents the shared graphical application model and standalone delivery path.
+- [MiaIA project format](Project/Project.md) defines the `.mai` v1 container and its safety behavior.
 - [Coding guidelines](Coding/Coding.md) records the conventions used by the C++ codebase.
 - [Architectural decisions](ADR/ADR.md) summarizes the decisions that currently shape the project.
 - [History](History/History.md) tracks the implemented foundation in chronological order.
@@ -26,6 +27,7 @@ The project is currently in its foundation stage. The C++ engine, public SDK fac
 | Inference | Direct input-to-output prediction through SDK and Console |
 | Inspection | Network, dataset, focused neuron/connection debug, gradient, session-history, and completed-step snapshots |
 | Interchange | Import and export of the currently supported dense ONNX subset |
+| Projects | Atomic `.mai` v1 save/open with embedded ONNX, dataset reference, training configuration, and breakpoints |
 | Datasets | Numeric CSV import with explicit input and target column counts |
 | Evaluation | Per-sample details and fixed-model mean squared error across a complete dataset |
 | Differentiation | Per-neuron, per-bias, and per-connection gradients without parameter updates |
@@ -76,7 +78,7 @@ The Unreal-based standalone application is packaged through `IDE/Unreal/Build/Pa
 
 All clients use the SDK rather than reaching into Engine or Core internals. Text commands are implemented once in the CLI module and hosted by both `Console.exe` and Unreal. Structured Unreal and Blueprint operations continue to use the SDK facade directly. A separate executable does not share current state because the SDK context is process-local.
 
-ONNX is used as an interchange format. A future `.mia` format is intended to preserve MiaIA-specific information such as editor layout, debug state, annotations, breakpoints, training history, and visualization metadata. A `.mia` project should still be exportable to ONNX when its model graph is representable by the supported ONNX subset.
+ONNX is used as an interchange format. The versioned `.mai` project format preserves the supported model together with the current dataset reference, training configuration, and breakpoint definitions. It deliberately does not yet preserve transient training progress, history, annotations, or visualization layout. A `.mai` project remains exportable to ONNX when its model graph is representable by the supported ONNX subset.
 
 ## Documentation rule
 

@@ -30,6 +30,12 @@ No STL type crosses the Unreal reflection boundary. IDs and indexes use signed 6
 The `MiaIA` Blueprint categories currently provide:
 
 ```text
+New Project
+Open Project
+Save Project
+Get Project Info
+Import Onnx
+Export Onnx
 Create Dense Network
 Get Network Snapshot
 Import Csv Dataset
@@ -54,6 +60,8 @@ Execute Command
 ```
 
 The training nodes currently select MSE and SGD internally because those are the only implemented loss and optimizer choices. Future enum pins should be added when the Engine supports more than one valid choice.
+
+The project nodes use the same `.mai` archive implementation as Console and MiaIA Studio. Their reflected information value reports the format version, current path, model and dataset availability, dataset schema, training configuration, and breakpoint count without exposing STL types. The interchange nodes import or export only the supported ONNX model portion.
 
 ## Minimal Blueprint workflow
 
@@ -80,7 +88,7 @@ The Blueprint asset is generated only after the initial Asset Registry scan and 
 
 ## MiaIA Studio editor panel
 
-MiaIA Studio opens automatically and receives focus after Unreal Editor and the Asset Registry finish initializing. Its dock location is managed by the normal Unreal layout system: dock it in the central workspace once and subsequent project launches restore that placement. If the tab is closed, reopen it from `Window > MiaIA Studio`. It reads the same shared `MiaIAClient` state used by the Console and Blueprint nodes; it does not create a separate model or duplicate Engine mathematics. Play in Editor is not started automatically.
+MiaIA Studio opens automatically and receives focus after Unreal Editor and the Asset Registry finish initializing. Its dock location is managed by the normal Unreal layout system: dock it in the central workspace once and subsequent project launches restore that placement. If the tab is closed, reopen it from `Window > MiaIA Studio`. It reads the same shared `MiaIAClient` state used by the Console and Blueprint nodes; it does not create a separate model or duplicate Engine mathematics. The `Project` toolbar menu creates, opens, saves, and describes `.mai` projects and imports or exports supported ONNX models in both the editor and packaged application. Play in Editor is not started automatically.
 
 ![MiaIA editor panel](Assets/miaia-editor-panel.png)
 

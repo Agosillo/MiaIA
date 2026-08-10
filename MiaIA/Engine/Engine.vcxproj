@@ -164,6 +164,7 @@
     <ClInclude Include="Interchange\OnnxExporter.h" />
     <ClInclude Include="Optimization\SgdOptimizer.h" />
     <ClInclude Include="Parameters\NetworkParameters.h" />
+    <ClInclude Include="Project\ProjectArchive.h" />
     <ClInclude Include="pch.h" />
     <ClInclude Include="Runtime\NetworkFactory.h" />
     <ClInclude Include="Runtime\NetworkRuntime.h" />
@@ -202,6 +203,7 @@
     </ClCompile>
     <ClCompile Include="Optimization\SgdOptimizer.cpp" />
     <ClCompile Include="Parameters\NetworkParameters.cpp" />
+    <ClCompile Include="Project\ProjectArchive.cpp" />
     <ClCompile Include="pch.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Create</PrecompiledHeader>

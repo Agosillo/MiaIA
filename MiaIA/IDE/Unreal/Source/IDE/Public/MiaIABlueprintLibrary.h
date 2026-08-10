@@ -16,6 +16,24 @@ public:
         const FString& Command,
         bool& OutExitRequested);
 
+    UFUNCTION(BlueprintCallable, Category = "MiaIA|Project")
+    static bool NewProject();
+
+    UFUNCTION(BlueprintCallable, Category = "MiaIA|Project")
+    static bool OpenProject(const FString& Path);
+
+    UFUNCTION(BlueprintCallable, Category = "MiaIA|Project")
+    static bool SaveProject(const FString& Path);
+
+    UFUNCTION(BlueprintPure, Category = "MiaIA|Project")
+    static FMiaIAProjectInfo GetProjectInfo();
+
+    UFUNCTION(BlueprintCallable, Category = "MiaIA|Interchange")
+    static bool ImportOnnx(const FString& Path);
+
+    UFUNCTION(BlueprintCallable, Category = "MiaIA|Interchange")
+    static bool ExportOnnx(const FString& Path);
+
     UFUNCTION(BlueprintCallable, Category = "MiaIA|Network")
     static bool CreateDenseNetwork(
         int32 InputCount,

@@ -130,8 +130,14 @@ The detailed-versus-compact thresholds then became persistent Studio preferences
 
 As the shared controls grew, the single toolbar was split into stable layout and training-debug rows. This keeps view and performance preferences separate from step controls while retaining session and phase status at the point of interaction on narrow editor and standalone windows.
 
+### Versioned MiaIA projects
+
+The first `.mai` project format established persistence above ONNX without changing MiaIA product or component names. Version 1 embeds the supported ONNX model and records the CSV dataset reference and schema, training configuration, and breakpoint definitions in tagged sections. Engine loading is transactional, saving publishes through a sibling temporary file, and an unavailable external dataset does not prevent the embedded model and other metadata from opening.
+
+The SDK, shared CLI, Unreal Blueprint library, and MiaIA Studio `Project` menu expose the same new, open, save, and information operations. Tests cover round trips, atomic overwrite, missing datasets, corrupt archives, unsupported versions, and unchanged client state after a rejected open.
+
 ## Current position
 
-MiaIA can now represent, execute, interchange, inspect, evaluate, differentiate, debug one training step phase by phase, train through controlled foreground or background sessions, and navigate the complete history of successful steps. It cannot yet persist a `.mia` workspace or deliver the planned complete graphical debugging experience.
+MiaIA can now represent, execute, interchange, persist a `.mai` v1 project, inspect, evaluate, differentiate, debug one training step phase by phase, train through controlled foreground or background sessions, and navigate the complete history of successful steps. It cannot yet persist visualization layouts or training history inside that project, or deliver the planned complete graphical debugging experience.
 
 Those next steps are tracked in the [Roadmap](../Roadmap/Roadmap.md).

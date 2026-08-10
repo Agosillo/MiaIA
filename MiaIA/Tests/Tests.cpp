@@ -268,6 +268,207 @@ int main()
 
     });
 
+    runner.Run("MiaIA project archive", [&]()
+    {
+    using MiaIA::CLI::MiaIACommandProcessor;
+
+    const auto testDirectory =
+        std::filesystem::temp_directory_path() /
+        "miaia_project_archive_tests";
+    const auto datasetPath = testDirectory / "samples.csv";
+    const auto projectPath = testDirectory / "training.mai";
+    const auto cliProjectPath = testDirectory / "cli.mai";
+    const auto corruptPath = testDirectory / "corrupt.mai";
+    const auto futurePath = testDirectory / "future.mai";
+    const auto wrongExtensionPath = testDirectory / "project.invalid";
+
+    std::filesystem::create_directories(testDirectory);
+
+    {
+        std::ofstream dataset(datasetPath);
+        dataset << "0,0,0\n1,1,1\n";
+    }
+
+    assert(MiaIAClient::NewProject());
+    assert(MiaIAClient::CreateDenseNetwork(2, 2, 1, 1));
+    assert(MiaIAClient::SetLayerActivation(
+        1,
+        MiaIA::Core::ActivationType::ReLU));
+    assert(MiaIAClient::SetNeuronBias(1003, 0.25));
+    assert(MiaIAClient::SetConnectionWeight(1, 0.75));
+    assert(MiaIAClient::ImportCsvDataset(
+        datasetPath.string(),
+        2,
+        1,
+        false));
+
+    MiaIA::Core::TrainingBreakpointSpec phaseBreakpoint;
+    phaseBreakpoint.Kind =
+        MiaIA::Core::TrainingBreakpointKind::Phase;
+    phaseBreakpoint.Phase =
+        MiaIA::Core::TrainingDebugPhase::Committed;
+    MiaIA::Core::TrainingBreakpointSnapshot addedPhaseBreakpoint;
+    assert(MiaIAClient::AddTrainingBreakpoint(
+        phaseBreakpoint,
+        addedPhaseBreakpoint));
+
+    MiaIA::Core::TrainingBreakpointSpec activationBreakpoint;
+    activationBreakpoint.Kind = MiaIA::Core::TrainingBreakpointKind::
+        NeuronActivationAbove;
+    activationBreakpoint.TargetId = 1005;
+    activationBreakpoint.Threshold = 0.5;
+    MiaIA::Core::TrainingBreakpointSnapshot addedActivationBreakpoint;
+    assert(MiaIAClient::AddTrainingBreakpoint(
+        activationBreakpoint,
+        addedActivationBreakpoint));
+    assert(MiaIAClient::SetTrainingBreakpointEnabled(
+        addedActivationBreakpoint.Id,
+        false));
+
+    MiaIA::Core::TrainingSessionSnapshot session;
+    assert(MiaIAClient::StartTrainingSession(
+        3,
+        0.05,
+        MiaIA::Core::LossType::MeanSquaredError,
+        MiaIA::Core::OptimizerType::StochasticGradientDescent,
+        session));
+    assert(MiaIAClient::CancelTrainingSession());
+
+    assert(!MiaIAClient::SaveProject(wrongExtensionPath.string()));
+    assert(MiaIAClient::SaveProject(projectPath.string()));
+    assert(std::filesystem::exists(projectPath));
+    assert(std::filesystem::file_size(projectPath) > 0);
+    assert(MiaIAClient::SaveProject(projectPath.string()));
+
+    auto projectInfo = MiaIAClient::GetProjectInfo();
+    assert(projectInfo.FormatVersion ==
+        MiaIA::Core::ProjectFormatVersion);
+    assert(projectInfo.Path == projectPath.string());
+    assert(projectInfo.HasModel);
+    assert(projectInfo.HasDatasetReference);
+    assert(projectInfo.DatasetLoaded);
+    assert(!projectInfo.DatasetHasHeader);
+    assert(projectInfo.DatasetInputCount == 2);
+    assert(projectInfo.DatasetTargetCount == 1);
+    assert(projectInfo.Training.Available);
+    assert(projectInfo.Training.EpochCount == 3);
+    assert(std::fabs(projectInfo.Training.LearningRate - 0.05) < 1e-12);
+    assert(projectInfo.BreakpointCount == 2);
+
+    assert(MiaIAClient::NewProject());
+    assert(MiaIAClient::GetSnapshot().Layers.empty());
+    assert(MiaIAClient::OpenProject(projectPath.string()));
+
+    const auto restoredNetwork = MiaIAClient::GetSnapshot();
+    assert(restoredNetwork.Layers.size() == 3);
+    assert(restoredNetwork.Layers[1].Activation ==
+        MiaIA::Core::ActivationType::ReLU);
+    MiaIA::Core::NeuronSnapshot restoredNeuron;
+    assert(MiaIAClient::TryGetNeuron(1003, restoredNeuron));
+    assert(std::fabs(restoredNeuron.Bias - 0.25) < 1e-12);
+    double restoredWeight{};
+    assert(MiaIAClient::GetConnectionWeight(1, restoredWeight));
+    assert(std::fabs(restoredWeight - 0.75) < 1e-12);
+
+    const auto restoredDataset = MiaIAClient::GetDatasetSummary();
+    assert(restoredDataset.SampleCount == 2);
+    assert(restoredDataset.InputCount == 2);
+    assert(restoredDataset.TargetCount == 1);
+    assert(!restoredDataset.HasHeader);
+
+    const auto restoredBreakpoints =
+        MiaIAClient::GetTrainingBreakpoints();
+    assert(restoredBreakpoints.size() == 2);
+    assert(restoredBreakpoints[0].Id == addedPhaseBreakpoint.Id);
+    assert(restoredBreakpoints[0].Enabled);
+    assert(restoredBreakpoints[0].Spec.Phase ==
+        MiaIA::Core::TrainingDebugPhase::Committed);
+    assert(restoredBreakpoints[1].Id ==
+        addedActivationBreakpoint.Id);
+    assert(!restoredBreakpoints[1].Enabled);
+    assert(restoredBreakpoints[1].Spec.TargetId == 1005);
+    assert(restoredBreakpoints[1].HitCount == 0);
+
+    projectInfo = MiaIAClient::GetProjectInfo();
+    assert(projectInfo.DatasetLoaded);
+    assert(projectInfo.Training.Available);
+    assert(projectInfo.BreakpointCount == 2);
+
+    const auto projectSuggestions =
+        MiaIACommandProcessor::GetSuggestions("project ");
+    assert(projectSuggestions.size() == 4);
+    assert(MiaIACommandProcessor::Execute(
+        "project info").Output.find("Format: .mai v1") !=
+        std::string::npos);
+    assert(MiaIACommandProcessor::Execute(
+        "project save cli.mai",
+        testDirectory.string()).Output.find("project saved") !=
+        std::string::npos);
+    assert(MiaIACommandProcessor::Execute(
+        "project new").Output.find("New MiaIA project") !=
+        std::string::npos);
+    assert(MiaIACommandProcessor::Execute(
+        "project open cli.mai",
+        testDirectory.string()).Output.find("project opened") !=
+        std::string::npos);
+    assert(MiaIAClient::GetSnapshot().Layers.size() == 3);
+
+    std::filesystem::rename(datasetPath, datasetPath.string() + ".away");
+    assert(MiaIAClient::NewProject());
+    assert(MiaIAClient::OpenProject(projectPath.string()));
+    projectInfo = MiaIAClient::GetProjectInfo();
+    assert(projectInfo.HasModel);
+    assert(projectInfo.HasDatasetReference);
+    assert(!projectInfo.DatasetLoaded);
+    assert(MiaIAClient::GetDatasetSummary().SampleCount == 0);
+    assert(MiaIAClient::GetSnapshot().Layers.size() == 3);
+    assert(MiaIAClient::GetTrainingBreakpoints().size() == 2);
+    std::filesystem::rename(datasetPath.string() + ".away", datasetPath);
+
+    assert(MiaIAClient::NewProject());
+    assert(MiaIAClient::CreateDenseNetwork(1, 1, 0, 1));
+    const auto sentinelNetwork = MiaIAClient::GetSnapshot();
+
+    {
+        std::ofstream corrupt(corruptPath, std::ios::binary);
+        corrupt << "not a MiaIA project";
+    }
+
+    assert(!MiaIAClient::OpenProject(corruptPath.string()));
+    assert(MiaIAClient::GetSnapshot().Layers.size() ==
+        sentinelNetwork.Layers.size());
+    assert(MiaIAClient::GetSnapshot().Connections.size() ==
+        sentinelNetwork.Connections.size());
+
+    std::filesystem::copy_file(
+        projectPath,
+        futurePath,
+        std::filesystem::copy_options::overwrite_existing);
+
+    {
+        std::fstream future(
+            futurePath,
+            std::ios::binary | std::ios::in | std::ios::out);
+        const char unsupportedVersion[4]{ 2, 0, 0, 0 };
+        future.seekp(8);
+        future.write(unsupportedVersion, sizeof(unsupportedVersion));
+    }
+
+    assert(!MiaIAClient::OpenProject(futurePath.string()));
+    assert(!MiaIAClient::OpenProject(wrongExtensionPath.string()));
+    assert(MiaIAClient::GetSnapshot().Layers.size() ==
+        sentinelNetwork.Layers.size());
+
+    assert(MiaIAClient::NewProject());
+    std::filesystem::remove(datasetPath);
+    std::filesystem::remove(projectPath);
+    std::filesystem::remove(cliProjectPath);
+    std::filesystem::remove(corruptPath);
+    std::filesystem::remove(futurePath);
+    std::filesystem::remove(testDirectory);
+
+    });
+
     runner.Run("Network editing and snapshots", [&]()
     {
     MiaIAClient::ClearNetwork();

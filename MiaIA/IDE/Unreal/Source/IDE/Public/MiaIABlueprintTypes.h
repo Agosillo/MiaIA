@@ -458,3 +458,48 @@ struct IDE_API FMiaIATrainingDebugConnection
     UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
     double UpdatedWeight{};
 };
+
+USTRUCT(BlueprintType)
+struct IDE_API FMiaIAProjectInfo
+{
+    GENERATED_BODY()
+
+    UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
+    int32 FormatVersion{};
+
+    UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
+    FString Path;
+
+    UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
+    bool bHasModel{};
+
+    UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
+    bool bHasDatasetReference{};
+
+    UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
+    bool bDatasetLoaded{};
+
+    UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
+    FString DatasetSource;
+
+    UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
+    int64 DatasetInputCount{};
+
+    UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
+    int64 DatasetTargetCount{};
+
+    UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
+    bool bDatasetHasHeader{true};
+
+    UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
+    bool bTrainingAvailable{};
+
+    UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
+    int64 TrainingEpochCount{};
+
+    UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
+    double TrainingLearningRate{};
+
+    UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
+    int64 BreakpointCount{};
+};

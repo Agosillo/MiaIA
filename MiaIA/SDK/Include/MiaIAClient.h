@@ -11,6 +11,7 @@
 #include "../../Core/Public/LossType.h"
 #include "../../Core/Public/OptimizerType.h"
 #include "../../Core/Public/PredictionSnapshot.h"
+#include "../../Core/Public/ProjectInfoSnapshot.h"
 #include "../../Core/Public/SampleEvaluationSnapshot.h"
 #include "../../Core/Public/SampleGradientSnapshot.h"
 #include "../../Core/Public/SampleSnapshot.h"
@@ -54,6 +55,11 @@ namespace MiaIA::SDK
         static bool CreateDenseNetwork(int inputCount, int hiddenCount, int hiddenLayers, int outputCount);
         static bool ImportOnnx(const std::string& path);
         static bool ExportOnnx(const std::string& path);
+        static bool NewProject();
+        static bool OpenProject(const std::string& path);
+        static bool SaveProject(const std::string& path);
+        [[nodiscard]]
+        static Core::ProjectInfoSnapshot GetProjectInfo();
         static bool ImportCsvDataset(
             const std::string& path,
             std::size_t inputCount,

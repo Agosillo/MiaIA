@@ -52,15 +52,15 @@ Future decisions that require a detailed comparison of alternatives should be re
 
 **Consequence:** ONNX compatibility does not imply support for every ONNX operator. Unsupported graphs must fail safely. MiaIA-specific editor and debugging data does not belong in the plain interchange graph.
 
-## ADR-006: Reserve `.mia` for the MiaIA workspace
+## ADR-006: Use `.mai` for versioned MiaIA projects
 
-**Status:** Planned; format not implemented
+**Status:** Accepted; version 1 implemented
 
-**Decision:** Introduce a future `.mia` format only when MiaIA-specific information must be persisted.
+**Decision:** Use `.mai` as a tagged, versioned project container. Version 1 embeds the supported ONNX model and stores a CSV dataset reference, training configuration, and breakpoint definitions when available.
 
-**Reason:** Editor layout, annotations, breakpoints, debug sessions, training history, and visualization metadata exceed the responsibility of ONNX.
+**Reason:** Breakpoints and training context exceed the responsibility of ONNX, while project persistence must remain independent of a specific graphical frontend.
 
-**Consequence:** A `.mia` workspace should retain an export path to ONNX for the representable model portion.
+**Consequence:** `.mai` saves are atomic and opens are transactional. A missing referenced dataset does not prevent the embedded model and metadata from opening. The representable model portion retains an explicit ONNX export path. Visualization layout, training history, and active debug state remain outside version 1.
 
 ## ADR-007: Start dataset interchange with explicit numeric CSV
 

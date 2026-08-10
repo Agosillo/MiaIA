@@ -432,6 +432,30 @@ namespace
         result.UpdatedWeight = source.UpdatedWeight;
         return result;
     }
+
+    FMiaIAProjectInfo ToBlueprint(
+        const MiaIA::Core::ProjectInfoSnapshot& source)
+    {
+        FMiaIAProjectInfo result;
+        result.FormatVersion = static_cast<int32>(source.FormatVersion);
+        result.Path = UTF8_TO_TCHAR(source.Path.c_str());
+        result.bHasModel = source.HasModel;
+        result.bHasDatasetReference = source.HasDatasetReference;
+        result.bDatasetLoaded = source.DatasetLoaded;
+        result.DatasetSource = UTF8_TO_TCHAR(source.DatasetSource.c_str());
+        result.DatasetInputCount = static_cast<int64>(
+            source.DatasetInputCount);
+        result.DatasetTargetCount = static_cast<int64>(
+            source.DatasetTargetCount);
+        result.bDatasetHasHeader = source.DatasetHasHeader;
+        result.bTrainingAvailable = source.Training.Available;
+        result.TrainingEpochCount = static_cast<int64>(
+            source.Training.EpochCount);
+        result.TrainingLearningRate = source.Training.LearningRate;
+        result.BreakpointCount = static_cast<int64>(
+            source.BreakpointCount);
+        return result;
+    }
 }
 
 FString UMiaIABlueprintLibrary::ExecuteCommand(
@@ -443,6 +467,44 @@ FString UMiaIABlueprintLibrary::ExecuteCommand(
         std::string(TCHAR_TO_UTF8(*FPaths::ProjectDir())));
     OutExitRequested = result.ExitRequested;
     return UTF8_TO_TCHAR(result.Output.c_str());
+}
+
+bool UMiaIABlueprintLibrary::NewProject()
+{
+    return MiaIA::SDK::MiaIAClient::NewProject();
+}
+
+bool UMiaIABlueprintLibrary::OpenProject(const FString& Path)
+{
+    return !Path.IsEmpty() &&
+        MiaIA::SDK::MiaIAClient::OpenProject(
+            std::string(TCHAR_TO_UTF8(*Path)));
+}
+
+bool UMiaIABlueprintLibrary::SaveProject(const FString& Path)
+{
+    return !Path.IsEmpty() &&
+        MiaIA::SDK::MiaIAClient::SaveProject(
+            std::string(TCHAR_TO_UTF8(*Path)));
+}
+
+FMiaIAProjectInfo UMiaIABlueprintLibrary::GetProjectInfo()
+{
+    return ToBlueprint(MiaIA::SDK::MiaIAClient::GetProjectInfo());
+}
+
+bool UMiaIABlueprintLibrary::ImportOnnx(const FString& Path)
+{
+    return !Path.IsEmpty() &&
+        MiaIA::SDK::MiaIAClient::ImportOnnx(
+            std::string(TCHAR_TO_UTF8(*Path)));
+}
+
+bool UMiaIABlueprintLibrary::ExportOnnx(const FString& Path)
+{
+    return !Path.IsEmpty() &&
+        MiaIA::SDK::MiaIAClient::ExportOnnx(
+            std::string(TCHAR_TO_UTF8(*Path)));
 }
 
 bool UMiaIABlueprintLibrary::CreateDenseNetwork(

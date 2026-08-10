@@ -14,6 +14,7 @@ namespace MiaIA::Core
         std::string Source;
         std::size_t InputCount{};
         std::size_t TargetCount{};
+        bool HasHeader{ true };
         std::vector<Sample> Samples;
     };
 }

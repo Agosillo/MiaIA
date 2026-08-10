@@ -6,7 +6,7 @@ The MiaIA Console is an interactive SDK client. Every command translates user in
 
 Command parsing and dispatch live in the reusable CLI command processor. `Console.exe` is only its terminal host; the Unreal editor panel calls the same processor directly. A command therefore has the same syntax and behavior in both interfaces and operates on the host process's shared `MiaIAClient` state.
 
-The state is currently process-local. A host contains one current network and one current dataset. Closing that host discards both unless the model was exported to ONNX. Starting `Console.exe` beside Unreal does not connect it to the editor: the two processes own independent state. MiaIA workspace persistence and remote sessions are planned but not implemented.
+The state is process-local. A host contains one current MiaIA project state; save it as `.mai` to restore the supported model, dataset reference, training configuration, and breakpoints in a later process. Starting `Console.exe` beside Unreal does not connect it to the editor: the two processes own independent state and must open or save projects explicitly. Remote sessions are not implemented.
 
 Relative paths are resolved from the host working directory. For `Console.exe`, this is the directory from which it was launched. In the Unreal editor console, it is the Unreal project directory that contains `IDE.uproject`. Absolute paths work in both hosts.
 
@@ -28,6 +28,12 @@ train session r
 
 dataset import
     -> dataset import csv <inputs> <targets> [--no-header] <path>
+
+project
+    -> project new
+    -> project open <path.mai>
+    -> project save [path.mai]
+    -> project info
 ```
 
 Once a command starts accepting values, its complete syntax remains visible while the values are entered. For example, `create 2` continues to display `create <inputs> <hidden-width> <hidden-layers> <outputs>`.
@@ -84,6 +90,7 @@ train session resume
 train session status
 train session pause
 train session cancel
+project save xor-training.mai
 ```
 
 `dataset evaluate` and `dataset gradients` require a current network whose input and output dimensions match the dataset.
@@ -232,6 +239,58 @@ Runs 10,000 forward iterations and prints total and average elapsed time.
 
 Use this command only with a valid current network. It is a lightweight local timing aid, not a rigorous benchmark framework: it does not provide warm-up control, statistical sampling, hardware normalization, or comparison isolation.
 
+## MiaIA projects
+
+### `project new`
+
+```text
+project new
+```
+
+Clears the current network, dataset, training session, debug transaction, breakpoints, and saved project path. The command is rejected while background training is running or phase debugging is active.
+
+### `project open`
+
+```text
+project open <path.mai>
+```
+
+Transactionally opens a versioned MiaIA project. The current process state changes only after the complete archive and embedded ONNX model pass validation.
+
+Examples:
+
+```text
+project open experiment.mai
+project open "C:\MiaIA Projects\xor.mai"
+```
+
+If the recorded CSV source is unavailable, opening still restores the model, training configuration, and breakpoints. The command prints a warning and `project info` reports the dataset as unavailable.
+
+### `project save`
+
+```text
+project save [path.mai]
+```
+
+Atomically saves the current project. The first save requires a path. Later saves can omit it and reuse the current project path.
+
+```text
+project save "C:\MiaIA Projects\xor.mai"
+project save
+```
+
+The destination must use `.mai`. The current network must be representable by the supported ONNX subset. Dataset samples remain in their CSV file; the project stores their source reference and schema.
+
+### `project info`
+
+```text
+project info
+```
+
+Prints the current path and format version, model availability, dataset source and status, training configuration, and breakpoint count.
+
+The [MiaIA project format](../Project/Project.md) documents the precise version 1 contents, exclusions, and failure behavior.
+
 ## ONNX interchange
 
 ### `import onnx`
@@ -265,7 +324,7 @@ Example:
 export onnx "C:\Models\experiment.onnx"
 ```
 
-ONNX stores the model graph and parameters. It does not preserve the future MiaIA editor layout, breakpoints, annotations, training history, or visualization state.
+ONNX stores the model graph and parameters. It does not preserve MiaIA breakpoints, dataset references, training configuration, annotations, training history, or visualization state. Use `.mai` for the implemented MiaIA project context and ONNX for model interchange.
 
 ## CSV datasets
 

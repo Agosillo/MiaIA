@@ -111,15 +111,16 @@ The debugging experience should next evolve toward:
 
 ## Persistence and interchange
 
-- design and version the `.mia` workspace format;
-- save model topology and parameters;
-- save dataset references without silently embedding unavailable external data;
-- persist editor layout, annotations, debug state, and training history;
-- reload a workspace safely;
+- implemented the versioned `.mai` v1 project container;
+- embedded model topology and parameters through the supported ONNX subset;
+- saved dataset references and schemas without silently embedding external samples;
+- saved training configuration and breakpoint definitions;
+- added atomic save, transactional open, SDK/CLI/Blueprint access, and MiaIA Studio project controls;
+- persist editor layout, annotations, selected checkpoints, and training history in later tagged format versions;
 - export the representable model graph to ONNX;
 - broaden ONNX support incrementally with explicit compatibility tests.
 
-The `.mia` format is planned and does not exist in the current implementation.
+The precise version 1 boundary is documented in the [MiaIA project format](../Project/Project.md).
 
 ## Unreal Engine IDE
 

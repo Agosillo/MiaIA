@@ -163,6 +163,7 @@
     <ClCompile Include="Source\MiaIAClientDataset.cpp" />
     <ClCompile Include="Source\MiaIAClientInference.cpp" />
     <ClCompile Include="Source\MiaIAClientOnnx.cpp" />
+    <ClCompile Include="Source\MiaIAClientProject.cpp" />
     <ClCompile Include="Source\MiaIAClientTraining.cpp" />
     <ClCompile Include="Source\MiaIAClientTrainingDebug.cpp" />
   </ItemGroup>

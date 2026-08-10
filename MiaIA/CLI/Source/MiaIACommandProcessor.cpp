@@ -111,6 +111,11 @@ const std::vector<CommandCatalogEntry>& CommandCatalog()
         { "import onnx", "import onnx <path>", "Import the supported dense ONNX subset.", true },
         { "export", "export onnx <path>", "Export the current model.", false },
         { "export onnx", "export onnx <path>", "Export the current model to ONNX.", true },
+        { "project", "project <new|open|save|info>", "Create, persist, or inspect a MiaIA project.", false },
+        { "project new", "project new", "Clear runtime state and begin an unsaved project.", true },
+        { "project open", "project open <path.mai>", "Open a versioned MiaIA project archive.", true },
+        { "project save", "project save [path.mai]", "Save to a new path or the current project path.", true },
+        { "project info", "project info", "Show current project, dataset, training, and breakpoint metadata.", true },
         { "dataset", "dataset <action>", "Import, inspect, evaluate, or clear samples.", false },
         { "dataset import", "dataset import csv <inputs> <targets> [--no-header] <path>", "Import dataset samples.", false },
         { "dataset import csv", "dataset import csv <inputs> <targets> [--no-header] <path>", "Import a numeric CSV dataset.", true },
@@ -213,6 +218,19 @@ void PrintHelp()
 
         << "  export onnx [path]\n"
         << "      Export the current network as an ONNX model\n\n"
+
+        << "  project new\n"
+        << "      Clear the current state and begin an unsaved project\n\n"
+
+        << "  project open <path.mai>\n"
+        << "      Open a MiaIA project containing an ONNX model, dataset reference,\n"
+        << "      training configuration, and safe breakpoints\n\n"
+
+        << "  project save [path.mai]\n"
+        << "      Save atomically to a new path or the current project path\n\n"
+
+        << "  project info\n"
+        << "      Show the current project and restored component status\n\n"
 
         << "  dataset import csv <input-count> <output-count> <path>\n"
         << "      Import a numeric CSV dataset with a header\n"
@@ -494,6 +512,146 @@ void ExportOnnx(const std::string& command)
 
     std::cout
         << "ONNX model exported.\n";
+}
+
+std::string UnquotePath(const std::string& value);
+
+void PrintProjectInfo(
+    const MiaIA::Core::ProjectInfoSnapshot& info)
+{
+    std::cout
+        << "\nMiaIA Project\n\n"
+        << "Path: "
+        << (info.Path.empty() ? "Unsaved" : info.Path)
+        << "\nFormat: .mai v" << (info.FormatVersion == 0
+            ? MiaIA::Core::ProjectFormatVersion
+            : info.FormatVersion)
+        << "\nModel: " << (info.HasModel ? "Available" : "None")
+        << "\nBreakpoints: " << info.BreakpointCount;
+
+    if (!info.HasDatasetReference)
+    {
+        std::cout << "\nDataset: None";
+    }
+    else
+    {
+        std::cout
+            << "\nDataset: "
+            << (info.DatasetLoaded ? "Loaded" : "Unavailable")
+            << "\nDataset source: " << info.DatasetSource
+            << "\nDataset inputs: " << info.DatasetInputCount
+            << "\nDataset targets: " << info.DatasetTargetCount
+            << "\nDataset header: "
+            << (info.DatasetHasHeader ? "Yes" : "No");
+    }
+
+    if (info.Training.Available)
+    {
+        std::cout
+            << "\nTraining epochs: " << info.Training.EpochCount
+            << "\nLearning rate: " << info.Training.LearningRate
+            << "\nLoss: MSE"
+            << "\nOptimizer: SGD";
+    }
+    else
+    {
+        std::cout << "\nTraining configuration: None";
+    }
+
+    std::cout << "\n";
+}
+
+void HandleProjectCommand(const std::string& command)
+{
+    using MiaIA::SDK::MiaIAClient;
+
+    std::stringstream stream(command);
+    std::string projectToken;
+    std::string action;
+    stream >> projectToken >> action;
+
+    if (projectToken != "project" || action.empty())
+    {
+        std::cout
+            << "Usage: project <new|open|save|info>\n";
+        return;
+    }
+
+    if (action == "new")
+    {
+        std::string extra;
+
+        if (stream >> extra || !MiaIAClient::NewProject())
+        {
+            std::cout
+                << "New project failed. Pause training or cancel phase debugging first.\n";
+            return;
+        }
+
+        std::cout << "New MiaIA project created.\n";
+        return;
+    }
+
+    if (action == "info")
+    {
+        std::string extra;
+
+        if (stream >> extra)
+        {
+            std::cout << "Usage: project info\n";
+            return;
+        }
+
+        PrintProjectInfo(MiaIAClient::GetProjectInfo());
+        return;
+    }
+
+    if (action != "open" && action != "save")
+    {
+        std::cout
+            << "Usage: project <new|open|save|info>\n";
+        return;
+    }
+
+    std::string path;
+    std::getline(stream, path);
+    path = UnquotePath(path);
+
+    if (path.empty() && action == "save")
+    {
+        path = MiaIAClient::GetProjectInfo().Path;
+    }
+
+    if (path.empty())
+    {
+        std::cout << "Usage: project " << action << " <path.mai>\n";
+        return;
+    }
+
+    path = ResolvePath(path);
+    const bool succeeded = action == "open"
+        ? MiaIAClient::OpenProject(path)
+        : MiaIAClient::SaveProject(path);
+
+    if (!succeeded)
+    {
+        std::cout
+            << "Project " << action
+            << " failed. Use a valid .mai path and ensure training is not running.\n";
+        return;
+    }
+
+    const auto info = MiaIAClient::GetProjectInfo();
+    std::cout << "MiaIA project "
+        << (action == "open" ? "opened" : "saved") << ".\n";
+
+    if (action == "open" &&
+        info.HasDatasetReference &&
+        !info.DatasetLoaded)
+    {
+        std::cout
+            << "Dataset reference is unavailable; model and project metadata were still restored.\n";
+    }
 }
 
 std::string UnquotePath(const std::string& value)
@@ -2532,6 +2690,7 @@ std::string ResolveCommand(
         "predict",
         "import",
         "export",
+        "project",
         "dataset",
         "train",
         "summary",
@@ -2734,6 +2893,10 @@ MiaIA::CLI::MiaIACommandProcessor::Execute(
     else if (command.rfind("export", 0) == 0)
     {
         ExportOnnx(command);
+    }
+    else if (command.rfind("project", 0) == 0)
+    {
+        HandleProjectCommand(command);
     }
     else if (command.rfind("dataset", 0) == 0)
     {

@@ -11,6 +11,7 @@
 #include "../../Core/Model/Dataset.h"
 #include "../../Core/Model/TrainingSession.h"
 #include "../../Core/Model/TrainingDebugSession.h"
+#include "../../Core/Public/ProjectInfoSnapshot.h"
 
 #include <mutex>
 
@@ -18,6 +19,7 @@ namespace
 {
     MiaIA::Core::Dataset CurrentDataset;
     MiaIA::Core::Network CurrentNetwork;
+    MiaIA::Core::ProjectInfoSnapshot CurrentProjectInfo;
     MiaIA::Core::TrainingSession CurrentTrainingSession;
     MiaIA::Core::TrainingDebugSession CurrentTrainingDebugSession;
     std::mutex CurrentClientMutex;
@@ -31,6 +33,12 @@ MiaIA::Core::Dataset& MiaIA::SDK::Detail::ClientDataset()
 MiaIA::Core::Network& MiaIA::SDK::Detail::ClientNetwork()
 {
     return CurrentNetwork;
+}
+
+MiaIA::Core::ProjectInfoSnapshot&
+MiaIA::SDK::Detail::ClientProjectInfo()
+{
+    return CurrentProjectInfo;
 }
 
 MiaIA::Core::TrainingSession&
