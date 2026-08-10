@@ -169,6 +169,7 @@
     <ClInclude Include="Runtime\NetworkRuntime.h" />
     <ClInclude Include="Topology\NetworkTopology.h" />
     <ClInclude Include="Training\TrainingStepExecutor.h" />
+    <ClInclude Include="Training\TrainingBreakpointController.h" />
     <ClInclude Include="Training\TrainingEpochExecutor.h" />
     <ClInclude Include="Training\TrainingDebugController.h" />
     <ClInclude Include="Training\TrainingDebugInspector.h" />
@@ -211,6 +212,7 @@
     <ClCompile Include="Runtime\NetworkRuntime.cpp" />
     <ClCompile Include="Topology\NetworkTopology.cpp" />
     <ClCompile Include="Training\TrainingStepExecutor.cpp" />
+    <ClCompile Include="Training\TrainingBreakpointController.cpp" />
     <ClCompile Include="Training\TrainingEpochExecutor.cpp" />
     <ClCompile Include="Training\TrainingDebugController.cpp" />
     <ClCompile Include="Training\TrainingDebugInspector.cpp" />

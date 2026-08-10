@@ -142,6 +142,99 @@ namespace
         return EMiaIATrainingSessionStatus::Idle;
     }
 
+    EMiaIATrainingBreakpointKind ToBlueprint(
+        MiaIA::Core::TrainingBreakpointKind kind)
+    {
+        switch (kind)
+        {
+        case MiaIA::Core::TrainingBreakpointKind::Phase:
+            return EMiaIATrainingBreakpointKind::Phase;
+        case MiaIA::Core::TrainingBreakpointKind::NeuronActivationAbove:
+            return EMiaIATrainingBreakpointKind::NeuronActivationAbove;
+        case MiaIA::Core::TrainingBreakpointKind::NeuronActivationBelow:
+            return EMiaIATrainingBreakpointKind::NeuronActivationBelow;
+        case MiaIA::Core::TrainingBreakpointKind::NeuronGradientMagnitudeAbove:
+            return EMiaIATrainingBreakpointKind::NeuronGradientMagnitudeAbove;
+        case MiaIA::Core::TrainingBreakpointKind::ConnectionUpdateMagnitudeAbove:
+            return EMiaIATrainingBreakpointKind::ConnectionUpdateMagnitudeAbove;
+        }
+
+        return EMiaIATrainingBreakpointKind::Phase;
+    }
+
+    MiaIA::Core::TrainingBreakpointKind ToCore(
+        EMiaIATrainingBreakpointKind kind)
+    {
+        switch (kind)
+        {
+        case EMiaIATrainingBreakpointKind::Phase:
+            return MiaIA::Core::TrainingBreakpointKind::Phase;
+        case EMiaIATrainingBreakpointKind::NeuronActivationAbove:
+            return MiaIA::Core::TrainingBreakpointKind::NeuronActivationAbove;
+        case EMiaIATrainingBreakpointKind::NeuronActivationBelow:
+            return MiaIA::Core::TrainingBreakpointKind::NeuronActivationBelow;
+        case EMiaIATrainingBreakpointKind::NeuronGradientMagnitudeAbove:
+            return MiaIA::Core::TrainingBreakpointKind::NeuronGradientMagnitudeAbove;
+        case EMiaIATrainingBreakpointKind::ConnectionUpdateMagnitudeAbove:
+            return MiaIA::Core::TrainingBreakpointKind::ConnectionUpdateMagnitudeAbove;
+        }
+
+        return MiaIA::Core::TrainingBreakpointKind::Phase;
+    }
+
+    MiaIA::Core::TrainingDebugPhase ToCore(
+        EMiaIATrainingDebugPhase phase)
+    {
+        switch (phase)
+        {
+        case EMiaIATrainingDebugPhase::Idle:
+            return MiaIA::Core::TrainingDebugPhase::Idle;
+        case EMiaIATrainingDebugPhase::BeforeForward:
+            return MiaIA::Core::TrainingDebugPhase::BeforeForward;
+        case EMiaIATrainingDebugPhase::ForwardComplete:
+            return MiaIA::Core::TrainingDebugPhase::ForwardComplete;
+        case EMiaIATrainingDebugPhase::BackwardComplete:
+            return MiaIA::Core::TrainingDebugPhase::BackwardComplete;
+        case EMiaIATrainingDebugPhase::UpdateComplete:
+            return MiaIA::Core::TrainingDebugPhase::UpdateComplete;
+        case EMiaIATrainingDebugPhase::Verified:
+            return MiaIA::Core::TrainingDebugPhase::Verified;
+        case EMiaIATrainingDebugPhase::Committed:
+            return MiaIA::Core::TrainingDebugPhase::Committed;
+        }
+
+        return MiaIA::Core::TrainingDebugPhase::Idle;
+    }
+
+    FMiaIATrainingBreakpoint ToBlueprint(
+        const MiaIA::Core::TrainingBreakpointSnapshot& source)
+    {
+        FMiaIATrainingBreakpoint result;
+        result.Id = static_cast<int64>(source.Id);
+        result.bEnabled = source.Enabled;
+        result.Kind = ToBlueprint(source.Spec.Kind);
+        result.Phase = ToBlueprint(source.Spec.Phase);
+        result.TargetId = static_cast<int64>(source.Spec.TargetId);
+        result.Threshold = source.Spec.Threshold;
+        result.HitCount = static_cast<int64>(source.HitCount);
+        return result;
+    }
+
+    FMiaIATrainingBreakpointHit ToBlueprint(
+        const MiaIA::Core::TrainingBreakpointHitSnapshot& source)
+    {
+        FMiaIATrainingBreakpointHit result;
+        result.BreakpointId = static_cast<int64>(source.BreakpointId);
+        result.Kind = ToBlueprint(source.Kind);
+        result.Phase = ToBlueprint(source.Phase);
+        result.TargetId = static_cast<int64>(source.TargetId);
+        result.ObservedValue = source.ObservedValue;
+        result.Threshold = source.Threshold;
+        result.StepIndex = static_cast<int64>(source.StepIndex);
+        result.SampleIndex = static_cast<int64>(source.SampleIndex);
+        return result;
+    }
+
     FMiaIATrainingDebugSnapshot ToBlueprint(
         const MiaIA::Core::TrainingDebugSnapshot& source)
     {
@@ -284,6 +377,16 @@ namespace
             static_cast<int64>(source.CompletedSteps);
         result.TotalSteps = static_cast<int64>(source.TotalSteps);
         result.LearningRate = source.LearningRate;
+        result.Breakpoints.Reserve(
+            static_cast<int32>(source.Breakpoints.size()));
+
+        for (const auto& breakpoint : source.Breakpoints)
+        {
+            result.Breakpoints.Add(ToBlueprint(breakpoint));
+        }
+
+        result.bHasBreakpointHit = source.HasBreakpointHit;
+        result.LastBreakpointHit = ToBlueprint(source.LastBreakpointHit);
         return result;
     }
 
@@ -432,6 +535,89 @@ bool UMiaIABlueprintLibrary::ResumeTrainingSession()
 bool UMiaIABlueprintLibrary::PauseTrainingSession()
 {
     return MiaIA::SDK::MiaIAClient::PauseTrainingSession();
+}
+
+bool UMiaIABlueprintLibrary::AddTrainingBreakpoint(
+    EMiaIATrainingBreakpointKind Kind,
+    EMiaIATrainingDebugPhase Phase,
+    int64 TargetId,
+    double Threshold,
+    FMiaIATrainingBreakpoint& OutBreakpoint)
+{
+    if (TargetId < 0)
+    {
+        return false;
+    }
+
+    MiaIA::Core::TrainingBreakpointSpec spec;
+    spec.Kind = ToCore(Kind);
+    spec.Phase = ToCore(Phase);
+    spec.TargetId = static_cast<std::uint64_t>(TargetId);
+    spec.Threshold = Threshold;
+    MiaIA::Core::TrainingBreakpointSnapshot breakpoint;
+
+    if (!MiaIA::SDK::MiaIAClient::AddTrainingBreakpoint(
+        spec,
+        breakpoint))
+    {
+        return false;
+    }
+
+    OutBreakpoint = ToBlueprint(breakpoint);
+    return true;
+}
+
+TArray<FMiaIATrainingBreakpoint>
+UMiaIABlueprintLibrary::GetTrainingBreakpoints()
+{
+    const auto source =
+        MiaIA::SDK::MiaIAClient::GetTrainingBreakpoints();
+    TArray<FMiaIATrainingBreakpoint> result;
+    result.Reserve(static_cast<int32>(source.size()));
+
+    for (const auto& breakpoint : source)
+    {
+        result.Add(ToBlueprint(breakpoint));
+    }
+
+    return result;
+}
+
+bool UMiaIABlueprintLibrary::SetTrainingBreakpointEnabled(
+    int64 BreakpointId,
+    bool bEnabled)
+{
+    return BreakpointId > 0 &&
+        MiaIA::SDK::MiaIAClient::SetTrainingBreakpointEnabled(
+            static_cast<std::uint64_t>(BreakpointId),
+            bEnabled);
+}
+
+bool UMiaIABlueprintLibrary::RemoveTrainingBreakpoint(
+    int64 BreakpointId)
+{
+    return BreakpointId > 0 &&
+        MiaIA::SDK::MiaIAClient::RemoveTrainingBreakpoint(
+            static_cast<std::uint64_t>(BreakpointId));
+}
+
+bool UMiaIABlueprintLibrary::ClearTrainingBreakpoints()
+{
+    return MiaIA::SDK::MiaIAClient::ClearTrainingBreakpoints();
+}
+
+bool UMiaIABlueprintLibrary::GetLastTrainingBreakpointHit(
+    FMiaIATrainingBreakpointHit& OutHit)
+{
+    MiaIA::Core::TrainingBreakpointHitSnapshot hit;
+
+    if (!MiaIA::SDK::MiaIAClient::TryGetLastTrainingBreakpointHit(hit))
+    {
+        return false;
+    }
+
+    OutHit = ToBlueprint(hit);
+    return true;
 }
 
 bool UMiaIABlueprintLibrary::StartSessionDebug(

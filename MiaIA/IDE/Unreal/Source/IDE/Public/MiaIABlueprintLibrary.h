@@ -51,6 +51,32 @@ public:
     UFUNCTION(BlueprintCallable, Category = "MiaIA|Training")
     static bool PauseTrainingSession();
 
+    UFUNCTION(BlueprintCallable, Category = "MiaIA|Training|Breakpoint")
+    static bool AddTrainingBreakpoint(
+        EMiaIATrainingBreakpointKind Kind,
+        EMiaIATrainingDebugPhase Phase,
+        int64 TargetId,
+        double Threshold,
+        FMiaIATrainingBreakpoint& OutBreakpoint);
+
+    UFUNCTION(BlueprintPure, Category = "MiaIA|Training|Breakpoint")
+    static TArray<FMiaIATrainingBreakpoint> GetTrainingBreakpoints();
+
+    UFUNCTION(BlueprintCallable, Category = "MiaIA|Training|Breakpoint")
+    static bool SetTrainingBreakpointEnabled(
+        int64 BreakpointId,
+        bool bEnabled);
+
+    UFUNCTION(BlueprintCallable, Category = "MiaIA|Training|Breakpoint")
+    static bool RemoveTrainingBreakpoint(int64 BreakpointId);
+
+    UFUNCTION(BlueprintCallable, Category = "MiaIA|Training|Breakpoint")
+    static bool ClearTrainingBreakpoints();
+
+    UFUNCTION(BlueprintCallable, Category = "MiaIA|Training|Breakpoint")
+    static bool GetLastTrainingBreakpointHit(
+        FMiaIATrainingBreakpointHit& OutHit);
+
     UFUNCTION(BlueprintCallable, Category = "MiaIA|Training|Debug")
     static bool StartSessionDebug(
         FMiaIATrainingDebugSnapshot& OutDebug);

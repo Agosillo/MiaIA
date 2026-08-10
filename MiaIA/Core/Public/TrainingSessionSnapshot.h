@@ -5,6 +5,8 @@
 #include "TrainingSessionStatus.h"
 #include "TrainingStepSnapshot.h"
 #include "TrainingWorkerStopReason.h"
+#include "TrainingBreakpointHitSnapshot.h"
+#include "TrainingBreakpointSnapshot.h"
 
 #include <cstddef>
 #include <vector>
@@ -28,6 +30,9 @@ namespace MiaIA::Core
         OptimizerType Optimizer{
             OptimizerType::StochasticGradientDescent
         };
+        std::vector<TrainingBreakpointSnapshot> Breakpoints;
+        bool HasBreakpointHit{};
+        TrainingBreakpointHitSnapshot LastBreakpointHit;
         std::vector<TrainingStepSnapshot> Steps;
     };
 }

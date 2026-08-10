@@ -43,6 +43,7 @@ public:
 private:
     void RefreshData();
     void RebuildExplorer();
+    void RebuildBreakpoints();
     void SelectNeuron(int64 NeuronId);
     void SelectNeurons(
         const TSet<int64>& NeuronIds,
@@ -75,10 +76,24 @@ private:
     FReply SelectTheme(EMiaIAEditorTheme InTheme);
     TSharedRef<SWidget> BuildDataRefreshMenu();
     FReply SelectDataRefreshMode(EMiaIADataRefreshMode InMode);
+    TSharedRef<SWidget> BuildTopologyLimitsMenu();
+    void HandlePendingNeuronLimitChanged(int32 InValue);
+    void HandlePendingConnectionLimitChanged(int32 InValue);
+    FReply HandleApplyTopologyLimits();
+    FReply HandleResetTopologyLimits();
     TSharedRef<SWidget> BuildHelpMenu();
     FReply HandleQuickHelp();
     FReply HandleAbout();
     FReply HandleCloseDialog();
+    TSharedRef<SWidget> BuildBreakpointKindMenu();
+    TSharedRef<SWidget> BuildBreakpointPhaseMenu();
+    FReply SelectBreakpointKind(
+        EMiaIATrainingBreakpointKind InKind);
+    FReply SelectBreakpointPhase(EMiaIATrainingDebugPhase InPhase);
+    FReply HandleAddBreakpoint();
+    FReply HandleToggleBreakpoint(int64 BreakpointId, bool bEnabled);
+    FReply HandleRemoveBreakpoint(int64 BreakpointId);
+    FReply HandleClearBreakpoints();
     void ShowDialog(const FText& Title, const FText& Content);
     EVisibility DialogVisibility() const;
     void RefreshWidgetStyles();
@@ -120,7 +135,13 @@ private:
     FText ViewModeText() const;
     FText ThemeText() const;
     FText DataRefreshText() const;
+    FText TopologyLimitsText() const;
     FText TopologyWorkspaceText() const;
+    FText BreakpointKindText() const;
+    FText BreakpointPhaseText() const;
+    FText LastBreakpointHitText() const;
+    EVisibility BreakpointPhaseVisibility() const;
+    EVisibility BreakpointTargetVisibility() const;
     double DataRefreshInterval() const;
 
     FMiaIANetworkSnapshot Network;
@@ -129,11 +150,13 @@ private:
     FMiaIATrainingDebugSnapshot Debug;
     FMiaIATrainingDebugNeuron DebugNeuron;
     FMiaIATrainingDebugConnection DebugConnection;
+    TArray<FMiaIATrainingBreakpoint> Breakpoints;
     int64 SelectedNeuronId{-1};
     int64 SelectedConnectionId{-1};
     TSet<int64> SelectedNeuronIds;
     FString SelectedLayerName;
     FString TopologyKey;
+    FString BreakpointKey;
     FString ConsoleHistory;
     TArray<FString> ConsoleCommandHistory;
     FString ConsoleHistoryDraft;
@@ -141,11 +164,19 @@ private:
     FText DialogTitle;
     FText DialogContent;
     int32 ConsoleHistoryIndex{};
+    int32 DetailedNeuronLimit{};
+    int32 DetailedConnectionLimit{};
+    int32 PendingDetailedNeuronLimit{};
+    int32 PendingDetailedConnectionLimit{};
     EMiaIAStudioViewMode ViewMode{
         EMiaIAStudioViewMode::TwoDimensional};
     EMiaIAEditorTheme Theme{EMiaIAEditorTheme::FollowUnreal};
     EMiaIADataRefreshMode DataRefreshMode{
         EMiaIADataRefreshMode::Adaptive};
+    EMiaIATrainingBreakpointKind BreakpointKind{
+        EMiaIATrainingBreakpointKind::Phase};
+    EMiaIATrainingDebugPhase BreakpointPhase{
+        EMiaIATrainingDebugPhase::Committed};
     FButtonStyle ButtonStyle;
     FButtonStyle ExplorerButtonStyle;
     FComboButtonStyle ComboButtonStyle;
@@ -163,6 +194,7 @@ private:
 
     TSharedPtr<SVerticalBox> ExplorerContent;
     TSharedPtr<SVerticalBox> ConsoleSuggestionsContent;
+    TSharedPtr<SVerticalBox> BreakpointContent;
     TSharedPtr<SMiaIANetworkView> NetworkView;
     TSharedPtr<SMiaIA3DNetworkView> Network3DView;
     TSharedPtr<SWidgetSwitcher> TopologySwitcher;
@@ -170,4 +202,6 @@ private:
     TSharedPtr<SMultiLineEditableText> ConsoleOutput;
     TSharedPtr<SScrollBar> ConsoleOutputScrollBar;
     TSharedPtr<SEditableTextBox> ConsoleInput;
+    TSharedPtr<SEditableTextBox> BreakpointTargetInput;
+    TSharedPtr<SEditableTextBox> BreakpointThresholdInput;
 };

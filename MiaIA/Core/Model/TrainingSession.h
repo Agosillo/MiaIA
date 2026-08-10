@@ -4,9 +4,12 @@
 #include "../Public/OptimizerType.h"
 #include "../Public/TrainingSessionStatus.h"
 #include "../Public/TrainingStepSnapshot.h"
+#include "../Public/TrainingBreakpointHitSnapshot.h"
+#include "../Public/TrainingBreakpointSnapshot.h"
 #include "../Public/TrainingWorkerStopReason.h"
 
 #include <cstddef>
+#include <cstdint>
 #include <vector>
 
 namespace MiaIA::Core
@@ -26,6 +29,10 @@ namespace MiaIA::Core
         OptimizerType Optimizer{
             OptimizerType::StochasticGradientDescent
         };
+        std::vector<TrainingBreakpointSnapshot> Breakpoints;
+        std::uint64_t NextBreakpointId{ 1 };
+        bool HasBreakpointHit{};
+        TrainingBreakpointHitSnapshot LastBreakpointHit;
         std::vector<TrainingStepSnapshot> Steps;
     };
 }

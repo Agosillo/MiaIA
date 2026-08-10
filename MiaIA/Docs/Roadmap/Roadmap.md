@@ -54,6 +54,9 @@ The roadmap is organized by dependency rather than by a fixed release date. Math
 - verified Win64 BuildCookRun archive with provisional application branding.
 - interactive 3D topology with aggregated sphere-and-cylinder geometry, projected identifiers, selection, camera navigation, and manual layout editing;
 - adaptive tessellation and compact scene policies that avoid one Unreal Actor per graph element.
+- engine-owned training breakpoints for debug phases, neuron activations and gradients, and connection updates;
+- safe automatic worker pause with structured trigger telemetry;
+- shared CLI, SDK, Blueprint, and MiaIA Studio breakpoint authoring.
 
 ## Implemented optimizer foundation
 
@@ -99,7 +102,6 @@ The first debugger-like training workflow is implemented for one sample: clients
 
 The debugging experience should next evolve toward:
 
-- configurable breakpoints around the implemented mathematical phases;
 - expand selected-neuron and selected-connection inspection with incoming and outgoing relationships;
 - compare current and previous activations, gradients, weights, and biases;
 - identify inactive or consistently saturated neurons;

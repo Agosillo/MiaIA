@@ -14,10 +14,12 @@ The IDE module converts SDK snapshots into Unreal-reflected types:
 
 - `EMiaIATrainingDebugPhase`;
 - `EMiaIATrainingSessionStatus`;
+- `EMiaIATrainingBreakpointKind`;
 - `EMiaIAActivationType`;
 - `FMiaIANetworkSnapshot` with reflected layer, neuron, and connection arrays;
 - `FMiaIATrainingDebugSnapshot`;
 - `FMiaIATrainingSessionSnapshot`;
+- `FMiaIATrainingBreakpoint` and `FMiaIATrainingBreakpointHit`;
 - `FMiaIATrainingDebugNeuron`;
 - `FMiaIATrainingDebugConnection`.
 
@@ -35,6 +37,12 @@ Start Training Session
 Get Training Session
 Resume Training Session
 Pause Training Session
+Add Training Breakpoint
+Get Training Breakpoints
+Set Training Breakpoint Enabled
+Remove Training Breakpoint
+Clear Training Breakpoints
+Get Last Training Breakpoint Hit
 Start Session Debug
 Advance Debug Phase
 Cancel Debug
@@ -97,16 +105,17 @@ The animation is slowed down for documentation. The demonstration itself advance
 
 ### Panel layout
 
+- **Two-row toolbar** keeps layout, view, theme, refresh, scalability, help, and application actions on the first row. Training and phase-debug controls occupy a dedicated second row with session and debug status aligned to the right, preserving access when the editor tab or standalone window is narrow.
 - **Model explorer** lists layers, neurons, and connections. Selecting an item here also selects it in the topology.
 - **Network topology** switches between interactive 2D and 3D renderers for the same current layers, neurons, and weighted connections. Its semantic overlay follows the active debug phase: forward uses candidate activations, backward uses gradient sign and normalized magnitude, update uses parameter-delta sign and normalized magnitude, and verified or committed states return to candidate or committed activations and weights.
 - **Inspector** shows neuron activation and bias data or connection weight data, including phase-dependent gradients and candidate updates.
 - **Session and debug status** report training progress and the currently inspected phase.
 - **Console** is the first and initially selected lower tab. It uses a narrow command-suggestion column on the left and a larger output/input workspace on the right. It accepts the same commands as `Console.exe` and operates on the same process-local state displayed by the panel and used by Blueprint nodes.
 - **Training timeline** follows the Console and summarizes the forward, backward, update, verification, and commit sequence.
-- **Breakpoints** reserves the location of the future breakpoint authoring interface.
+- **Breakpoints** creates phase, neuron-activation, neuron-gradient, and connection-update conditions through the public SDK facade. Each entry can be enabled, disabled, or removed and reports its hit count; the tab also shows the latest structured trigger.
 - **Help** opens the built-in interaction reference or the versioned About dialog in both hosts.
 
-MiaIA Studio requests a lightweight network overview before requesting the complete topology. Networks with at most 2,000 neurons and 5,000 connections use detailed mode. Larger networks automatically use compact mode: the topology draws one aggregate node per layer, the explorer lists layer counts instead of every element, and the panel avoids repeatedly copying or painting the complete connection set. The compact header always reports the exact layer, neuron, and connection totals.
+MiaIA Studio requests a lightweight network overview before requesting the complete topology. By default, networks with at most 2,000 neurons and 5,000 connections use detailed mode. Larger networks automatically use compact mode: the topology draws one aggregate node per layer, the explorer lists layer counts instead of every element, and the panel avoids repeatedly copying or painting the complete connection set. The compact header always reports the exact layer, neuron, and connection totals.
 
 Compact mode is a visualization guardrail rather than an Engine limit. The native network remains complete and available through `MiaIAClient`. Element-level visual inspection and phase controls are disabled in compact mode until paged large-model inspection is implemented; use a smaller network when testing the current graphical phase debugger.
 
@@ -116,9 +125,11 @@ Use the `Theme` selector in the panel toolbar to choose `Follow Unreal`, `Dark`,
 
 The selection is stored in the local Unreal game-user settings configuration and restored by both hosts. It is a per-user preference and does not modify tracked project configuration. The selected palette consistently controls panel surfaces, splitters, buttons, menus, inputs, scrollbars, text, neuron activation, positive and negative weights, selection, and debug-phase emphasis.
 
-### Data refresh and application help
+### Data refresh, detail limits, and application help
 
 `Data refresh` controls automatic model polling without changing rendering frame rate. `Adaptive` is the recommended default: it polls at 4 Hz while training is running and at 1 Hz while the session is idle or paused. Fixed 1, 2, 4, and 10 Hz choices support slower inspection or more responsive monitoring. The preference is stored in local game-user settings and restored at the next launch. Console commands, toolbar operations, and phase-debug steps bypass the periodic delay and update the interface immediately.
+
+`Detail limits` independently configures the maximum neuron and connection counts accepted by detailed mode. The menu starts at 2,000 neurons and 5,000 connections, applies both values together, and can restore those defaults. Normal ranges are available through sliders; substantially higher finite values can be typed directly, up to 100,000,000 neurons and 1,000,000,000 connections. Applying a value immediately re-evaluates the current network and persists the preference in local game-user settings. Raising the limits can significantly increase snapshot copying, layout, and rendering cost; it does not increase an Engine model limit or disable the compact-mode guardrail.
 
 The `Help` menu contains `Quick help` and `About MiaIA Studio`. Quick help summarizes Console startup, 2D and 3D navigation, multiple selection, layout editing, Inspector use, and phase debugging. About reads `ProjectVersion` from Unreal project configuration and identifies this application as the Unreal frontend over the shared MiaIA Engine, SDK, and CLI services. Both open as themed, scrollable overlays inside the Studio panel, ensuring identical behavior in Unreal Editor and the packaged application without an external platform dialog.
 
@@ -245,8 +256,9 @@ The first panel increment established:
 - training-session status and phase timeline;
 - working refresh, continue, pause, and debug phase-step actions;
 - an interactive command console shared with `Console.exe`.
+- safe breakpoint authoring shared with the SDK, CLI, and Blueprint nodes.
 
-The panel refreshes runtime values automatically while rebuilding its explorer only when the topology changes. Command history is currently memory-only and belongs to the open panel instance. Persistent history, weight editing, breakpoint authoring, asynchronous command dispatch, compact-scene drill-down, and more advanced 3D filtering and analysis remain outside the current implementation.
+The panel refreshes runtime values automatically while rebuilding its explorer and breakpoint list only when their corresponding state changes. Command history is currently memory-only and belongs to the open panel instance. Persistent history, weight editing, asynchronous command dispatch, compact-scene drill-down, and more advanced 3D filtering and analysis remain outside the current implementation.
 
 ## Build order
 

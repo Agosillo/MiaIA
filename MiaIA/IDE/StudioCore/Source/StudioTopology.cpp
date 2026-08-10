@@ -30,19 +30,25 @@ namespace
 
 bool MiaIA::Studio::StudioTopologyBuilder::RequiresCompactMode(
     std::size_t neuronCount,
-    std::size_t connectionCount)
+    std::size_t connectionCount,
+    std::size_t detailedNeuronLimit,
+    std::size_t detailedConnectionLimit)
 {
-    return neuronCount > DetailedNeuronLimit ||
-        connectionCount > DetailedConnectionLimit;
+    return neuronCount > detailedNeuronLimit ||
+        connectionCount > detailedConnectionLimit;
 }
 
 MiaIA::Studio::StudioTopologyDetail
 MiaIA::Studio::StudioTopologyBuilder::ChooseDetail(
-    const Core::NetworkOverviewSnapshot& overview)
+    const Core::NetworkOverviewSnapshot& overview,
+    std::size_t detailedNeuronLimit,
+    std::size_t detailedConnectionLimit)
 {
     return RequiresCompactMode(
         overview.NeuronCount,
-        overview.ConnectionCount)
+        overview.ConnectionCount,
+        detailedNeuronLimit,
+        detailedConnectionLimit)
         ? StudioTopologyDetail::Compact
         : StudioTopologyDetail::Detailed;
 }

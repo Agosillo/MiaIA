@@ -22,6 +22,9 @@
 #include "../../Core/Public/TrainingDebugSnapshot.h"
 #include "../../Core/Public/TrainingDebugNeuronSnapshot.h"
 #include "../../Core/Public/TrainingDebugConnectionSnapshot.h"
+#include "../../Core/Public/TrainingBreakpointHitSnapshot.h"
+#include "../../Core/Public/TrainingBreakpointSnapshot.h"
+#include "../../Core/Public/TrainingBreakpointSpec.h"
 
 namespace MiaIA::SDK
 {
@@ -107,6 +110,20 @@ namespace MiaIA::SDK
         static bool ResumeTrainingSession();
         static bool PauseTrainingSession();
         static bool CancelTrainingSession();
+        static bool AddTrainingBreakpoint(
+            const Core::TrainingBreakpointSpec& spec,
+            Core::TrainingBreakpointSnapshot& result);
+        [[nodiscard]]
+        static std::vector<Core::TrainingBreakpointSnapshot>
+            GetTrainingBreakpoints();
+        static bool SetTrainingBreakpointEnabled(
+            std::uint64_t breakpointId,
+            bool enabled);
+        static bool RemoveTrainingBreakpoint(
+            std::uint64_t breakpointId);
+        static bool ClearTrainingBreakpoints();
+        static bool TryGetLastTrainingBreakpointHit(
+            Core::TrainingBreakpointHitSnapshot& result);
         static bool StartTrainingDebug(
             std::size_t sampleIndex,
             double learningRate,

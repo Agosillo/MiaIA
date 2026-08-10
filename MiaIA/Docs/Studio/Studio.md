@@ -41,7 +41,7 @@ Core / Engine
 
 `StudioTopologyBuilder` converts SDK snapshots into renderer-neutral scenes. A scene contains logical nodes, links, element identities, layer information, values, and normalized three-dimensional positions.
 
-Detailed mode is used while a network has at most 2,000 neurons and 5,000 connections. Above either limit, compact mode creates one aggregate node per layer and does not require the complete graph snapshot. These limits are shared with the current Unreal panel.
+Detailed mode defaults to networks with at most 2,000 neurons and 5,000 connections. Above either limit, compact mode creates one aggregate node per layer and does not require the complete graph snapshot. `StudioTopologyBuilder` accepts explicit limits while retaining those defaults, allowing each host to expose a persistent user preference without embedding renderer policy in the Engine.
 
 ## Layout conventions
 
@@ -64,9 +64,15 @@ All automatic positions remain normalized so each renderer can choose its own wo
 
 The reusable Slate panel, topology view, and theme implementation live in the runtime-capable `IDEStudio` module. `IDEEditor` contains only editor integration such as dock-tab registration and installation of the Blueprint demonstration. The native `UMiaIAStudioGameInstance` places the same panel over the game viewport, so editor and standalone hosts do not maintain separate IDE implementations.
 
+The shared toolbar uses two stable functional rows rather than overflowing one horizontal strip. Layout, visualization, performance preferences, help, and host actions remain together on the first row; training and phase-debug actions share the second row with their live session and phase status.
+
 The `MiaIAStudio` game target is the development entry point for the independent host. `IDE/Unreal/Build/Package-Windows.ps1` builds, cooks, stages, and archives that target for Win64. Its shared panel now exposes a `2D`/`3D` selector backed by `StudioCore`. Both views share single and multiple neuron selection, additive `Ctrl` selection, rectangular marquee selection, group dragging, and Inspector state. The 3D mode hosts a real runtime Unreal viewport with an initial 2D-equivalent front camera, one aggregated mesh of shaded neuron spheres and weighted connection cylinders, stable FXAA, the same gamma and semantic color composition as the Slate canvas, projected neuron labels, a perspective-correct circular selection outline, orbit, pan, extended zoom, and adaptive fit. A shared expanded-workspace mode temporarily gives the topology all space outside the retained right-side Inspector while preserving the same widget and state, so the editor tab and packaged application present the same visualization behavior.
 
 The toolbar `Help` menu provides an embedded interaction reference and an `About MiaIA Studio` dialog. Both use the same themed in-panel Slate overlay in the editor and packaged application instead of relying on host-specific operating-system message boxes. The About text reads the project version from Unreal configuration and identifies the shared Engine, SDK, and CLI service boundary instead of presenting the Unreal frontend as the complete MiaIA architecture.
+
+The lower `Breakpoints` tab is connected to the same SDK state used by the Console. It can create mathematical-phase, neuron-activation, neuron-gradient, and connection-update conditions; enable, disable, or remove individual entries; clear the collection; display hit counters; and report the latest trigger. Phase breakpoints select one of the existing debug phases. Value breakpoints accept a neuron or connection ID and a numeric threshold. A background session that hits a condition returns to `Active` at the next safe sample boundary, so the topology and Inspector can be examined without observing a partial update.
+
+All breakpoint operations are also exposed by the Unreal Blueprint function library. The graphical tab is therefore a client of the public `MiaIAClient` breakpoint facade rather than a separate Unreal-only implementation.
 
 Quick Help also identifies the public source location and license boundary. About displays the MPL-covered source location and the Unreal Engine attribution required for the packaged frontend. Public archives are created through `Build/Package-Windows.ps1`, which adds the MiaIA license, end-user terms, trademark policy, third-party notice index, and collected dependency licenses beside the top-level launcher after Unreal packaging succeeds.
 

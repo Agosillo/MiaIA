@@ -78,6 +78,18 @@
     <ClInclude Include="Public\TrainingRunSnapshot.h">
       <Filter>File di intestazione</Filter>
     </ClInclude>
+    <ClInclude Include="Public\TrainingBreakpointHitSnapshot.h">
+      <Filter>File di intestazione</Filter>
+    </ClInclude>
+    <ClInclude Include="Public\TrainingBreakpointKind.h">
+      <Filter>File di intestazione</Filter>
+    </ClInclude>
+    <ClInclude Include="Public\TrainingBreakpointSnapshot.h">
+      <Filter>File di intestazione</Filter>
+    </ClInclude>
+    <ClInclude Include="Public\TrainingBreakpointSpec.h">
+      <Filter>File di intestazione</Filter>
+    </ClInclude>
     <ClInclude Include="Public\TrainingRunStopReason.h">
       <Filter>File di intestazione</Filter>
     </ClInclude>

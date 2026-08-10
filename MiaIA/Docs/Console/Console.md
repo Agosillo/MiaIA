@@ -68,6 +68,8 @@ train debug cancel
 train epoch 0.01 mse
 dataset evaluate all mse
 train session start 2 0.01 mse
+train breakpoint add activation-above 1005 0.9
+train breakpoint list
 train session next
 train session debug
 train debug next
@@ -498,6 +500,44 @@ The Console prints the number of processed samples, the learning rate, the mean 
 
 The entire epoch is transactional. MiaIA publishes the trained candidate only if every sample succeeds. An invalid sample, incompatible dimension, unsafe update, or non-finite calculation leaves the original network unchanged. The current implementation uses CSV order and does not shuffle samples.
 
+### `train breakpoint`
+
+```text
+train breakpoint add phase <before|forward|backward|update|verify|commit>
+train breakpoint add activation-above <neuron-id> <threshold>
+train breakpoint add activation-below <neuron-id> <threshold>
+train breakpoint add gradient-above <neuron-id> <magnitude>
+train breakpoint add weight-update-above <connection-id> <magnitude>
+train breakpoint list
+train breakpoint enable <id> <on|off>
+train breakpoint remove <id>
+train breakpoint clear
+```
+
+Breakpoints belong to the controlled training state and remain configured when a new session starts. Starting a session resets their hit counters and previous trigger information without changing their IDs or enabled state.
+
+Value breakpoints are evaluated against the complete atomic sample result:
+
+- activation conditions read the selected neuron's committed activation;
+- gradient conditions compare the absolute bias-gradient magnitude;
+- weight-update conditions compare the absolute connection delta.
+
+When an enabled condition matches during `run` or background `resume`, the successful sample remains committed and the session returns to `Active` before the following sample. The worker stop reason becomes `Breakpoint hit`, while the session snapshot records the breakpoint ID, phase, target, observed value, threshold, sample, and step. This is a safe debugger boundary: MiaIA never exposes a partly applied optimizer update.
+
+A `phase commit` breakpoint can stop ordinary automatic training because every atomic step reaches commit. The other phase names are evaluated during `train debug next`, where the intermediate mathematical phases are observable. Activation, gradient, and update conditions are also evaluated as soon as their required debug data exists.
+
+Examples:
+
+```text
+train breakpoint add phase backward
+train breakpoint add activation-below 1003 0.01
+train breakpoint add gradient-above 1003 5.0
+train breakpoint add weight-update-above 1 0.25
+train breakpoint list
+```
+
+Breakpoint editing is rejected while background training or a phase transaction is active. Pause or cancel the active operation first.
+
 ### `train session start`
 
 ```text
@@ -574,6 +614,7 @@ Runs repeated session steps synchronously. A numeric limit executes at most that
 The run summary reports requested and executed steps, start and end cursors, mean loss immediately before and after its successful updates, and one of these stop reasons:
 
 - `Step limit reached`: the requested block completed and the session remains Active;
+- `Breakpoint hit`: a successful step matched an enabled condition and the session paused safely;
 - `Session completed`: the configured final epoch completed;
 - `Step failed`: the next atomic step was rejected.
 
@@ -599,7 +640,7 @@ train session pause
 
 Requests cooperative pause and waits for the current sample step, if any, to finish. It never interrupts forward propagation, backward propagation, or an optimizer update halfway through. When the command returns successfully, the worker has been joined and the session is Active at the next safe sample boundary.
 
-If the worker stops because a step fails, the session also returns to Active and reports `Step failed` as its worker stop reason. The failed step does not advance the cursor or change the network.
+If the worker stops because a breakpoint matches, the session returns to Active and reports `Breakpoint hit`; the triggering step has already committed and the cursor identifies the following sample. If a step fails, the session reports `Step failed`, and that failed step does not advance the cursor or change the network.
 
 ### `train session cancel`
 

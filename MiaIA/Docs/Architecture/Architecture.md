@@ -222,7 +222,9 @@ A session starts Active at a safe step boundary. `next` executes exactly one sam
 
 `resume` changes an Active session to Running and launches one SDK-owned background worker. `pause` requests cooperative stop, waits for the current atomic sample step to finish, joins the worker, and returns the session to Active. The network is therefore never exposed halfway through an update. Completion occurs after the configured number of ordered epochs. Cancellation stops and joins a running worker but does not roll back successful steps.
 
-All SDK access to the process-local network, dataset, and session is serialized by one client-state mutex. Snapshot and inspection calls remain available while Running and observe a coherent step boundary. Operations that would mutate the network, dataset, or activations are rejected until the session is paused. Worker stop reasons distinguish a requested pause, requested cancellation, and a failed step.
+All SDK access to the process-local network, dataset, and session is serialized by one client-state mutex. Snapshot and inspection calls remain available while Running and observe a coherent step boundary. Operations that would mutate the network, dataset, or activations are rejected until the session is paused. Worker stop reasons distinguish a requested pause, a breakpoint hit, requested cancellation, and a failed step.
+
+`TrainingBreakpointController` owns validated breakpoint definitions and evaluates them against either a committed `TrainingStepSnapshot` or an intermediate `TrainingDebugSnapshot`. Breakpoint configuration is retained across new controlled sessions while hit state is reset. Automatic execution evaluates only fully committed sample results, changes a Running session back to Active, and records structured trigger telemetry. Phase stepping can additionally evaluate the internal forward, backward, update, and verification boundaries without moving breakpoint logic into a client.
 
 A bounded run composes repeated `next` operations synchronously. It can stop because its requested step limit was reached, the session completed, or a step failed. Unlike the separately atomic `train epoch` operation, a session run is progressive: successful steps remain published if a later step fails. The session stays Active at the failed sample so a client can inspect state, intervene, retry, or cancel. `TrainingRunSnapshot` contains the start/end cursors, executed steps, trace means, detailed step snapshots, and an explicit stop reason.
 
@@ -248,6 +250,7 @@ Current public snapshots include:
 - controlled session configuration, progress, status, and complete step history;
 - bounded run progress, trace means, details, and stop reason;
 - background worker state and stop reason.
+- breakpoint definitions, hit counts, and the latest structured trigger;
 - lightweight training-history entries and complete retained steps.
 
 This boundary is important for future graphical debugging: visual components can consume a stable description without becoming owners of engine internals.
@@ -284,7 +287,7 @@ Clients should treat a `false` result as a rejected operation and should not inf
 - MSE is the only loss type;
 - SGD is the only optimizer;
 - background execution uses one cooperative worker and one process-local state lock;
-- no mini-batches, checkpoints, breakpoints, or configurable sample ordering yet;
+- no mini-batches, checkpoints, or configurable sample ordering yet;
 - no `.mia` persistence yet;
 - Unreal visualization and Blueprint coverage are incomplete.
 

@@ -120,7 +120,18 @@ const std::vector<CommandCatalogEntry>& CommandCatalog()
         { "dataset evaluate", "dataset evaluate <sample-index|all> mse", "Evaluate one sample or the fixed model.", true },
         { "dataset gradients", "dataset gradients <sample-index> mse", "Calculate gradients without updating parameters.", true },
         { "dataset clear", "dataset clear", "Clear the current dataset.", true },
-        { "train", "train <step|epoch|debug|session>", "Run or inspect training operations.", false },
+        { "train", "train <step|epoch|debug|session|breakpoint>", "Run or inspect training operations.", false },
+        { "train breakpoint", "train breakpoint <action>", "Create and manage safe training breakpoints.", false },
+        { "train breakpoint add", "train breakpoint add <condition> ...", "Add a phase or threshold breakpoint.", false },
+        { "train breakpoint add phase", "train breakpoint add phase <before|forward|backward|update|verify|commit>", "Break when debug reaches a mathematical phase.", true },
+        { "train breakpoint add activation-above", "train breakpoint add activation-above <neuron-id> <threshold>", "Break when a neuron activation exceeds a threshold.", true },
+        { "train breakpoint add activation-below", "train breakpoint add activation-below <neuron-id> <threshold>", "Break when a neuron activation falls below a threshold.", true },
+        { "train breakpoint add gradient-above", "train breakpoint add gradient-above <neuron-id> <magnitude>", "Break when a neuron bias-gradient magnitude exceeds a threshold.", true },
+        { "train breakpoint add weight-update-above", "train breakpoint add weight-update-above <connection-id> <magnitude>", "Break when a connection update magnitude exceeds a threshold.", true },
+        { "train breakpoint list", "train breakpoint list", "List configured breakpoints and hit counts.", true },
+        { "train breakpoint enable", "train breakpoint enable <id> <on|off>", "Enable or disable one breakpoint.", true },
+        { "train breakpoint remove", "train breakpoint remove <id>", "Remove one breakpoint.", true },
+        { "train breakpoint clear", "train breakpoint clear", "Remove every training breakpoint.", true },
         { "train step", "train step <sample-index> <learning-rate> mse", "Execute one atomic SGD sample update.", true },
         { "train epoch", "train epoch <learning-rate> mse", "Execute one ordered atomic dataset epoch.", true },
         { "train debug", "train debug <action>", "Control a phase-by-phase sample transaction.", false },
@@ -257,6 +268,19 @@ void PrintHelp()
 
         << "  train epoch <learning-rate> mse\n"
         << "      Train all dataset samples in order as one atomic epoch\n\n"
+
+        << "  train breakpoint add phase <phase>\n"
+        << "  train breakpoint add activation-above <neuron-id> <threshold>\n"
+        << "  train breakpoint add activation-below <neuron-id> <threshold>\n"
+        << "  train breakpoint add gradient-above <neuron-id> <magnitude>\n"
+        << "  train breakpoint add weight-update-above <connection-id> <magnitude>\n"
+        << "      Pause controlled training when a condition is reached\n\n"
+
+        << "  train breakpoint list\n"
+        << "  train breakpoint enable <id> <on|off>\n"
+        << "  train breakpoint remove <id>\n"
+        << "  train breakpoint clear\n"
+        << "      Inspect or edit the breakpoint collection\n\n"
 
         << "  train session start <epochs> <learning-rate> mse\n"
         << "      Start a manually controlled training session\n\n"
@@ -970,6 +994,8 @@ const char* TrainingWorkerStopReasonName(
         return "None";
     case MiaIA::Core::TrainingWorkerStopReason::PauseRequested:
         return "Pause requested";
+    case MiaIA::Core::TrainingWorkerStopReason::BreakpointHit:
+        return "Breakpoint hit";
     case MiaIA::Core::TrainingWorkerStopReason::CancelRequested:
         return "Cancel requested";
     case MiaIA::Core::TrainingWorkerStopReason::StepFailed:
@@ -978,6 +1004,9 @@ const char* TrainingWorkerStopReasonName(
 
     return "Unknown";
 }
+
+const char* TrainingDebugPhaseName(
+    MiaIA::Core::TrainingDebugPhase phase);
 
 void PrintTrainingSession(
     const MiaIA::Core::TrainingSessionSnapshot& session)
@@ -1008,6 +1037,23 @@ void PrintTrainingSession(
             << "\nOptimizer: SGD";
     }
 
+    if (session.HasBreakpointHit)
+    {
+        const auto& hit = session.LastBreakpointHit;
+        std::cout
+            << "\nLast breakpoint: #" << hit.BreakpointId
+            << " at " << TrainingDebugPhaseName(hit.Phase)
+            << ", sample " << hit.SampleIndex;
+
+        if (hit.TargetId != 0)
+        {
+            std::cout
+                << ", target " << hit.TargetId
+                << ", observed " << hit.ObservedValue
+                << ", threshold " << hit.Threshold;
+        }
+    }
+
     std::cout << "\n";
 }
 
@@ -1033,6 +1079,8 @@ const char* TrainingRunStopReasonName(
     {
     case MiaIA::Core::TrainingRunStopReason::StepLimitReached:
         return "Step limit reached";
+    case MiaIA::Core::TrainingRunStopReason::BreakpointHit:
+        return "Breakpoint hit";
     case MiaIA::Core::TrainingRunStopReason::SessionCompleted:
         return "Session completed";
     case MiaIA::Core::TrainingRunStopReason::StepFailed:
@@ -1064,6 +1112,305 @@ const char* TrainingDebugPhaseName(
     }
 
     return "Unknown";
+}
+
+const char* TrainingBreakpointKindName(
+    MiaIA::Core::TrainingBreakpointKind kind)
+{
+    switch (kind)
+    {
+    case MiaIA::Core::TrainingBreakpointKind::Phase:
+        return "phase";
+    case MiaIA::Core::TrainingBreakpointKind::NeuronActivationAbove:
+        return "activation-above";
+    case MiaIA::Core::TrainingBreakpointKind::NeuronActivationBelow:
+        return "activation-below";
+    case MiaIA::Core::TrainingBreakpointKind::NeuronGradientMagnitudeAbove:
+        return "gradient-above";
+    case MiaIA::Core::TrainingBreakpointKind::ConnectionUpdateMagnitudeAbove:
+        return "weight-update-above";
+    }
+
+    return "unknown";
+}
+
+bool TryParseTrainingDebugPhase(
+    const std::string& value,
+    MiaIA::Core::TrainingDebugPhase& result)
+{
+    if (value == "before")
+    {
+        result = MiaIA::Core::TrainingDebugPhase::BeforeForward;
+    }
+    else if (value == "forward")
+    {
+        result = MiaIA::Core::TrainingDebugPhase::ForwardComplete;
+    }
+    else if (value == "backward")
+    {
+        result = MiaIA::Core::TrainingDebugPhase::BackwardComplete;
+    }
+    else if (value == "update")
+    {
+        result = MiaIA::Core::TrainingDebugPhase::UpdateComplete;
+    }
+    else if (value == "verify")
+    {
+        result = MiaIA::Core::TrainingDebugPhase::Verified;
+    }
+    else if (value == "commit")
+    {
+        result = MiaIA::Core::TrainingDebugPhase::Committed;
+    }
+    else
+    {
+        return false;
+    }
+
+    return true;
+}
+
+void PrintTrainingBreakpointUsage()
+{
+    std::cout
+        << "Usage: train breakpoint add phase "
+            "<before|forward|backward|update|verify|commit>\n"
+        << "       train breakpoint add activation-above "
+            "<neuron-id> <threshold>\n"
+        << "       train breakpoint add activation-below "
+            "<neuron-id> <threshold>\n"
+        << "       train breakpoint add gradient-above "
+            "<neuron-id> <magnitude>\n"
+        << "       train breakpoint add weight-update-above "
+            "<connection-id> <magnitude>\n"
+        << "       train breakpoint list\n"
+        << "       train breakpoint enable <id> <on|off>\n"
+        << "       train breakpoint remove <id>\n"
+        << "       train breakpoint clear\n";
+}
+
+void PrintTrainingBreakpoint(
+    const MiaIA::Core::TrainingBreakpointSnapshot& breakpoint)
+{
+    std::cout
+        << "#" << breakpoint.Id
+        << " [" << (breakpoint.Enabled ? "enabled" : "disabled") << "] "
+        << TrainingBreakpointKindName(breakpoint.Spec.Kind);
+
+    if (breakpoint.Spec.Kind ==
+        MiaIA::Core::TrainingBreakpointKind::Phase)
+    {
+        std::cout << " " << TrainingDebugPhaseName(breakpoint.Spec.Phase);
+    }
+    else
+    {
+        std::cout
+            << " target " << breakpoint.Spec.TargetId
+            << " threshold " << breakpoint.Spec.Threshold;
+    }
+
+    std::cout << " hits " << breakpoint.HitCount << "\n";
+}
+
+void HandleTrainingBreakpointCommand(std::stringstream& stream)
+{
+    using MiaIA::SDK::MiaIAClient;
+
+    std::string action;
+
+    if (!(stream >> action))
+    {
+        PrintTrainingBreakpointUsage();
+        return;
+    }
+
+    if (action == "list")
+    {
+        stream >> std::ws;
+
+        if (!stream.eof())
+        {
+            PrintTrainingBreakpointUsage();
+            return;
+        }
+
+        const auto breakpoints = MiaIAClient::GetTrainingBreakpoints();
+
+        if (breakpoints.empty())
+        {
+            std::cout << "No training breakpoints configured.\n";
+            return;
+        }
+
+        std::cout << "\nTraining Breakpoints\n";
+
+        for (const auto& breakpoint : breakpoints)
+        {
+            PrintTrainingBreakpoint(breakpoint);
+        }
+
+        MiaIA::Core::TrainingBreakpointHitSnapshot hit;
+
+        if (MiaIAClient::TryGetLastTrainingBreakpointHit(hit))
+        {
+            std::cout
+                << "Last hit: #" << hit.BreakpointId
+                << " at " << TrainingDebugPhaseName(hit.Phase)
+                << ", sample " << hit.SampleIndex << "\n";
+        }
+
+        return;
+    }
+
+    if (action == "clear")
+    {
+        stream >> std::ws;
+
+        if (!stream.eof() || !MiaIAClient::ClearTrainingBreakpoints())
+        {
+            std::cout
+                << "Training breakpoints could not be cleared while "
+                   "training or debug is active.\n";
+            return;
+        }
+
+        std::cout << "Training breakpoints cleared.\n";
+        return;
+    }
+
+    if (action == "enable")
+    {
+        std::uint64_t breakpointId{};
+        std::string enabledName;
+
+        if (!(stream >> breakpointId >> enabledName) ||
+            (enabledName != "on" && enabledName != "off"))
+        {
+            PrintTrainingBreakpointUsage();
+            return;
+        }
+
+        stream >> std::ws;
+
+        if (!stream.eof() ||
+            !MiaIAClient::SetTrainingBreakpointEnabled(
+                breakpointId,
+                enabledName == "on"))
+        {
+            std::cout << "Training breakpoint could not be updated.\n";
+            return;
+        }
+
+        std::cout << "Training breakpoint updated.\n";
+        return;
+    }
+
+    if (action == "remove")
+    {
+        std::uint64_t breakpointId{};
+
+        if (!(stream >> breakpointId))
+        {
+            PrintTrainingBreakpointUsage();
+            return;
+        }
+
+        stream >> std::ws;
+
+        if (!stream.eof() ||
+            !MiaIAClient::RemoveTrainingBreakpoint(breakpointId))
+        {
+            std::cout << "Training breakpoint could not be removed.\n";
+            return;
+        }
+
+        std::cout << "Training breakpoint removed.\n";
+        return;
+    }
+
+    if (action != "add")
+    {
+        PrintTrainingBreakpointUsage();
+        return;
+    }
+
+    std::string condition;
+    MiaIA::Core::TrainingBreakpointSpec spec;
+
+    if (!(stream >> condition))
+    {
+        PrintTrainingBreakpointUsage();
+        return;
+    }
+
+    if (condition == "phase")
+    {
+        std::string phaseName;
+
+        if (!(stream >> phaseName) ||
+            !TryParseTrainingDebugPhase(phaseName, spec.Phase))
+        {
+            PrintTrainingBreakpointUsage();
+            return;
+        }
+
+        spec.Kind = MiaIA::Core::TrainingBreakpointKind::Phase;
+    }
+    else
+    {
+        if (!(stream >> spec.TargetId >> spec.Threshold))
+        {
+            PrintTrainingBreakpointUsage();
+            return;
+        }
+
+        if (condition == "activation-above")
+        {
+            spec.Kind = MiaIA::Core::TrainingBreakpointKind::
+                NeuronActivationAbove;
+        }
+        else if (condition == "activation-below")
+        {
+            spec.Kind = MiaIA::Core::TrainingBreakpointKind::
+                NeuronActivationBelow;
+        }
+        else if (condition == "gradient-above")
+        {
+            spec.Kind = MiaIA::Core::TrainingBreakpointKind::
+                NeuronGradientMagnitudeAbove;
+        }
+        else if (condition == "weight-update-above")
+        {
+            spec.Kind = MiaIA::Core::TrainingBreakpointKind::
+                ConnectionUpdateMagnitudeAbove;
+        }
+        else
+        {
+            PrintTrainingBreakpointUsage();
+            return;
+        }
+    }
+
+    stream >> std::ws;
+
+    if (!stream.eof())
+    {
+        PrintTrainingBreakpointUsage();
+        return;
+    }
+
+    MiaIA::Core::TrainingBreakpointSnapshot breakpoint;
+
+    if (!MiaIAClient::AddTrainingBreakpoint(spec, breakpoint))
+    {
+        std::cout
+            << "Training breakpoint could not be added. Check its "
+               "arguments or active training state.\n";
+        return;
+    }
+
+    std::cout << "Training breakpoint added: ";
+    PrintTrainingBreakpoint(breakpoint);
 }
 
 void PrintTrainingDebug(
@@ -1648,6 +1995,12 @@ void HandleTrainCommand(const std::string& command)
         }
 
         PrintTrainingSessionUsage();
+        return;
+    }
+
+    if (action == "breakpoint")
+    {
+        HandleTrainingBreakpointCommand(stream);
         return;
     }
 

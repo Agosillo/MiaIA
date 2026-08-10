@@ -6,6 +6,7 @@ namespace MiaIA::Core
     {
         None,
         PauseRequested,
+        BreakpointHit,
         CancelRequested,
         StepFailed
     };

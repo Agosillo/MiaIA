@@ -6,11 +6,13 @@
 #include "Framework/Application/SlateApplication.h"
 #include "HAL/PlatformMisc.h"
 #include "InputCoreTypes.h"
+#include "Containers/UnrealString.h"
 #include "Misc/ConfigCacheIni.h"
 #include "Styling/AppStyle.h"
 #include "Widgets/Input/SButton.h"
 #include "Widgets/Input/SComboButton.h"
 #include "Widgets/Input/SEditableTextBox.h"
+#include "Widgets/Input/SSpinBox.h"
 #include "Widgets/Text/SMultiLineEditableText.h"
 #include "Widgets/Layout/SBorder.h"
 #include "Widgets/Layout/SBox.h"
@@ -32,6 +34,15 @@ namespace
     constexpr TCHAR DataRefreshSettingsSection[] =
         TEXT("MiaIAStudio.UserSettings");
     constexpr TCHAR DataRefreshSettingsKey[] = TEXT("DataRefresh");
+    constexpr TCHAR DetailedNeuronLimitSettingsKey[] =
+        TEXT("DetailedNeuronLimit");
+    constexpr TCHAR DetailedConnectionLimitSettingsKey[] =
+        TEXT("DetailedConnectionLimit");
+    constexpr int32 MinimumTopologyLimit = 1;
+    constexpr int32 MaximumDetailedNeuronLimit = 100000000;
+    constexpr int32 MaximumDetailedConnectionLimit = 1000000000;
+    constexpr int32 MaximumNeuronSliderLimit = 100000;
+    constexpr int32 MaximumConnectionSliderLimit = 1000000;
 
     FString DataRefreshModeName(EMiaIADataRefreshMode Mode)
     {
@@ -96,6 +107,48 @@ namespace
             DataRefreshSettingsSection,
             DataRefreshSettingsKey,
             *DataRefreshModeName(Mode),
+            GGameUserSettingsIni);
+        GConfig->Flush(false, GGameUserSettingsIni);
+    }
+
+    int32 LoadTopologyLimit(
+        const TCHAR* Key,
+        int32 DefaultValue,
+        int32 MaximumValue)
+    {
+        int32 savedValue{};
+
+        if (GConfig && GConfig->GetInt(
+            DataRefreshSettingsSection,
+            Key,
+            savedValue,
+            GGameUserSettingsIni))
+        {
+            return FMath::Clamp(
+                savedValue,
+                MinimumTopologyLimit,
+                MaximumValue);
+        }
+
+        return DefaultValue;
+    }
+
+    void SaveTopologyLimits(int32 NeuronLimit, int32 ConnectionLimit)
+    {
+        if (!GConfig)
+        {
+            return;
+        }
+
+        GConfig->SetInt(
+            DataRefreshSettingsSection,
+            DetailedNeuronLimitSettingsKey,
+            NeuronLimit,
+            GGameUserSettingsIni);
+        GConfig->SetInt(
+            DataRefreshSettingsSection,
+            DetailedConnectionLimitSettingsKey,
+            ConnectionLimit,
             GGameUserSettingsIni);
         GConfig->Flush(false, GGameUserSettingsIni);
     }
@@ -177,6 +230,51 @@ namespace
         return TEXT("Unknown");
     }
 
+    FText BreakpointKindName(EMiaIATrainingBreakpointKind Kind)
+    {
+        switch (Kind)
+        {
+        case EMiaIATrainingBreakpointKind::Phase:
+            return LOCTEXT("BreakpointPhase", "Phase reached");
+        case EMiaIATrainingBreakpointKind::NeuronActivationAbove:
+            return LOCTEXT("BreakpointActivationAbove", "Activation above");
+        case EMiaIATrainingBreakpointKind::NeuronActivationBelow:
+            return LOCTEXT("BreakpointActivationBelow", "Activation below");
+        case EMiaIATrainingBreakpointKind::NeuronGradientMagnitudeAbove:
+            return LOCTEXT("BreakpointGradientAbove", "Gradient above");
+        case EMiaIATrainingBreakpointKind::ConnectionUpdateMagnitudeAbove:
+            return LOCTEXT("BreakpointUpdateAbove", "Weight update above");
+        }
+
+        return LOCTEXT("BreakpointUnknown", "Unknown");
+    }
+
+    FString BuildBreakpointKey(
+        const TArray<FMiaIATrainingBreakpoint>& Breakpoints,
+        const FMiaIATrainingSessionSnapshot& Session)
+    {
+        FString key = FString::Printf(
+            TEXT("%d:%d:%lld"),
+            Breakpoints.Num(),
+            Session.bHasBreakpointHit ? 1 : 0,
+            Session.LastBreakpointHit.BreakpointId);
+
+        for (const FMiaIATrainingBreakpoint& breakpoint : Breakpoints)
+        {
+            key += FString::Printf(
+                TEXT("|%lld:%d:%d:%d:%lld:%g:%lld"),
+                breakpoint.Id,
+                breakpoint.bEnabled ? 1 : 0,
+                static_cast<int32>(breakpoint.Kind),
+                static_cast<int32>(breakpoint.Phase),
+                breakpoint.TargetId,
+                breakpoint.Threshold,
+                breakpoint.HitCount);
+        }
+
+        return key;
+    }
+
     FString BuildTopologyKey(const FMiaIANetworkSnapshot& Network)
     {
         FString key = FString::Printf(
@@ -234,6 +332,17 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
     bStandaloneMode = InArgs._StandaloneMode;
     Theme = FMiaIAEditorTheme::Load();
     DataRefreshMode = LoadDataRefreshMode();
+    DetailedNeuronLimit = LoadTopologyLimit(
+        DetailedNeuronLimitSettingsKey,
+        static_cast<int32>(
+            MiaIA::Studio::StudioTopologyBuilder::DetailedNeuronLimit),
+        MaximumDetailedNeuronLimit);
+    DetailedConnectionLimit = LoadTopologyLimit(
+        DetailedConnectionLimitSettingsKey,
+        static_cast<int32>(
+            MiaIA::Studio::StudioTopologyBuilder::
+                DetailedConnectionLimit),
+        MaximumDetailedConnectionLimit);
     RefreshWidgetStyles();
     ConsoleHistory = TEXT(
         "MiaIA Studio Console\n"
@@ -269,7 +378,19 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
             .BorderBackgroundColor(this, &SMiaIAEditorPanel::PanelColor)
             .Padding(FMargin(6.0f, 4.0f))
             [
+                SNew(SVerticalBox)
+                + SVerticalBox::Slot()
+                .AutoHeight()
+                [
                 SNew(SHorizontalBox)
+                + SHorizontalBox::Slot()
+                .AutoWidth()
+                .VAlign(VAlign_Center)
+                .Padding(2.0f, 0.0f, 8.0f, 0.0f)
+                [
+                    SNew(STextBlock)
+                    .Text(LOCTEXT("LayoutToolbarGroup", "Layout"))
+                ]
                 + SHorizontalBox::Slot()
                 .AutoWidth()
                 .Padding(2.0f)
@@ -316,56 +437,6 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
                     .OnClicked(
                         this,
                         &SMiaIAEditorPanel::HandleToggleTopologyWorkspace)
-                ]
-                + SHorizontalBox::Slot()
-                .AutoWidth()
-                .Padding(2.0f)
-                [
-                    SNew(SButton)
-                    .ButtonStyle(&ButtonStyle)
-                    .Text(LOCTEXT("Resume", "Continue"))
-                    .IsEnabled(this, &SMiaIAEditorPanel::CanResume)
-                    .OnClicked(this, &SMiaIAEditorPanel::HandleResume)
-                ]
-                + SHorizontalBox::Slot()
-                .AutoWidth()
-                .Padding(2.0f)
-                [
-                    SNew(SButton)
-                    .ButtonStyle(&ButtonStyle)
-                    .Text(LOCTEXT("Pause", "Pause"))
-                    .IsEnabled(this, &SMiaIAEditorPanel::CanPause)
-                    .OnClicked(this, &SMiaIAEditorPanel::HandlePause)
-                ]
-                + SHorizontalBox::Slot()
-                .AutoWidth()
-                .Padding(2.0f)
-                [
-                    SNew(SButton)
-                    .ButtonStyle(&ButtonStyle)
-                    .Text(LOCTEXT("StartDebug", "Start debug"))
-                    .IsEnabled(this, &SMiaIAEditorPanel::CanStartDebug)
-                    .OnClicked(this, &SMiaIAEditorPanel::HandleStartDebug)
-                ]
-                + SHorizontalBox::Slot()
-                .AutoWidth()
-                .Padding(2.0f)
-                [
-                    SNew(SButton)
-                    .ButtonStyle(&ButtonStyle)
-                    .Text(LOCTEXT("Advance", "Step phase"))
-                    .IsEnabled(this, &SMiaIAEditorPanel::CanAdvanceDebug)
-                    .OnClicked(this, &SMiaIAEditorPanel::HandleAdvanceDebug)
-                ]
-                + SHorizontalBox::Slot()
-                .AutoWidth()
-                .Padding(2.0f)
-                [
-                    SNew(SButton)
-                    .ButtonStyle(&ButtonStyle)
-                    .Text(LOCTEXT("CancelDebug", "Cancel debug"))
-                    .IsEnabled(this, &SMiaIAEditorPanel::CanCancelDebug)
-                    .OnClicked(this, &SMiaIAEditorPanel::HandleCancelDebug)
                 ]
                 + SHorizontalBox::Slot()
                 .AutoWidth()
@@ -450,6 +521,33 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
                 .VAlign(VAlign_Center)
                 .Padding(10.0f, 0.0f, 2.0f, 0.0f)
                 [
+                    SNew(STextBlock)
+                    .Text(LOCTEXT("TopologyLimitsLabel", "Detail limits"))
+                ]
+                + SHorizontalBox::Slot()
+                .AutoWidth()
+                .VAlign(VAlign_Center)
+                .Padding(2.0f)
+                [
+                    SNew(SComboButton)
+                    .ComboButtonStyle(&ComboButtonStyle)
+                    .ToolTipText(LOCTEXT(
+                        "TopologyLimitsTooltip",
+                        "Set the largest neuron and connection counts rendered in detailed mode. Larger networks use compact mode."))
+                    .ButtonContent()
+                    [
+                        SNew(STextBlock)
+                        .Text(this, &SMiaIAEditorPanel::TopologyLimitsText)
+                    ]
+                    .OnGetMenuContent(
+                        this,
+                        &SMiaIAEditorPanel::BuildTopologyLimitsMenu)
+                ]
+                + SHorizontalBox::Slot()
+                .AutoWidth()
+                .VAlign(VAlign_Center)
+                .Padding(10.0f, 0.0f, 2.0f, 0.0f)
+                [
                     SNew(SComboButton)
                     .ComboButtonStyle(&ComboButtonStyle)
                     .ToolTipText(LOCTEXT(
@@ -463,6 +561,96 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
                     .OnGetMenuContent(
                         this,
                         &SMiaIAEditorPanel::BuildHelpMenu)
+                ]
+                + SHorizontalBox::Slot()
+                .FillWidth(1.0f)
+                [
+                    SNullWidget::NullWidget
+                ]
+                + SHorizontalBox::Slot()
+                .AutoWidth()
+                .VAlign(VAlign_Center)
+                .Padding(8.0f, 0.0f, 2.0f, 0.0f)
+                [
+                    SNew(SButton)
+                    .ButtonStyle(&ButtonStyle)
+                    .Visibility_Lambda([this]()
+                    {
+                        return bStandaloneMode
+                            ? EVisibility::Visible
+                            : EVisibility::Collapsed;
+                    })
+                    .Text(LOCTEXT("Exit", "Exit"))
+                    .ToolTipText(LOCTEXT(
+                        "ExitTooltip",
+                        "Close MiaIA Studio."))
+                    .OnClicked(this, &SMiaIAEditorPanel::HandleExit)
+                ]
+                ]
+                + SVerticalBox::Slot()
+                .AutoHeight()
+                .Padding(0.0f, 2.0f, 0.0f, 0.0f)
+                [
+                SNew(SHorizontalBox)
+                + SHorizontalBox::Slot()
+                .AutoWidth()
+                .VAlign(VAlign_Center)
+                .Padding(2.0f, 0.0f, 8.0f, 0.0f)
+                [
+                    SNew(STextBlock)
+                    .Text(LOCTEXT(
+                        "TrainingDebugToolbarGroup",
+                        "Training debug"))
+                ]
+                + SHorizontalBox::Slot()
+                .AutoWidth()
+                .Padding(2.0f)
+                [
+                    SNew(SButton)
+                    .ButtonStyle(&ButtonStyle)
+                    .Text(LOCTEXT("Resume", "Continue"))
+                    .IsEnabled(this, &SMiaIAEditorPanel::CanResume)
+                    .OnClicked(this, &SMiaIAEditorPanel::HandleResume)
+                ]
+                + SHorizontalBox::Slot()
+                .AutoWidth()
+                .Padding(2.0f)
+                [
+                    SNew(SButton)
+                    .ButtonStyle(&ButtonStyle)
+                    .Text(LOCTEXT("Pause", "Pause"))
+                    .IsEnabled(this, &SMiaIAEditorPanel::CanPause)
+                    .OnClicked(this, &SMiaIAEditorPanel::HandlePause)
+                ]
+                + SHorizontalBox::Slot()
+                .AutoWidth()
+                .Padding(2.0f)
+                [
+                    SNew(SButton)
+                    .ButtonStyle(&ButtonStyle)
+                    .Text(LOCTEXT("StartDebug", "Start debug"))
+                    .IsEnabled(this, &SMiaIAEditorPanel::CanStartDebug)
+                    .OnClicked(this, &SMiaIAEditorPanel::HandleStartDebug)
+                ]
+                + SHorizontalBox::Slot()
+                .AutoWidth()
+                .Padding(2.0f)
+                [
+                    SNew(SButton)
+                    .ButtonStyle(&ButtonStyle)
+                    .Text(LOCTEXT("Advance", "Step phase"))
+                    .IsEnabled(this, &SMiaIAEditorPanel::CanAdvanceDebug)
+                    .OnClicked(this, &SMiaIAEditorPanel::HandleAdvanceDebug)
+                ]
+                + SHorizontalBox::Slot()
+                .AutoWidth()
+                .Padding(2.0f)
+                [
+                    SNew(SButton)
+                    .ButtonStyle(&ButtonStyle)
+                    .Text(LOCTEXT("CancelDebug", "Cancel debug"))
+                    .IsEnabled(this, &SMiaIAEditorPanel::CanCancelDebug)
+                    .OnClicked(this, &SMiaIAEditorPanel::HandleCancelDebug)
                 ]
                 + SHorizontalBox::Slot()
                 .FillWidth(1.0f)
@@ -490,24 +678,6 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
                             FMiaIAEditorTheme::Palette(Theme).Debug);
                     })
                 ]
-                + SHorizontalBox::Slot()
-                .AutoWidth()
-                .VAlign(VAlign_Center)
-                .Padding(8.0f, 0.0f, 2.0f, 0.0f)
-                [
-                    SNew(SButton)
-                    .ButtonStyle(&ButtonStyle)
-                    .Visibility_Lambda([this]()
-                    {
-                        return bStandaloneMode
-                            ? EVisibility::Visible
-                            : EVisibility::Collapsed;
-                    })
-                    .Text(LOCTEXT("Exit", "Exit"))
-                    .ToolTipText(LOCTEXT(
-                        "ExitTooltip",
-                        "Close MiaIA Studio."))
-                    .OnClicked(this, &SMiaIAEditorPanel::HandleExit)
                 ]
             ]
         ]
@@ -967,10 +1137,135 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
                         ]
                         + SWidgetSwitcher::Slot()
                         [
-                            SNew(STextBlock)
-                            .Text(LOCTEXT(
-                                "BreakpointsPlanned",
-                                "Breakpoint authoring will be connected in the next editor increment."))
+                            SNew(SVerticalBox)
+                            + SVerticalBox::Slot()
+                            .AutoHeight()
+                            .Padding(2.0f, 2.0f, 2.0f, 6.0f)
+                            [
+                                SNew(SHorizontalBox)
+                                + SHorizontalBox::Slot()
+                                .AutoWidth()
+                                .Padding(2.0f)
+                                [
+                                    SNew(SComboButton)
+                                    .ComboButtonStyle(&ComboButtonStyle)
+                                    .OnGetMenuContent(
+                                        this,
+                                        &SMiaIAEditorPanel::BuildBreakpointKindMenu)
+                                    .ButtonContent()
+                                    [
+                                        SNew(STextBlock)
+                                        .Text(
+                                            this,
+                                            &SMiaIAEditorPanel::BreakpointKindText)
+                                    ]
+                                ]
+                                + SHorizontalBox::Slot()
+                                .AutoWidth()
+                                .Padding(2.0f)
+                                [
+                                    SNew(SBox)
+                                    .Visibility(
+                                        this,
+                                        &SMiaIAEditorPanel::BreakpointPhaseVisibility)
+                                    [
+                                        SNew(SComboButton)
+                                        .ComboButtonStyle(&ComboButtonStyle)
+                                        .OnGetMenuContent(
+                                            this,
+                                            &SMiaIAEditorPanel::BuildBreakpointPhaseMenu)
+                                        .ButtonContent()
+                                        [
+                                            SNew(STextBlock)
+                                            .Text(
+                                                this,
+                                                &SMiaIAEditorPanel::BreakpointPhaseText)
+                                        ]
+                                    ]
+                                ]
+                                + SHorizontalBox::Slot()
+                                .AutoWidth()
+                                .Padding(2.0f)
+                                [
+                                    SNew(SBox)
+                                    .WidthOverride(120.0f)
+                                    .Visibility(
+                                        this,
+                                        &SMiaIAEditorPanel::BreakpointTargetVisibility)
+                                    [
+                                        SAssignNew(
+                                            BreakpointTargetInput,
+                                            SEditableTextBox)
+                                        .Style(&InputStyle)
+                                        .HintText(LOCTEXT(
+                                            "BreakpointTargetHint",
+                                            "Neuron/connection ID"))
+                                    ]
+                                ]
+                                + SHorizontalBox::Slot()
+                                .AutoWidth()
+                                .Padding(2.0f)
+                                [
+                                    SNew(SBox)
+                                    .WidthOverride(110.0f)
+                                    .Visibility(
+                                        this,
+                                        &SMiaIAEditorPanel::BreakpointTargetVisibility)
+                                    [
+                                        SAssignNew(
+                                            BreakpointThresholdInput,
+                                            SEditableTextBox)
+                                        .Style(&InputStyle)
+                                        .HintText(LOCTEXT(
+                                            "BreakpointThresholdHint",
+                                            "Threshold"))
+                                    ]
+                                ]
+                                + SHorizontalBox::Slot()
+                                .AutoWidth()
+                                .Padding(2.0f)
+                                [
+                                    SNew(SButton)
+                                    .ButtonStyle(&ButtonStyle)
+                                    .Text(LOCTEXT("AddBreakpoint", "Add"))
+                                    .OnClicked(
+                                        this,
+                                        &SMiaIAEditorPanel::HandleAddBreakpoint)
+                                ]
+                                + SHorizontalBox::Slot()
+                                .AutoWidth()
+                                .Padding(2.0f)
+                                [
+                                    SNew(SButton)
+                                    .ButtonStyle(&ButtonStyle)
+                                    .Text(LOCTEXT("ClearBreakpoints", "Clear"))
+                                    .OnClicked(
+                                        this,
+                                        &SMiaIAEditorPanel::HandleClearBreakpoints)
+                                ]
+                            ]
+                            + SVerticalBox::Slot()
+                            .AutoHeight()
+                            .Padding(4.0f, 0.0f, 4.0f, 5.0f)
+                            [
+                                SNew(STextBlock)
+                                .Text(
+                                    this,
+                                    &SMiaIAEditorPanel::LastBreakpointHitText)
+                                .AutoWrapText(true)
+                            ]
+                            + SVerticalBox::Slot()
+                            .FillHeight(1.0f)
+                            [
+                                SNew(SScrollBox)
+                                .ScrollBarStyle(&ScrollBarStyle)
+                                + SScrollBox::Slot()
+                                [
+                                    SAssignNew(
+                                        BreakpointContent,
+                                        SVerticalBox)
+                                ]
+                            ]
                         ]
                     ]
                 ]
@@ -1065,8 +1360,16 @@ void SMiaIAEditorPanel::RefreshData()
     bCompactTopology =
         MiaIA::Studio::StudioTopologyBuilder::RequiresCompactMode(
             static_cast<std::size_t>(NetworkOverview.NeuronCount),
-            static_cast<std::size_t>(NetworkOverview.ConnectionCount));
+            static_cast<std::size_t>(NetworkOverview.ConnectionCount),
+            static_cast<std::size_t>(DetailedNeuronLimit),
+            static_cast<std::size_t>(DetailedConnectionLimit));
     Session = UMiaIABlueprintLibrary::GetTrainingSession();
+    Breakpoints = Session.Breakpoints;
+    const FString newBreakpointKey =
+        BuildBreakpointKey(Breakpoints, Session);
+    const bool breakpointsChanged =
+        newBreakpointKey != BreakpointKey;
+    BreakpointKey = newBreakpointKey;
 
     if (bCompactTopology)
     {
@@ -1189,6 +1492,105 @@ void SMiaIAEditorPanel::RefreshData()
     if (topologyChanged)
     {
         RebuildExplorer();
+    }
+
+    if (breakpointsChanged)
+    {
+        RebuildBreakpoints();
+    }
+}
+
+void SMiaIAEditorPanel::RebuildBreakpoints()
+{
+    if (!BreakpointContent.IsValid())
+    {
+        return;
+    }
+
+    BreakpointContent->ClearChildren();
+
+    if (Breakpoints.IsEmpty())
+    {
+        BreakpointContent->AddSlot()
+        .AutoHeight()
+        .Padding(4.0f)
+        [
+            SNew(STextBlock)
+            .Text(LOCTEXT(
+                "NoBreakpoints",
+                "No breakpoints configured. Add one above or use the shared CLI."))
+            .AutoWrapText(true)
+        ];
+        return;
+    }
+
+    for (const FMiaIATrainingBreakpoint& breakpoint : Breakpoints)
+    {
+        FText description;
+
+        if (breakpoint.Kind == EMiaIATrainingBreakpointKind::Phase)
+        {
+            description = FText::Format(
+                LOCTEXT(
+                    "PhaseBreakpointDescription",
+                    "#{0}  {1}  |  {2}  |  hits {3}"),
+                FText::AsNumber(breakpoint.Id),
+                BreakpointKindName(breakpoint.Kind),
+                DebugPhaseName(breakpoint.Phase),
+                FText::AsNumber(breakpoint.HitCount));
+        }
+        else
+        {
+            description = FText::Format(
+                LOCTEXT(
+                    "ValueBreakpointDescription",
+                    "#{0}  {1}  |  target {2}  |  threshold {3}  |  hits {4}"),
+                FText::AsNumber(breakpoint.Id),
+                BreakpointKindName(breakpoint.Kind),
+                FText::AsNumber(breakpoint.TargetId),
+                FText::AsNumber(breakpoint.Threshold),
+                FText::AsNumber(breakpoint.HitCount));
+        }
+
+        BreakpointContent->AddSlot()
+        .AutoHeight()
+        .Padding(2.0f)
+        [
+            SNew(SHorizontalBox)
+            + SHorizontalBox::Slot()
+            .FillWidth(1.0f)
+            .VAlign(VAlign_Center)
+            [
+                SNew(STextBlock)
+                .Text(description)
+            ]
+            + SHorizontalBox::Slot()
+            .AutoWidth()
+            .Padding(4.0f, 0.0f)
+            [
+                SNew(SButton)
+                .ButtonStyle(&ButtonStyle)
+                .Text(breakpoint.bEnabled
+                    ? LOCTEXT("DisableBreakpoint", "Disable")
+                    : LOCTEXT("EnableBreakpoint", "Enable"))
+                .OnClicked(
+                    this,
+                    &SMiaIAEditorPanel::HandleToggleBreakpoint,
+                    breakpoint.Id,
+                    !breakpoint.bEnabled)
+            ]
+            + SHorizontalBox::Slot()
+            .AutoWidth()
+            [
+                SNew(SButton)
+                .ButtonStyle(&ButtonStyle)
+                .Text(LOCTEXT("RemoveBreakpoint", "Remove"))
+                .OnClicked(
+                    this,
+                    &SMiaIAEditorPanel::HandleRemoveBreakpoint,
+                    breakpoint.Id)
+            ]
+        ];
     }
 }
 
@@ -1530,6 +1932,186 @@ FReply SMiaIAEditorPanel::SelectBottomTab(int32 TabIndex)
     return FReply::Handled();
 }
 
+TSharedRef<SWidget> SMiaIAEditorPanel::BuildBreakpointKindMenu()
+{
+    TSharedRef<SVerticalBox> menu = SNew(SVerticalBox);
+    const EMiaIATrainingBreakpointKind kinds[] =
+    {
+        EMiaIATrainingBreakpointKind::Phase,
+        EMiaIATrainingBreakpointKind::NeuronActivationAbove,
+        EMiaIATrainingBreakpointKind::NeuronActivationBelow,
+        EMiaIATrainingBreakpointKind::NeuronGradientMagnitudeAbove,
+        EMiaIATrainingBreakpointKind::ConnectionUpdateMagnitudeAbove
+    };
+
+    for (const EMiaIATrainingBreakpointKind kind : kinds)
+    {
+        menu->AddSlot()
+        .AutoHeight()
+        [
+            SNew(SButton)
+            .ButtonStyle(&ButtonStyle)
+            .Text(BreakpointKindName(kind))
+            .OnClicked(
+                this,
+                &SMiaIAEditorPanel::SelectBreakpointKind,
+                kind)
+        ];
+    }
+
+    return menu;
+}
+
+TSharedRef<SWidget> SMiaIAEditorPanel::BuildBreakpointPhaseMenu()
+{
+    TSharedRef<SVerticalBox> menu = SNew(SVerticalBox);
+    const EMiaIATrainingDebugPhase phases[] =
+    {
+        EMiaIATrainingDebugPhase::BeforeForward,
+        EMiaIATrainingDebugPhase::ForwardComplete,
+        EMiaIATrainingDebugPhase::BackwardComplete,
+        EMiaIATrainingDebugPhase::UpdateComplete,
+        EMiaIATrainingDebugPhase::Verified,
+        EMiaIATrainingDebugPhase::Committed
+    };
+
+    for (const EMiaIATrainingDebugPhase phase : phases)
+    {
+        menu->AddSlot()
+        .AutoHeight()
+        [
+            SNew(SButton)
+            .ButtonStyle(&ButtonStyle)
+            .Text(DebugPhaseName(phase))
+            .OnClicked(
+                this,
+                &SMiaIAEditorPanel::SelectBreakpointPhase,
+                phase)
+        ];
+    }
+
+    return menu;
+}
+
+FReply SMiaIAEditorPanel::SelectBreakpointKind(
+    EMiaIATrainingBreakpointKind InKind)
+{
+    BreakpointKind = InKind;
+    return FReply::Handled();
+}
+
+FReply SMiaIAEditorPanel::SelectBreakpointPhase(
+    EMiaIATrainingDebugPhase InPhase)
+{
+    BreakpointPhase = InPhase;
+    return FReply::Handled();
+}
+
+FReply SMiaIAEditorPanel::HandleAddBreakpoint()
+{
+    int64 targetId{};
+    double threshold{};
+
+    if (BreakpointKind != EMiaIATrainingBreakpointKind::Phase)
+    {
+        if (!BreakpointTargetInput.IsValid() ||
+            !BreakpointThresholdInput.IsValid() ||
+            !LexTryParseString(
+                targetId,
+                *BreakpointTargetInput->GetText().ToString()) ||
+            !LexTryParseString(
+                threshold,
+                *BreakpointThresholdInput->GetText().ToString()))
+        {
+            ShowDialog(
+                LOCTEXT("InvalidBreakpointTitle", "Invalid breakpoint"),
+                LOCTEXT(
+                    "InvalidBreakpointValues",
+                    "Enter a numeric neuron/connection ID and threshold."));
+            return FReply::Handled();
+        }
+    }
+
+    FMiaIATrainingBreakpoint breakpoint;
+
+    if (!UMiaIABlueprintLibrary::AddTrainingBreakpoint(
+        BreakpointKind,
+        BreakpointPhase,
+        targetId,
+        threshold,
+        breakpoint))
+    {
+        ShowDialog(
+            LOCTEXT("BreakpointAddFailedTitle", "Breakpoint not added"),
+            LOCTEXT(
+                "BreakpointAddFailed",
+                "Check the values and pause any running training or debug session."));
+        return FReply::Handled();
+    }
+
+    if (BreakpointTargetInput.IsValid())
+    {
+        BreakpointTargetInput->SetText(FText::GetEmpty());
+    }
+
+    if (BreakpointThresholdInput.IsValid())
+    {
+        BreakpointThresholdInput->SetText(FText::GetEmpty());
+    }
+
+    RefreshData();
+    return FReply::Handled();
+}
+
+FReply SMiaIAEditorPanel::HandleToggleBreakpoint(
+    int64 BreakpointId,
+    bool bEnabled)
+{
+    if (!UMiaIABlueprintLibrary::SetTrainingBreakpointEnabled(
+        BreakpointId,
+        bEnabled))
+    {
+        ShowDialog(
+            LOCTEXT("BreakpointUpdateFailedTitle", "Breakpoint not updated"),
+            LOCTEXT(
+                "BreakpointUpdateFailed",
+                "Pause the running training or debug operation and try again."));
+    }
+
+    RefreshData();
+    return FReply::Handled();
+}
+
+FReply SMiaIAEditorPanel::HandleRemoveBreakpoint(int64 BreakpointId)
+{
+    if (!UMiaIABlueprintLibrary::RemoveTrainingBreakpoint(BreakpointId))
+    {
+        ShowDialog(
+            LOCTEXT("BreakpointRemoveFailedTitle", "Breakpoint not removed"),
+            LOCTEXT(
+                "BreakpointRemoveFailed",
+                "Pause the running training or debug operation and try again."));
+    }
+
+    RefreshData();
+    return FReply::Handled();
+}
+
+FReply SMiaIAEditorPanel::HandleClearBreakpoints()
+{
+    if (!UMiaIABlueprintLibrary::ClearTrainingBreakpoints())
+    {
+        ShowDialog(
+            LOCTEXT("BreakpointClearFailedTitle", "Breakpoints not cleared"),
+            LOCTEXT(
+                "BreakpointClearFailed",
+                "Pause the running training or debug operation and try again."));
+    }
+
+    RefreshData();
+    return FReply::Handled();
+}
+
 TSharedRef<SWidget> SMiaIAEditorPanel::BuildViewModeMenu()
 {
     return SNew(SVerticalBox)
@@ -1723,6 +2305,154 @@ FReply SMiaIAEditorPanel::SelectDataRefreshMode(
     return FReply::Handled();
 }
 
+TSharedRef<SWidget> SMiaIAEditorPanel::BuildTopologyLimitsMenu()
+{
+    PendingDetailedNeuronLimit = DetailedNeuronLimit;
+    PendingDetailedConnectionLimit = DetailedConnectionLimit;
+
+    return SNew(SBox)
+        .WidthOverride(340.0f)
+        .Padding(10.0f)
+        [
+            SNew(SVerticalBox)
+            + SVerticalBox::Slot()
+            .AutoHeight()
+            .Padding(0.0f, 0.0f, 0.0f, 4.0f)
+            [
+                SNew(STextBlock)
+                .Text(LOCTEXT(
+                    "DetailedNeuronLimitLabel",
+                    "Detailed neurons"))
+            ]
+            + SVerticalBox::Slot()
+            .AutoHeight()
+            .Padding(0.0f, 0.0f, 0.0f, 10.0f)
+            [
+                SNew(SSpinBox<int32>)
+                .MinValue(MinimumTopologyLimit)
+                .MaxValue(MaximumDetailedNeuronLimit)
+                .MinSliderValue(MinimumTopologyLimit)
+                .MaxSliderValue(MaximumNeuronSliderLimit)
+                .Delta(100)
+                .Value(PendingDetailedNeuronLimit)
+                .OnValueChanged(
+                    this,
+                    &SMiaIAEditorPanel::
+                        HandlePendingNeuronLimitChanged)
+                .ToolTipText(LOCTEXT(
+                    "DetailedNeuronLimitTooltip",
+                    "Networks above this neuron count use compact mode. Values above the slider range can be typed directly."))
+            ]
+            + SVerticalBox::Slot()
+            .AutoHeight()
+            .Padding(0.0f, 0.0f, 0.0f, 4.0f)
+            [
+                SNew(STextBlock)
+                .Text(LOCTEXT(
+                    "DetailedConnectionLimitLabel",
+                    "Detailed connections"))
+            ]
+            + SVerticalBox::Slot()
+            .AutoHeight()
+            .Padding(0.0f, 0.0f, 0.0f, 10.0f)
+            [
+                SNew(SSpinBox<int32>)
+                .MinValue(MinimumTopologyLimit)
+                .MaxValue(MaximumDetailedConnectionLimit)
+                .MinSliderValue(MinimumTopologyLimit)
+                .MaxSliderValue(MaximumConnectionSliderLimit)
+                .Delta(100)
+                .Value(PendingDetailedConnectionLimit)
+                .OnValueChanged(
+                    this,
+                    &SMiaIAEditorPanel::
+                        HandlePendingConnectionLimitChanged)
+                .ToolTipText(LOCTEXT(
+                    "DetailedConnectionLimitTooltip",
+                    "Networks above this connection count use compact mode. Values above the slider range can be typed directly."))
+            ]
+            + SVerticalBox::Slot()
+            .AutoHeight()
+            [
+                SNew(STextBlock)
+                .AutoWrapText(true)
+                .Text(LOCTEXT(
+                    "TopologyLimitsWarning",
+                    "Higher limits can significantly increase snapshot, layout, and rendering cost."))
+            ]
+            + SVerticalBox::Slot()
+            .AutoHeight()
+            .Padding(0.0f, 10.0f, 0.0f, 0.0f)
+            [
+                SNew(SHorizontalBox)
+                + SHorizontalBox::Slot()
+                .FillWidth(1.0f)
+                .Padding(0.0f, 0.0f, 4.0f, 0.0f)
+                [
+                    SNew(SButton)
+                    .ButtonStyle(&ButtonStyle)
+                    .Text(LOCTEXT("ApplyTopologyLimits", "Apply"))
+                    .OnClicked(
+                        this,
+                        &SMiaIAEditorPanel::HandleApplyTopologyLimits)
+                ]
+                + SHorizontalBox::Slot()
+                .FillWidth(1.0f)
+                .Padding(4.0f, 0.0f, 0.0f, 0.0f)
+                [
+                    SNew(SButton)
+                    .ButtonStyle(&ButtonStyle)
+                    .Text(LOCTEXT(
+                        "ResetTopologyLimits",
+                        "Reset defaults"))
+                    .OnClicked(
+                        this,
+                        &SMiaIAEditorPanel::HandleResetTopologyLimits)
+                ]
+            ]
+        ];
+}
+
+void SMiaIAEditorPanel::HandlePendingNeuronLimitChanged(int32 InValue)
+{
+    PendingDetailedNeuronLimit = FMath::Clamp(
+        InValue,
+        MinimumTopologyLimit,
+        MaximumDetailedNeuronLimit);
+}
+
+void SMiaIAEditorPanel::HandlePendingConnectionLimitChanged(int32 InValue)
+{
+    PendingDetailedConnectionLimit = FMath::Clamp(
+        InValue,
+        MinimumTopologyLimit,
+        MaximumDetailedConnectionLimit);
+}
+
+FReply SMiaIAEditorPanel::HandleApplyTopologyLimits()
+{
+    DetailedNeuronLimit = PendingDetailedNeuronLimit;
+    DetailedConnectionLimit = PendingDetailedConnectionLimit;
+    SaveTopologyLimits(DetailedNeuronLimit, DetailedConnectionLimit);
+    FSlateApplication::Get().DismissAllMenus();
+    RefreshData();
+    return FReply::Handled();
+}
+
+FReply SMiaIAEditorPanel::HandleResetTopologyLimits()
+{
+    DetailedNeuronLimit = static_cast<int32>(
+        MiaIA::Studio::StudioTopologyBuilder::DetailedNeuronLimit);
+    DetailedConnectionLimit = static_cast<int32>(
+        MiaIA::Studio::StudioTopologyBuilder::DetailedConnectionLimit);
+    PendingDetailedNeuronLimit = DetailedNeuronLimit;
+    PendingDetailedConnectionLimit = DetailedConnectionLimit;
+    SaveTopologyLimits(DetailedNeuronLimit, DetailedConnectionLimit);
+    FSlateApplication::Get().DismissAllMenus();
+    RefreshData();
+    return FReply::Handled();
+}
+
 TSharedRef<SWidget> SMiaIAEditorPanel::BuildHelpMenu()
 {
     return SNew(SVerticalBox)
@@ -1763,6 +2493,9 @@ FReply SMiaIAEditorPanel::HandleQuickHelp()
             "Mouse wheel: zoom. Middle drag: pan. Right drag in 3D: orbit.\n\n"
             "INSPECTION AND DEBUG\n"
             "The Inspector follows the current element or group. Use Start debug and Step phase to inspect forward, backward, update, verify, and commit states.\n\n"
+
+            "BREAKPOINTS\n"
+            "Open the Breakpoints tab to stop controlled training on a phase, neuron activation, neuron gradient, or connection update. Automatic training stops after the triggering sample commits, before the next sample begins.\n\n"
 
             "LICENSE AND SOURCE\n"
             "Official website and downloads: https://www.nonop.biz\n"
@@ -2427,6 +3160,14 @@ FText SMiaIAEditorPanel::DataRefreshText() const
     return DataRefreshModeDisplayName(DataRefreshMode);
 }
 
+FText SMiaIAEditorPanel::TopologyLimitsText() const
+{
+    return FText::Format(
+        LOCTEXT("CurrentTopologyLimits", "{0} / {1}"),
+        FText::AsNumber(DetailedNeuronLimit),
+        FText::AsNumber(DetailedConnectionLimit));
+}
+
 double SMiaIAEditorPanel::DataRefreshInterval() const
 {
     switch (DataRefreshMode)
@@ -2452,6 +3193,65 @@ FText SMiaIAEditorPanel::TopologyWorkspaceText() const
     return bTopologyWorkspaceExpanded
         ? LOCTEXT("RestoreTopologyPanels", "Restore panels")
         : LOCTEXT("ExpandTopologyView", "Expand view");
+}
+
+FText SMiaIAEditorPanel::BreakpointKindText() const
+{
+    return BreakpointKindName(BreakpointKind);
+}
+
+FText SMiaIAEditorPanel::BreakpointPhaseText() const
+{
+    return DebugPhaseName(BreakpointPhase);
+}
+
+FText SMiaIAEditorPanel::LastBreakpointHitText() const
+{
+    if (!Session.bHasBreakpointHit)
+    {
+        return LOCTEXT(
+            "NoBreakpointHit",
+            "Last hit: none. Automatic training pauses at a safe sample boundary.");
+    }
+
+    const FMiaIATrainingBreakpointHit& hit =
+        Session.LastBreakpointHit;
+
+    if (hit.TargetId == 0)
+    {
+        return FText::Format(
+            LOCTEXT(
+                "LastPhaseBreakpointHit",
+                "Last hit: #{0} at {1}, sample {2}, step {3}."),
+            FText::AsNumber(hit.BreakpointId),
+            DebugPhaseName(hit.Phase),
+            FText::AsNumber(hit.SampleIndex),
+            FText::AsNumber(hit.StepIndex));
+    }
+
+    return FText::Format(
+        LOCTEXT(
+            "LastValueBreakpointHit",
+            "Last hit: #{0} at {1}, target {2}, observed {3}, threshold {4}."),
+        FText::AsNumber(hit.BreakpointId),
+        DebugPhaseName(hit.Phase),
+        FText::AsNumber(hit.TargetId),
+        FText::AsNumber(hit.ObservedValue),
+        FText::AsNumber(hit.Threshold));
+}
+
+EVisibility SMiaIAEditorPanel::BreakpointPhaseVisibility() const
+{
+    return BreakpointKind == EMiaIATrainingBreakpointKind::Phase
+        ? EVisibility::Visible
+        : EVisibility::Collapsed;
+}
+
+EVisibility SMiaIAEditorPanel::BreakpointTargetVisibility() const
+{
+    return BreakpointKind == EMiaIATrainingBreakpointKind::Phase
+        ? EVisibility::Collapsed
+        : EVisibility::Visible;
 }
 
 #undef LOCTEXT_NAMESPACE

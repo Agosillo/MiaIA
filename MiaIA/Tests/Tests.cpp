@@ -95,6 +95,16 @@ int main()
 
         assert(StudioTopologyBuilder::ChooseDetail(overview) ==
             StudioTopologyDetail::Compact);
+        assert(StudioTopologyBuilder::ChooseDetail(
+            overview,
+            overview.NeuronCount,
+            overview.ConnectionCount) ==
+            StudioTopologyDetail::Detailed);
+        assert(StudioTopologyBuilder::RequiresCompactMode(
+            10,
+            101,
+            10,
+            100));
 
         const auto compact = StudioTopologyBuilder::BuildCompact(
             overview,
@@ -213,6 +223,27 @@ int main()
     assert(sessionActions.size() == 2);
     assert(sessionActions[0].Completion == "train session run");
     assert(sessionActions[1].Completion == "train session resume");
+
+    const auto breakpointAdd = MiaIACommandProcessor::GetSuggestions(
+        "train breakpoint add ");
+    assert(breakpointAdd.size() == 5);
+
+    assert(MiaIACommandProcessor::Execute(
+        "train breakpoint clear").Output.find("cleared") !=
+        std::string::npos);
+    const auto breakpointCreated = MiaIACommandProcessor::Execute(
+        "train breakpoint add phase commit");
+    assert(breakpointCreated.Output.find("added") !=
+        std::string::npos);
+    assert(MiaIACommandProcessor::Execute(
+        "train breakpoint list").Output.find("Committed") !=
+        std::string::npos);
+    assert(MiaIACommandProcessor::Execute(
+        "train breakpoint enable 1 off").Output.find("updated") !=
+        std::string::npos);
+    assert(MiaIACommandProcessor::Execute(
+        "train breakpoint remove 1").Output.find("removed") !=
+        std::string::npos);
 
     const auto datasetFormat =
         MiaIACommandProcessor::GetSuggestions("dataset import ");
@@ -2021,6 +2052,200 @@ int main()
     assert(MiaIAClient::ClearNetwork());
     std::filesystem::remove(backgroundPath);
     std::filesystem::remove(failingBackgroundPath);
+
+    });
+
+    runner.Run("Training breakpoints", [&]()
+    {
+    assert(MiaIAClient::ClearTrainingBreakpoints());
+    MiaIAClient::ClearDataset();
+    MiaIAClient::ClearNetwork();
+    assert(MiaIAClient::CreateDenseNetwork(2, 2, 1, 1));
+
+    const auto testDirectory =
+        std::filesystem::temp_directory_path() /
+        "miaia_training_breakpoint_tests";
+    const auto datasetPath = testDirectory / "samples.csv";
+    std::filesystem::create_directories(testDirectory);
+
+    {
+        std::ofstream dataset(datasetPath);
+        dataset << "x1,x2,y\n0,0,0\n1,1,1\n";
+    }
+
+    assert(MiaIAClient::ImportCsvDataset(
+        datasetPath.string(),
+        2,
+        1));
+
+    MiaIA::Core::TrainingBreakpointSpec invalidGradient;
+    invalidGradient.Kind = MiaIA::Core::TrainingBreakpointKind::
+        NeuronGradientMagnitudeAbove;
+    invalidGradient.Threshold = 0.1;
+    MiaIA::Core::TrainingBreakpointSnapshot breakpoint;
+    assert(!MiaIAClient::AddTrainingBreakpoint(
+        invalidGradient,
+        breakpoint));
+
+    MiaIA::Core::TrainingBreakpointSpec committedPhase;
+    committedPhase.Kind = MiaIA::Core::TrainingBreakpointKind::Phase;
+    committedPhase.Phase =
+        MiaIA::Core::TrainingDebugPhase::Committed;
+    assert(MiaIAClient::AddTrainingBreakpoint(
+        committedPhase,
+        breakpoint));
+    const std::uint64_t committedBreakpointId = breakpoint.Id;
+
+    MiaIA::Core::TrainingBreakpointSpec activation;
+    activation.Kind = MiaIA::Core::TrainingBreakpointKind::
+        NeuronActivationAbove;
+    activation.TargetId = 1005;
+    activation.Threshold = -1.0;
+    MiaIA::Core::TrainingBreakpointSnapshot activationBreakpoint;
+    assert(MiaIAClient::AddTrainingBreakpoint(
+        activation,
+        activationBreakpoint));
+    assert(MiaIAClient::SetTrainingBreakpointEnabled(
+        activationBreakpoint.Id,
+        false));
+
+    MiaIA::Core::TrainingBreakpointSpec gradient;
+    gradient.Kind = MiaIA::Core::TrainingBreakpointKind::
+        NeuronGradientMagnitudeAbove;
+    gradient.TargetId = 1005;
+    gradient.Threshold = 0.0;
+    MiaIA::Core::TrainingBreakpointSnapshot gradientBreakpoint;
+    assert(MiaIAClient::AddTrainingBreakpoint(
+        gradient,
+        gradientBreakpoint));
+    assert(MiaIAClient::SetTrainingBreakpointEnabled(
+        gradientBreakpoint.Id,
+        false));
+
+    MiaIA::Core::TrainingBreakpointSpec update;
+    update.Kind = MiaIA::Core::TrainingBreakpointKind::
+        ConnectionUpdateMagnitudeAbove;
+    update.TargetId = 5;
+    update.Threshold = 0.0;
+    MiaIA::Core::TrainingBreakpointSnapshot updateBreakpoint;
+    assert(MiaIAClient::AddTrainingBreakpoint(
+        update,
+        updateBreakpoint));
+    assert(MiaIAClient::SetTrainingBreakpointEnabled(
+        updateBreakpoint.Id,
+        false));
+
+    MiaIA::Core::TrainingSessionSnapshot session;
+    assert(MiaIAClient::StartTrainingSession(
+        2,
+        0.1,
+        MiaIA::Core::LossType::MeanSquaredError,
+        MiaIA::Core::OptimizerType::StochasticGradientDescent,
+        session));
+    assert(session.Breakpoints.size() == 4);
+
+    MiaIA::Core::TrainingRunSnapshot run;
+    assert(MiaIAClient::RunTrainingSession(4, run));
+    assert(run.ExecutedSteps == 1);
+    assert(run.StopReason ==
+        MiaIA::Core::TrainingRunStopReason::BreakpointHit);
+
+    session = MiaIAClient::GetTrainingSession();
+    assert(session.Status == MiaIA::Core::TrainingSessionStatus::Active);
+    assert(session.WorkerStopReason ==
+        MiaIA::Core::TrainingWorkerStopReason::BreakpointHit);
+    assert(session.HasBreakpointHit);
+    assert(session.LastBreakpointHit.BreakpointId ==
+        committedBreakpointId);
+    assert(session.LastBreakpointHit.SampleIndex == 0);
+    assert(session.Breakpoints[0].HitCount == 1);
+
+    MiaIA::Core::TrainingBreakpointHitSnapshot hit;
+    assert(MiaIAClient::TryGetLastTrainingBreakpointHit(hit));
+    assert(hit.BreakpointId == committedBreakpointId);
+
+    assert(MiaIAClient::SetTrainingBreakpointEnabled(
+        committedBreakpointId,
+        false));
+    assert(MiaIAClient::SetTrainingBreakpointEnabled(
+        activationBreakpoint.Id,
+        true));
+
+    assert(MiaIAClient::ResumeTrainingSession());
+
+    for (int attempt = 0; attempt < 200; ++attempt)
+    {
+        session = MiaIAClient::GetTrainingSession();
+
+        if (session.Status !=
+            MiaIA::Core::TrainingSessionStatus::Running)
+        {
+            break;
+        }
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+
+    session = MiaIAClient::GetTrainingSession();
+    assert(session.Status == MiaIA::Core::TrainingSessionStatus::Active);
+    assert(session.WorkerStopReason ==
+        MiaIA::Core::TrainingWorkerStopReason::BreakpointHit);
+    assert(session.LastBreakpointHit.BreakpointId ==
+        activationBreakpoint.Id);
+    assert(session.CompletedSteps == 2);
+
+    assert(MiaIAClient::SetTrainingBreakpointEnabled(
+        activationBreakpoint.Id,
+        false));
+    assert(MiaIAClient::SetTrainingBreakpointEnabled(
+        gradientBreakpoint.Id,
+        true));
+    assert(MiaIAClient::SetTrainingBreakpointEnabled(
+        updateBreakpoint.Id,
+        true));
+
+    MiaIA::Core::TrainingBreakpointSpec forwardPhase;
+    forwardPhase.Kind = MiaIA::Core::TrainingBreakpointKind::Phase;
+    forwardPhase.Phase =
+        MiaIA::Core::TrainingDebugPhase::ForwardComplete;
+    MiaIA::Core::TrainingBreakpointSnapshot forwardBreakpoint;
+    assert(MiaIAClient::AddTrainingBreakpoint(
+        forwardPhase,
+        forwardBreakpoint));
+
+    MiaIA::Core::TrainingDebugSnapshot debug;
+    assert(MiaIAClient::StartTrainingSessionDebug(debug));
+    assert(MiaIAClient::AdvanceTrainingDebug(debug));
+    assert(debug.Phase ==
+        MiaIA::Core::TrainingDebugPhase::ForwardComplete);
+    assert(MiaIAClient::TryGetLastTrainingBreakpointHit(hit));
+    assert(hit.BreakpointId == forwardBreakpoint.Id);
+    assert(hit.Phase ==
+        MiaIA::Core::TrainingDebugPhase::ForwardComplete);
+
+    assert(MiaIAClient::AdvanceTrainingDebug(debug));
+    assert(debug.Phase ==
+        MiaIA::Core::TrainingDebugPhase::BackwardComplete);
+    assert(MiaIAClient::TryGetLastTrainingBreakpointHit(hit));
+    assert(hit.BreakpointId == gradientBreakpoint.Id);
+
+    assert(MiaIAClient::AdvanceTrainingDebug(debug));
+    assert(debug.Phase ==
+        MiaIA::Core::TrainingDebugPhase::UpdateComplete);
+    assert(MiaIAClient::TryGetLastTrainingBreakpointHit(hit));
+    assert(hit.BreakpointId == updateBreakpoint.Id);
+    assert(MiaIAClient::CancelTrainingDebug());
+    assert(MiaIAClient::CancelTrainingSession());
+
+    assert(MiaIAClient::RemoveTrainingBreakpoint(
+        forwardBreakpoint.Id));
+    assert(MiaIAClient::ClearTrainingBreakpoints());
+    assert(MiaIAClient::GetTrainingBreakpoints().empty());
+    assert(MiaIAClient::ClearDataset());
+    assert(MiaIAClient::ClearNetwork());
+
+    std::filesystem::remove(datasetPath);
+    std::filesystem::remove(testDirectory);
 
     });
 

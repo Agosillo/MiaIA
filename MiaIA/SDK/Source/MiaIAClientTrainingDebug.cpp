@@ -3,6 +3,7 @@
 
 #include "../../Engine/Training/TrainingDebugController.h"
 #include "../../Engine/Training/TrainingDebugInspector.h"
+#include "../../Engine/Training/TrainingBreakpointController.h"
 #include "../../Engine/Training/TrainingSessionDebugController.h"
 #include "../../Core/Model/TrainingDebugSession.h"
 #include "../../Core/Model/TrainingSession.h"
@@ -63,21 +64,34 @@ namespace MiaIA::SDK
         const std::scoped_lock lock(Detail::ClientMutex());
         auto& debugSession = Detail::ClientTrainingDebugSession();
 
+        bool advanced{};
+
         if (debugSession.AttachedToTrainingSession)
         {
-            return Engine::TrainingSessionDebugController::Next(
+            advanced = Engine::TrainingSessionDebugController::Next(
                 Detail::ClientDataset(),
                 Detail::ClientNetwork(),
                 Detail::ClientTrainingSession(),
                 debugSession,
                 result);
         }
+        else
+        {
+            advanced = Engine::TrainingDebugController::Next(
+                Detail::ClientDataset(),
+                Detail::ClientNetwork(),
+                debugSession,
+                result);
+        }
 
-        return Engine::TrainingDebugController::Next(
-            Detail::ClientDataset(),
-            Detail::ClientNetwork(),
-            debugSession,
-            result);
+        if (advanced)
+        {
+            Engine::TrainingBreakpointController::EvaluateDebugPhase(
+                result,
+                Detail::ClientTrainingSession());
+        }
+
+        return advanced;
     }
 
     bool MiaIAClient::CancelTrainingDebug()

@@ -76,11 +76,17 @@ namespace MiaIA::Studio
         [[nodiscard]]
         static bool RequiresCompactMode(
             std::size_t neuronCount,
-            std::size_t connectionCount);
+            std::size_t connectionCount,
+            std::size_t detailedNeuronLimit = DetailedNeuronLimit,
+            std::size_t detailedConnectionLimit =
+                DetailedConnectionLimit);
 
         [[nodiscard]]
         static StudioTopologyDetail ChooseDetail(
-            const Core::NetworkOverviewSnapshot& overview);
+            const Core::NetworkOverviewSnapshot& overview,
+            std::size_t detailedNeuronLimit = DetailedNeuronLimit,
+            std::size_t detailedConnectionLimit =
+                DetailedConnectionLimit);
 
         [[nodiscard]]
         static StudioPosition DetailedPosition2D(

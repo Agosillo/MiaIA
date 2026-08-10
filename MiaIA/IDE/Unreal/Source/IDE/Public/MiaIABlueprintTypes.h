@@ -26,6 +26,16 @@ enum class EMiaIATrainingSessionStatus : uint8
 };
 
 UENUM(BlueprintType)
+enum class EMiaIATrainingBreakpointKind : uint8
+{
+    Phase,
+    NeuronActivationAbove,
+    NeuronActivationBelow,
+    NeuronGradientMagnitudeAbove,
+    ConnectionUpdateMagnitudeAbove
+};
+
+UENUM(BlueprintType)
 enum class EMiaIAActivationType : uint8
 {
     Sigmoid,
@@ -246,6 +256,66 @@ struct IDE_API FMiaIATrainingDebugSnapshot
 };
 
 USTRUCT(BlueprintType)
+struct IDE_API FMiaIATrainingBreakpoint
+{
+    GENERATED_BODY()
+
+    UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
+    int64 Id{};
+
+    UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
+    bool bEnabled{true};
+
+    UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
+    EMiaIATrainingBreakpointKind Kind{
+        EMiaIATrainingBreakpointKind::Phase};
+
+    UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
+    EMiaIATrainingDebugPhase Phase{
+        EMiaIATrainingDebugPhase::BeforeForward};
+
+    UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
+    int64 TargetId{};
+
+    UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
+    double Threshold{};
+
+    UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
+    int64 HitCount{};
+};
+
+USTRUCT(BlueprintType)
+struct IDE_API FMiaIATrainingBreakpointHit
+{
+    GENERATED_BODY()
+
+    UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
+    int64 BreakpointId{};
+
+    UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
+    EMiaIATrainingBreakpointKind Kind{
+        EMiaIATrainingBreakpointKind::Phase};
+
+    UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
+    EMiaIATrainingDebugPhase Phase{EMiaIATrainingDebugPhase::Idle};
+
+    UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
+    int64 TargetId{};
+
+    UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
+    double ObservedValue{};
+
+    UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
+    double Threshold{};
+
+    UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
+    int64 StepIndex{};
+
+    UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
+    int64 SampleIndex{};
+};
+
+USTRUCT(BlueprintType)
 struct IDE_API FMiaIATrainingSessionSnapshot
 {
     GENERATED_BODY()
@@ -275,6 +345,15 @@ struct IDE_API FMiaIATrainingSessionSnapshot
 
     UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
     double LearningRate{};
+
+    UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
+    TArray<FMiaIATrainingBreakpoint> Breakpoints;
+
+    UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
+    bool bHasBreakpointHit{};
+
+    UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
+    FMiaIATrainingBreakpointHit LastBreakpointHit;
 };
 
 USTRUCT(BlueprintType)

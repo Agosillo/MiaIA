@@ -1,6 +1,7 @@
 #include "TrainingSessionController.h"
 
 #include "TrainingStepExecutor.h"
+#include "TrainingBreakpointController.h"
 #include "../Validation/NetworkValidator.h"
 #include "../../Core/Model/Dataset.h"
 #include "../../Core/Model/Network.h"
@@ -92,6 +93,13 @@ namespace MiaIA::Engine
         candidate.LearningRate = learningRate;
         candidate.Loss = lossType;
         candidate.Optimizer = optimizerType;
+        candidate.Breakpoints = session.Breakpoints;
+        candidate.NextBreakpointId = session.NextBreakpointId;
+
+        for (auto& breakpoint : candidate.Breakpoints)
+        {
+            breakpoint.HitCount = 0;
+        }
 
         Core::TrainingSessionSnapshot snapshot = Snapshot(candidate);
 
@@ -136,6 +144,11 @@ namespace MiaIA::Engine
         {
             return false;
         }
+
+        TrainingBreakpointController::EvaluateCommittedStep(
+            network,
+            step,
+            session);
 
         result = std::move(step);
 
@@ -251,6 +264,15 @@ namespace MiaIA::Engine
             ++run.ExecutedSteps;
             run.Steps.push_back(std::move(step));
 
+            if (session.Status == Core::TrainingSessionStatus::Active &&
+                session.WorkerStopReason ==
+                    Core::TrainingWorkerStopReason::BreakpointHit)
+            {
+                run.StopReason =
+                    Core::TrainingRunStopReason::BreakpointHit;
+                break;
+            }
+
             if (session.Status == Core::TrainingSessionStatus::Completed)
             {
                 run.StopReason =
@@ -281,6 +303,9 @@ namespace MiaIA::Engine
         snapshot.LearningRate = session.LearningRate;
         snapshot.Loss = session.Loss;
         snapshot.Optimizer = session.Optimizer;
+        snapshot.Breakpoints = session.Breakpoints;
+        snapshot.HasBreakpointHit = session.HasBreakpointHit;
+        snapshot.LastBreakpointHit = session.LastBreakpointHit;
         snapshot.Steps = session.Steps;
 
         return snapshot;
