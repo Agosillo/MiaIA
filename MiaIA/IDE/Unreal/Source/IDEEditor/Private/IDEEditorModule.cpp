@@ -128,6 +128,14 @@ private:
             FMiaIADemoInstaller::InstallInCurrentMap(*DemoBlueprint.Get());
         }
 
+        if (const TSharedPtr<SDockTab> studioTab =
+            FGlobalTabmanager::Get()->TryInvokeTab(
+                FTabId(MiaIATabName)))
+        {
+            studioTab->ActivateInParent(
+                ETabActivationCause::SetDirectly);
+        }
+
         return false;
     }
 

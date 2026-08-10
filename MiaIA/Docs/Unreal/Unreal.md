@@ -72,7 +72,7 @@ The Blueprint asset is generated only after the initial Asset Registry scan and 
 
 ## MiaIA Studio editor panel
 
-Open the dockable panel from `Window > MiaIA Studio`. It reads the same shared `MiaIAClient` state used by the Console and Blueprint nodes; it does not create a separate model or duplicate Engine mathematics.
+MiaIA Studio opens automatically and receives focus after Unreal Editor and the Asset Registry finish initializing. Its dock location is managed by the normal Unreal layout system: dock it in the central workspace once and subsequent project launches restore that placement. If the tab is closed, reopen it from `Window > MiaIA Studio`. It reads the same shared `MiaIAClient` state used by the Console and Blueprint nodes; it does not create a separate model or duplicate Engine mathematics. Play in Editor is not started automatically.
 
 ![MiaIA editor panel](Assets/miaia-editor-panel.png)
 
@@ -82,8 +82,8 @@ The captured foundation panel shows a network created directly from its embedded
 
 1. Build the native solution in `Release | x64`, then build `IDEEditor | Win64 | Development`.
 2. Open `MiaIA/IDE/Unreal/IDE.uproject` and load the `MiaIAMain` level.
-3. Select `Window > MiaIA Studio` from the main Unreal Editor menu.
-4. Dock the MiaIA tab or keep it as a separate window. Keeping it separate makes the state transitions easier to record or inspect.
+3. Wait for the automatically opened MiaIA Studio tab. If it was manually closed, select `Window > MiaIA Studio` from the main Unreal Editor menu.
+4. Dock the MiaIA tab in the central workspace or keep it as a separate window. Unreal restores the saved location on later launches; keeping it separate can make state transitions easier to record or inspect.
 5. Start Play in Editor from the main toolbar or press `Alt+P`.
 6. Leave the panel controls untouched during the automatic demonstration. `BP_MiaIADemo` creates the network and dataset, starts a session, and advances one debug step automatically at short intervals.
 7. Watch the session and debug state in the upper-right corner, the candidate activations in the topology, and the current values in the inspector.

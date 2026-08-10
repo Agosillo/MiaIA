@@ -256,6 +256,4 @@ The project begins from ideas and architecture rather than implementation.
 
 Project ideation, architecture and vision.
 
-Developed together with **OpenAI ChatGPT** as a collaborative design partner during the initial conception of the project.
-
-*"Every great project starts with an idea, but only disciplined execution can turn that idea into reality."*
+Developed together with **OpenAI ChatGPT** as a collaborative design partner from the initial conception of the project.
