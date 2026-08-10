@@ -122,6 +122,8 @@ The selection is stored in the local Unreal game-user settings configuration and
 
 The `Help` menu contains `Quick help` and `About MiaIA Studio`. Quick help summarizes Console startup, 2D and 3D navigation, multiple selection, layout editing, Inspector use, and phase debugging. About reads `ProjectVersion` from Unreal project configuration and identifies this application as the Unreal frontend over the shared MiaIA Engine, SDK, and CLI services. Both open as themed, scrollable overlays inside the Studio panel, ensuring identical behavior in Unreal Editor and the packaged application without an external platform dialog.
 
+Quick help and About also expose the public MiaIA source location and MPL 2.0 status. About carries the Unreal Engine trademark and copyright attribution. The supported release workflow is `Build/Package-Windows.ps1`: after Unreal finishes the archive, the script copies the repository licensing documents and collected dependency license texts into a readable `Licenses` directory beside the top-level launcher. Packaging directly from Unreal Editor does not perform this post-processing and is not the supported public-distribution path. Unreal-generated runtime notices must remain in the distribution.
+
 ### Topology view mode
 
 Use the `View` selector in the toolbar to switch between `2D` and `3D`. Both modes read the same snapshot, selection, Inspector, phase telemetry, semantic colors, and detailed-versus-compact policy. Switching the renderer does not create another network or alter any model value.
@@ -232,7 +234,7 @@ The automatic demonstration commits one step and leaves its four-sample training
 
 Neuron color ranges from inactive gray to active green. Positive weights are blue, negative weights are red, and the selected connection is amber. Color intensity and line thickness communicate value strength; exact values remain available in the inspector.
 
-The first panel increment provides:
+The first panel increment established:
 
 - a layer and neuron explorer;
 - a live two-dimensional topology view;
@@ -244,7 +246,7 @@ The first panel increment provides:
 - working refresh, continue, pause, and debug phase-step actions;
 - an interactive command console shared with `Console.exe`.
 
-The panel refreshes runtime values automatically while rebuilding its explorer only when the topology changes. Command history is currently memory-only and belongs to the open panel instance. Persistent history, weight editing, breakpoint authoring, asynchronous command dispatch, and the eventual three-dimensional model navigator remain outside this increment.
+The panel refreshes runtime values automatically while rebuilding its explorer only when the topology changes. Command history is currently memory-only and belongs to the open panel instance. Persistent history, weight editing, breakpoint authoring, asynchronous command dispatch, compact-scene drill-down, and more advanced 3D filtering and analysis remain outside the current implementation.
 
 ## Build order
 
@@ -274,10 +276,10 @@ This development executable still reads cooked or editor project content accordi
 
 The project packaging settings select the `MiaIAStudio` target, cook `/Game/Maps/MiaIAMain`, use Pak and IoStore containers, and include the supported Windows prerequisites. The editor-only `IDEEditor` module is not part of the game target.
 
-Close Unreal Editor and Visual Studio before the first packaging test, then run:
+Close Unreal Editor and Visual Studio before the first packaging test, then run from the repository root:
 
 ```powershell
-cd C:\Users\agosi\Documents\Codex\2026-08-06\esplora\work\MiaIA\MiaIA\IDE\Unreal
+Set-Location .\MiaIA\IDE\Unreal
 & .\Build\Package-Windows.ps1 -Configuration Development
 ```
 
@@ -307,7 +309,7 @@ The script prints the precise path to `MiaIAStudio.exe`. Run that executable wit
 
 Keep the whole archived directory when copying the application to another machine. `MiaIAStudio.exe` depends on the staged Unreal runtime, cooked content, and container files beside it. Numeric CSV datasets are user data and are intentionally not embedded in this first package; pass an absolute path to `dataset import csv` or copy the dataset into a user-selected external folder.
 
-For a Shipping archive, use:
+Public downloads should use a Shipping archive rather than the Development archive. Shipping removes development-oriented behavior, but the final archive must still be reviewed for symbols, logs, diagnostic utilities, unnecessary plugins, and complete third-party notices. Build it with:
 
 ```powershell
 & .\Build\Package-Windows.ps1 -Configuration Shipping
@@ -337,7 +339,8 @@ The icon uses the cyan, teal, lime, and amber neural-network mark without text. 
 ## Planned Unreal work
 
 - Blueprint coverage for broader Console and SDK operations;
-- activation, gradient, and weight-change color mapping;
-- scalable rendering that does not create one ticking Actor per neuron;
 - forward and backward flow animation;
 - persistent command history and asynchronous long-running dispatch.
+- paged drill-down and filtering for compact large-network summaries;
+- persistent layouts through the future MiaIA workspace format;
+- automated packaged-application smoke testing.

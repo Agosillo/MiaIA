@@ -52,6 +52,8 @@ The roadmap is organized by dependency rather than by a fixed release date. Math
 - initial Unreal consumption of StudioCore scalability and two-dimensional layout rules;
 - runtime-capable Unreal Studio UI shared by the editor panel and the `MiaIAStudio` game target;
 - verified Win64 BuildCookRun archive with provisional application branding.
+- interactive 3D topology with aggregated sphere-and-cylinder geometry, projected identifiers, selection, camera navigation, and manual layout editing;
+- adaptive tessellation and compact scene policies that avoid one Unreal Actor per graph element.
 
 ## Implemented optimizer foundation
 
@@ -137,7 +139,7 @@ The `.mia` format is planned and does not exist in the current implementation.
 
 The platform-neutral Studio application foundation, shared Unreal runtime host, Win64 packaging workflow, user-selectable 2D/3D topology mode, and first interactive runtime 3D renderer are implemented. The next delivery steps are:
 
-- evolve the first point-and-link 3D scene toward richer neuron geometry, labels, filtering, and layout tools without introducing one Actor per element;
+- extend the current sphere-and-cylinder 3D scene with filtering, compact-scene drill-down, and richer layout tools;
 - persist user visualization layouts in future MiaIA workspace metadata rather than ONNX;
 - retain StudioCore as the shared application boundary for a possible future Qt frontend.
 

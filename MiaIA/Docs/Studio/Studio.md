@@ -68,6 +68,8 @@ The `MiaIAStudio` game target is the development entry point for the independent
 
 The toolbar `Help` menu provides an embedded interaction reference and an `About MiaIA Studio` dialog. Both use the same themed in-panel Slate overlay in the editor and packaged application instead of relying on host-specific operating-system message boxes. The About text reads the project version from Unreal configuration and identifies the shared Engine, SDK, and CLI service boundary instead of presenting the Unreal frontend as the complete MiaIA architecture.
 
+Quick Help also identifies the public source location and license boundary. About displays the MPL-covered source location and the Unreal Engine attribution required for the packaged frontend. Public archives are created through `Build/Package-Windows.ps1`, which adds the MiaIA license, end-user terms, trademark policy, third-party notice index, and collected dependency licenses beside the top-level launcher after Unreal packaging succeeds.
+
 The Unreal renderer batches neuron markers and weighted links in one runtime component instead of creating one Actor per model element. Detailed mode still retains every element ID for selection and Inspector queries. Compact mode remains a separate scalability policy that summarizes each layer when the full graph exceeds the shared limits.
 
 The packaged executable does not require Unreal Editor to run. It still contains the Unreal runtime. A future Qt frontend would instead render the same `StudioCore` state through Qt and its selected graphics backend.

@@ -91,3 +91,13 @@ Future decisions that require a detailed comparison of alternatives should be re
 **Reason:** Release-only linking, dependency, and numerical behavior must be detectable. Standard C assertions are insufficient when they disappear from Release builds.
 
 **Consequence:** New features require named tests, and mathematical features should include known-value or numerical verification.
+
+## ADR-010: Publish original MiaIA source under MPL 2.0
+
+**Status:** Accepted
+
+**Decision:** Publish original MiaIA source code under the Mozilla Public License 2.0 while leaving Unreal Engine, third-party dependencies, and MiaIA branding under their respective terms. Keep the repository author-led and closed to unsolicited code contributions until a contribution and copyright-management process is established.
+
+**Reason:** File-level copyleft keeps distributed modifications to MiaIA source files available while allowing the engine and SDK to participate in larger applications and leaving room for separately implemented modules under other terms. Delaying external code contributions preserves clear copyright ownership during the initial public phase.
+
+**Consequence:** Source and executable distributions must identify the corresponding source location and preserve MPL and third-party notices. New dependency and packaging changes require a license review. The contribution policy must be revised before external patches are accepted.

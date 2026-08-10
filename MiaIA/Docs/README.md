@@ -87,3 +87,11 @@ Documentation must distinguish clearly between:
 - **historical** material preserved to explain the origin of the project.
 
 Project documentation, source identifiers, comments, tests, and commit messages are written in English.
+
+## License and project governance
+
+Original MiaIA source code is published under the Mozilla Public License 2.0. Unreal Engine and every third-party dependency retain their own license terms, while MiaIA names and branding are outside the source-code license. The root `LICENSING.md`, `THIRD_PARTY_NOTICES.md`, and `TRADEMARKS.md` files define these boundaries.
+
+Copyright 2026 Agostino Mosillo. Official project information and executable downloads are published at [www.nonop.biz](https://www.nonop.biz); the corresponding source remains available from the public repository identified in the root licensing documents.
+
+The repository is currently author-led. External pull requests and unsolicited code contributions are not accepted until a contribution and copyright-management process is introduced; issue reports and focused feedback remain welcome under the root contribution policy.

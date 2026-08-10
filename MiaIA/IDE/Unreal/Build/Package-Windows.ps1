@@ -71,6 +71,7 @@ $executable = Get-ChildItem `
     -File `
     -Recurse `
     -ErrorAction SilentlyContinue |
+    Sort-Object { $_.FullName.Length } |
     Select-Object -First 1
 
 if ($null -eq $executable)
@@ -78,5 +79,52 @@ if ($null -eq $executable)
     throw "Packaging completed, but MiaIAStudio.exe was not found below $archiveDirectory."
 }
 
+$packageDirectory = Split-Path -Parent $executable.FullName
+$repositoryDirectory = [System.IO.Path]::GetFullPath(
+    (Join-Path $projectDirectory "..\..\.."))
+$licenseOutputDirectory = Join-Path $packageDirectory "Licenses"
+$licenseSourceDirectory = Join-Path $repositoryDirectory "LICENSES"
+
+New-Item `
+    -ItemType Directory `
+    -Path $licenseOutputDirectory `
+    -Force | Out-Null
+
+$distributionDocuments = @(
+    "LICENSE",
+    "NOTICE",
+    "LICENSING.md",
+    "THIRD_PARTY_NOTICES.md",
+    "TRADEMARKS.md",
+    "EULA.txt"
+)
+
+foreach ($document in $distributionDocuments)
+{
+    $source = Join-Path $repositoryDirectory $document
+
+    if (-not (Test-Path -LiteralPath $source -PathType Leaf))
+    {
+        throw "Required distribution document not found: $source"
+    }
+
+    Copy-Item `
+        -LiteralPath $source `
+        -Destination $licenseOutputDirectory `
+        -Force
+}
+
+if (-not (Test-Path -LiteralPath $licenseSourceDirectory -PathType Container))
+{
+    throw "Third-party license directory not found: $licenseSourceDirectory"
+}
+
+Copy-Item `
+    -LiteralPath $licenseSourceDirectory `
+    -Destination $licenseOutputDirectory `
+    -Recurse `
+    -Force
+
 Write-Host "MiaIA Studio package completed successfully."
 Write-Host "Executable: $($executable.FullName)"
+Write-Host "Licenses:   $licenseOutputDirectory"

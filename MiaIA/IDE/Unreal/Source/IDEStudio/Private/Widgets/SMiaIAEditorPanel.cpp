@@ -1763,6 +1763,11 @@ FReply SMiaIAEditorPanel::HandleQuickHelp()
             "Mouse wheel: zoom. Middle drag: pan. Right drag in 3D: orbit.\n\n"
             "INSPECTION AND DEBUG\n"
             "The Inspector follows the current element or group. Use Start debug and Step phase to inspect forward, backward, update, verify, and commit states.\n\n"
+
+            "LICENSE AND SOURCE\n"
+            "Official website and downloads: https://www.nonop.biz\n"
+            "MiaIA source code is available under the Mozilla Public License 2.0 at https://github.com/Agosillo/MiaIA. Unreal Engine and third-party components remain under their respective terms.\n\n"
+
             "Type 'help' in the Console to list every shared CLI command."));
     return FReply::Handled();
 }
@@ -1791,6 +1796,12 @@ FReply SMiaIAEditorPanel::HandleAbout()
                 "VISUALIZE | EXPERIMENT | INSPECT | DEBUG\n\n"
                 "An interactive development environment for understanding neural networks through visualization, experimentation, and step-by-step debugging.\n\n"
                 "This Unreal frontend uses the shared MiaIA Engine, SDK, and CLI application services.\n\n"
+                "Copyright 2026 Agostino Mosillo\n"
+                "Official website and downloads: https://www.nonop.biz\n"
+                "MiaIA source code: https://github.com/Agosillo/MiaIA\n"
+                "Licensed under the Mozilla Public License 2.0.\n\n"
+                "MiaIA Studio uses Unreal\u00AE Engine. Unreal\u00AE is a trademark or registered trademark of Epic Games, Inc. in the United States of America and elsewhere.\n"
+                "Unreal\u00AE Engine, Copyright 1998-2026, Epic Games, Inc. All rights reserved.\n\n"
                 "Early development build."),
             FText::FromString(version)));
     return FReply::Handled();

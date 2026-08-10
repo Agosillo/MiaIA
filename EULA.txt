@@ -1,0 +1,37 @@
+MiaIA Studio End-User Terms
+===========================
+
+Copyright 2026 Agostino Mosillo
+Official website and downloads: https://www.nonop.biz
+
+MiaIA Studio includes source code made available under the Mozilla Public
+License 2.0. The corresponding source code and the complete license are
+available at:
+
+https://github.com/Agosillo/MiaIA
+
+Nothing in these terms limits or alters the rights granted for that source
+code by the Mozilla Public License 2.0.
+
+MiaIA Studio incorporates Unreal Engine technology in object-code form.
+Unreal Engine is licensed by Epic Games, Inc. and is not licensed under the
+Mozilla Public License. Your use of Unreal Engine technology is limited to
+its operation as an inseparable part of MiaIA Studio. You may not extract,
+reuse, or incorporate that technology into another product, service, or
+project.
+
+TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, EPIC GAMES, INC. AND ITS
+AFFILIATES MAKE NO REPRESENTATIONS AND PROVIDE NO WARRANTIES OR CONDITIONS,
+EXPRESS OR IMPLIED, CONCERNING THE UNREAL ENGINE TECHNOLOGY INCORPORATED IN
+MIAIA STUDIO, AND ACCEPT NO LIABILITY ARISING FROM ITS USE IN THIS PRODUCT.
+
+Third-party components are provided under their respective license terms.
+See THIRD_PARTY_NOTICES.md and the LICENSES directory included with this
+distribution.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO WARRANTIES OF MERCHANTABILITY, FITNESS
+FOR A PARTICULAR PURPOSE, AND NON-INFRINGEMENT. TO THE MAXIMUM EXTENT
+PERMITTED BY APPLICABLE LAW, THE MIAIA AUTHORS AND COPYRIGHT HOLDERS SHALL
+NOT BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY ARISING FROM THE
+SOFTWARE OR ITS USE.
