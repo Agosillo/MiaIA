@@ -349,6 +349,11 @@ namespace
 {
     constexpr float BaseNeuronSphereRadius = 24.0f;
     constexpr float CompactSphereRadius = 34.0f;
+    constexpr float CompactSphereGap = 12.0f;
+    constexpr float NetworkAggregateSphereRadius = 52.0f;
+    constexpr float NetworkIndicatorLength = 120.0f;
+    constexpr float NetworkIndicatorGap = 12.0f;
+    constexpr int32 MaximumNetworkIndicators = 512;
     constexpr float NodeSelectionDistance = 17.0f;
     constexpr float ConnectionSelectionDistance = 7.0f;
     constexpr float MinimumCameraDistance = 80.0f;
@@ -367,34 +372,27 @@ namespace
             -LayoutPosition.Y * LayoutUnit);
     }
 
-    FVector CompactWorldPosition(
-        const MiaIA::Studio::StudioPosition& Position2D)
-    {
-        return FVector(
-            (Position2D.X - 0.5) * 620.0,
-            0.0,
-            (0.5 - Position2D.Y) * 520.0);
-    }
-
-    MiaIA::Studio::StudioPosition OrientCompactPosition(
-        const MiaIA::Studio::StudioPosition& Position,
+    FVector CompactLayerWorldPosition(
+        int32 LayerIndex,
+        int32 LayerCount,
         MiaIA::Studio::StudioLayoutOrientation Orientation,
         MiaIA::Studio::StudioLayoutDirection Direction)
     {
-        const MiaIA::Studio::StudioPosition directed = Direction ==
+        const int32 directedIndex = Direction ==
             MiaIA::Studio::StudioLayoutDirection::Reverse
-            ? MiaIA::Studio::StudioPosition{
-                1.0 - Position.X,
-                Position.Y,
-                Position.Z}
-            : Position;
+            ? LayerCount - LayerIndex - 1
+            : LayerIndex;
+        const float spacing = CompactSphereRadius * 2.0f +
+            CompactSphereGap;
+        const float offset = LayerCount <= 1
+            ? 0.0f
+            : (static_cast<float>(directedIndex) -
+                static_cast<float>(LayerCount - 1) * 0.5f) * spacing;
+
         return Orientation ==
             MiaIA::Studio::StudioLayoutOrientation::Vertical
-            ? MiaIA::Studio::StudioPosition{
-                directed.Y,
-                directed.X,
-                directed.Z}
-            : directed;
+            ? FVector(0.0, 0.0, -offset)
+            : FVector(offset, 0.0, 0.0);
     }
 }
 
@@ -409,8 +407,12 @@ void SMiaIA3DNetworkView::Construct(const FArguments& InArgs)
 {
     OnNeuronSelectionChanged = InArgs._OnNeuronSelectionChanged;
     OnConnectionSelected = InArgs._OnConnectionSelected;
+    OnLayerSelected = InArgs._OnLayerSelected;
     OnNeuronNavigationRequested =
         InArgs._OnNeuronNavigationRequested;
+    OnLayerOpenRequested = InArgs._OnLayerOpenRequested;
+    OnNetworkOpenRequested = InArgs._OnNetworkOpenRequested;
+    OnLayerFocusExitRequested = InArgs._OnLayerFocusExitRequested;
 
     SViewport::FArguments viewportArguments;
     viewportArguments
@@ -466,14 +468,34 @@ void SMiaIA3DNetworkView::SetSnapshot(
 
 void SMiaIA3DNetworkView::SetOverview(
     const FMiaIANetworkOverview& InOverview,
-    bool bInCompactMode)
+    bool bInCompactMode,
+    bool bInNetworkAggregateMode)
 {
-    const bool modeChanged = bCompactMode != bInCompactMode;
+    const int64 previousInputCount = Overview.Layers.IsEmpty()
+        ? 0
+        : Overview.Layers[0].NeuronCount;
+    const int64 previousOutputCount = Overview.Layers.IsEmpty()
+        ? 0
+        : Overview.Layers.Last().NeuronCount;
+    const int64 nextInputCount = InOverview.Layers.IsEmpty()
+        ? 0
+        : InOverview.Layers[0].NeuronCount;
+    const int64 nextOutputCount = InOverview.Layers.IsEmpty()
+        ? 0
+        : InOverview.Layers.Last().NeuronCount;
+    const bool aggregateDimensionsChanged =
+        previousInputCount != nextInputCount ||
+        previousOutputCount != nextOutputCount;
+    const bool modeChanged = bCompactMode != bInCompactMode ||
+        bNetworkAggregateMode != bInNetworkAggregateMode;
     Overview = InOverview;
     bCompactMode = bInCompactMode;
+    bNetworkAggregateMode = bInCompactMode &&
+        bInNetworkAggregateMode;
     bSceneDirty = true;
 
-    if (modeChanged)
+    if (modeChanged ||
+        (bNetworkAggregateMode && aggregateDimensionsChanged))
     {
         FitView();
     }
@@ -521,6 +543,7 @@ void SMiaIA3DNetworkView::SetSelectedNeurons(
     if (SelectedNeuronIds.Num() > 0)
     {
         SelectedConnectionId = -1;
+        SelectedLayerId = -1;
     }
 
     bSceneDirty = true;
@@ -534,6 +557,21 @@ void SMiaIA3DNetworkView::SetSelectedConnection(int64 InConnectionId)
     {
         SelectedNeuronIds.Reset();
         SelectedNeuronId = -1;
+        SelectedLayerId = -1;
+    }
+
+    bSceneDirty = true;
+}
+
+void SMiaIA3DNetworkView::SetSelectedLayer(int64 InLayerId)
+{
+    SelectedLayerId = InLayerId;
+
+    if (SelectedLayerId >= 0)
+    {
+        SelectedNeuronIds.Reset();
+        SelectedNeuronId = -1;
+        SelectedConnectionId = -1;
     }
 
     bSceneDirty = true;
@@ -594,22 +632,45 @@ void SMiaIA3DNetworkView::FitView()
 
     if (bCompactMode)
     {
-        primitiveRadius = CompactSphereRadius;
-
-        for (int32 layerIndex = 0;
-            layerIndex < Overview.Layers.Num();
-            ++layerIndex)
+        if (bNetworkAggregateMode)
         {
-            const MiaIA::Studio::StudioPosition position2D =
-                OrientCompactPosition(
-                    MiaIA::Studio::StudioTopologyBuilder::DetailedPosition2D(
-                        layerIndex,
-                        Overview.Layers.Num(),
-                        0,
-                        1),
+            const int64 inputCount = Overview.Layers.IsEmpty()
+                ? 0
+                : Overview.Layers[0].NeuronCount;
+            const int64 outputCount = Overview.Layers.IsEmpty()
+                ? 0
+                : Overview.Layers.Last().NeuronCount;
+            const int32 visibleCount = static_cast<int32>(FMath::Min<int64>(
+                FMath::Max(inputCount, outputCount),
+                MaximumNetworkIndicators));
+            const float indicatorSpan = visibleCount <= 1
+                ? 0.0f
+                : static_cast<float>(visibleCount - 1) *
+                    NetworkIndicatorGap;
+            primitiveRadius = NetworkAggregateSphereRadius;
+            sceneBounds += FVector(
+                -NetworkAggregateSphereRadius - NetworkIndicatorLength,
+                0.0,
+                -indicatorSpan * 0.5f);
+            sceneBounds += FVector(
+                NetworkAggregateSphereRadius + NetworkIndicatorLength,
+                0.0,
+                indicatorSpan * 0.5f);
+        }
+        else
+        {
+            primitiveRadius = CompactSphereRadius;
+
+            for (int32 layerIndex = 0;
+                layerIndex < Overview.Layers.Num();
+                ++layerIndex)
+            {
+                sceneBounds += CompactLayerWorldPosition(
+                    layerIndex,
+                    Overview.Layers.Num(),
                     VisualizationSettings.Layout.Orientation,
                     VisualizationSettings.Layout.Direction);
-            sceneBounds += CompactWorldPosition(position2D);
+            }
         }
     }
     else
@@ -764,8 +825,7 @@ int32 SMiaIA3DNetworkView::OnPaint(
         InWidgetStyle,
         bParentEnabled);
 
-    if (bCompactMode ||
-        RenderedNodes.IsEmpty() ||
+    if (RenderedNodes.IsEmpty() ||
         !SceneViewport.IsValid())
     {
         return viewportLayer;
@@ -787,7 +847,8 @@ int32 SMiaIA3DNetworkView::OnPaint(
         localSize.Y / viewportSize.Y);
     const FMiaIAEditorPalette palette =
         FMiaIAEditorTheme::Palette(Theme);
-    const bool showLabels = RenderedNodes.Num() <= 500 &&
+    const bool showLabels = !bCompactMode &&
+        RenderedNodes.Num() <= 500 &&
         VisualizationSettings.Layout.Mode !=
             MiaIA::Studio::StudioLayoutMode::Packed;
     int32 overlayLayer = viewportLayer + 1;
@@ -804,11 +865,19 @@ int32 SMiaIA3DNetworkView::OnPaint(
         const FVector2D localPosition(
             projectedPosition.X * viewportToLocal.X,
             projectedPosition.Y * viewportToLocal.Y);
+        const float compactRadius = bNetworkAggregateMode
+            ? NetworkAggregateSphereRadius
+            : CompactSphereRadius;
         const float projectedRadius = ProjectedSphereRadius(
-            node.Position) *
+            node.Position,
+            bCompactMode ? compactRadius : SphereRadius()) *
             static_cast<float>((viewportToLocal.X + viewportToLocal.Y) * 0.5);
 
-        if (SelectedNeuronIds.Contains(node.Id))
+        const bool selected = bCompactMode && !bNetworkAggregateMode
+            ? node.Id == SelectedLayerId
+            : SelectedNeuronIds.Contains(node.Id);
+
+        if (selected)
         {
             const FVector2D selectionCenter = localPosition;
             const float selectionRadius = FMath::Max(
@@ -944,6 +1013,30 @@ FReply SMiaIA3DNetworkView::OnMouseButtonDown(
     {
         if (bCompactMode)
         {
+            const FVector2D localSize = MyGeometry.GetLocalSize();
+            const FIntPoint viewportSize = SceneViewport->GetSizeXY();
+
+            if (localSize.X > 0.0f && localSize.Y > 0.0f &&
+                viewportSize.X > 0 && viewportSize.Y > 0)
+            {
+                const FVector2D viewportPosition(
+                    localPosition.X * viewportSize.X / localSize.X,
+                    localPosition.Y * viewportSize.Y / localSize.Y);
+
+                if (const FNodeRenderData* node =
+                    FindNodeAt(viewportPosition))
+                {
+                    if (bNetworkAggregateMode)
+                    {
+                        OnNetworkOpenRequested.ExecuteIfBound();
+                    }
+                    else
+                    {
+                        OnLayerSelected.ExecuteIfBound(node->Id);
+                    }
+                }
+            }
+
             return FReply::Handled();
         }
 
@@ -1042,6 +1135,48 @@ FReply SMiaIA3DNetworkView::OnMouseButtonDown(
     }
 
     return SViewport::OnMouseButtonDown(MyGeometry, MouseEvent);
+}
+
+FReply SMiaIA3DNetworkView::OnMouseButtonDoubleClick(
+    const FGeometry& MyGeometry,
+    const FPointerEvent& MouseEvent)
+{
+    if (!bCompactMode ||
+        MouseEvent.GetEffectingButton() != EKeys::LeftMouseButton ||
+        !SceneViewport.IsValid())
+    {
+        return FReply::Unhandled();
+    }
+
+    const FVector2D localPosition = MyGeometry.AbsoluteToLocal(
+        MouseEvent.GetScreenSpacePosition());
+    const FVector2D localSize = MyGeometry.GetLocalSize();
+    const FIntPoint viewportSize = SceneViewport->GetSizeXY();
+
+    if (localSize.X <= 0.0f || localSize.Y <= 0.0f ||
+        viewportSize.X <= 0 || viewportSize.Y <= 0)
+    {
+        return FReply::Unhandled();
+    }
+
+    const FVector2D viewportPosition(
+        localPosition.X * viewportSize.X / localSize.X,
+        localPosition.Y * viewportSize.Y / localSize.Y);
+
+    if (const FNodeRenderData* node = FindNodeAt(viewportPosition))
+    {
+        if (bNetworkAggregateMode)
+        {
+            OnNetworkOpenRequested.ExecuteIfBound();
+        }
+        else
+        {
+            OnLayerOpenRequested.ExecuteIfBound(node->Id);
+        }
+        return FReply::Handled();
+    }
+
+    return FReply::Unhandled();
 }
 
 FReply SMiaIA3DNetworkView::OnMouseButtonUp(
@@ -1159,6 +1294,25 @@ FReply SMiaIA3DNetworkView::OnKeyDown(
         MiaIA::Studio::StudioLayoutOrientation::Vertical;
     const bool isReverse = VisualizationSettings.Layout.Direction ==
         MiaIA::Studio::StudioLayoutDirection::Reverse;
+
+    if (key == EKeys::Enter && bCompactMode && bNetworkAggregateMode)
+    {
+        OnNetworkOpenRequested.ExecuteIfBound();
+        return FReply::Handled();
+    }
+
+    if (key == EKeys::Enter && bCompactMode && SelectedLayerId >= 0)
+    {
+        OnLayerOpenRequested.ExecuteIfBound(SelectedLayerId);
+        return FReply::Handled();
+    }
+
+    if (key == EKeys::Escape &&
+        OnLayerFocusExitRequested.IsBound() &&
+        OnLayerFocusExitRequested.Execute())
+    {
+        return FReply::Handled();
+    }
 
     if (key == EKeys::Up)
     {
@@ -1293,7 +1447,14 @@ void SMiaIA3DNetworkView::RebuildScene()
 
     if (bCompactMode)
     {
-        RebuildCompactScene();
+        if (bNetworkAggregateMode)
+        {
+            RebuildNetworkAggregateScene();
+        }
+        else
+        {
+            RebuildCompactScene();
+        }
     }
     else
     {
@@ -1464,20 +1625,16 @@ void SMiaIA3DNetworkView::RebuildCompactScene()
         layerIndex < layerCount;
         ++layerIndex)
     {
-        const MiaIA::Studio::StudioPosition position2D =
-            OrientCompactPosition(
-                MiaIA::Studio::StudioTopologyBuilder::DetailedPosition2D(
-                    layerIndex,
-                    layerCount,
-                    0,
-                    1),
-                VisualizationSettings.Layout.Orientation,
-                VisualizationSettings.Layout.Direction);
-        const FVector position = CompactWorldPosition(position2D);
+        const FVector position = CompactLayerWorldPosition(
+            layerIndex,
+            layerCount,
+            VisualizationSettings.Layout.Orientation,
+            VisualizationSettings.Layout.Direction);
         ViewportClient->AddSphere(
             position,
-            palette.InactiveNeuron,
+            palette.ActiveNeuron,
             CompactSphereRadius);
+        RenderedNodes.Add({Overview.Layers[layerIndex].Id, position});
 
         if (hasPrevious)
         {
@@ -1491,6 +1648,71 @@ void SMiaIA3DNetworkView::RebuildCompactScene()
         previousPosition = position;
         hasPrevious = true;
     }
+}
+
+void SMiaIA3DNetworkView::RebuildNetworkAggregateScene()
+{
+    const FMiaIAEditorPalette palette =
+        FMiaIAEditorTheme::Palette(Theme);
+    const int64 inputCount = Overview.Layers.IsEmpty()
+        ? 0
+        : Overview.Layers[0].NeuronCount;
+    const int64 outputCount = Overview.Layers.IsEmpty()
+        ? 0
+        : Overview.Layers.Last().NeuronCount;
+    const FVector center = FVector::ZeroVector;
+
+    const auto visibleCount = [](int64 count)
+    {
+        return static_cast<int32>(FMath::Min<int64>(
+            FMath::Max<int64>(0, count),
+            MaximumNetworkIndicators));
+    };
+    const int32 visibleInputs = visibleCount(inputCount);
+    const int32 visibleOutputs = visibleCount(outputCount);
+
+    ViewportClient->ReservePrimitives(
+        1,
+        visibleInputs + visibleOutputs);
+    ViewportClient->AddSphere(
+        center,
+        palette.Debug,
+        NetworkAggregateSphereRadius);
+    RenderedNodes.Add({-1, center});
+
+    const auto addIndicators = [this](
+        int32 count,
+        const FVector& start,
+        const FVector& direction,
+        const FVector& spreadAxis,
+        const FLinearColor& color)
+    {
+        for (int32 index = 0; index < count; ++index)
+        {
+            const float offset = (static_cast<float>(index) -
+                static_cast<float>(count - 1) * 0.5f) *
+                NetworkIndicatorGap;
+            const FVector lineStart = start + spreadAxis * offset;
+            ViewportClient->AddLine(
+                lineStart,
+                lineStart + direction * NetworkIndicatorLength,
+                color,
+                3.0f);
+        }
+    };
+
+    addIndicators(
+        visibleInputs,
+        center + FVector(-NetworkAggregateSphereRadius, 0.0, 0.0),
+        FVector(-1.0, 0.0, 0.0),
+        FVector(0.0, 0.0, 1.0),
+        palette.Debug);
+    addIndicators(
+        visibleOutputs,
+        center + FVector(NetworkAggregateSphereRadius, 0.0, 0.0),
+        FVector(1.0, 0.0, 0.0),
+        FVector(0.0, 0.0, 1.0),
+        palette.ActiveNeuron);
 }
 
 void SMiaIA3DNetworkView::UpdateCamera()
@@ -1536,7 +1758,8 @@ bool SMiaIA3DNetworkView::ProjectToViewport(
 }
 
 float SMiaIA3DNetworkView::ProjectedSphereRadius(
-    const FVector& WorldPositionValue) const
+    const FVector& WorldPositionValue,
+    float WorldRadius) const
 {
     FVector2D center;
     FVector2D edge;
@@ -1546,7 +1769,7 @@ float SMiaIA3DNetworkView::ProjectedSphereRadius(
 
     if (!ProjectToViewport(WorldPositionValue, center) ||
         !ProjectToViewport(
-            WorldPositionValue + cameraRight * SphereRadius(),
+            WorldPositionValue + cameraRight * WorldRadius,
             edge))
     {
         return 9.0f;
@@ -1603,7 +1826,13 @@ SMiaIA3DNetworkView::FindNodeAt(
 
         const double selectionDistance = FMath::Max(
             static_cast<double>(NodeSelectionDistance),
-            static_cast<double>(ProjectedSphereRadius(node.Position)));
+            static_cast<double>(ProjectedSphereRadius(
+                node.Position,
+                bNetworkAggregateMode
+                    ? NetworkAggregateSphereRadius
+                    : bCompactMode
+                        ? CompactSphereRadius
+                        : SphereRadius())));
 
         if (distance <= selectionDistance &&
             distance <= closestDistance)

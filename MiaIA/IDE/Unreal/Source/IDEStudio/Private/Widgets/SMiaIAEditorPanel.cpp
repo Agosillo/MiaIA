@@ -957,9 +957,36 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
                         .AutoHeight()
                         .Padding(8.0f, 5.0f)
                         [
-                            SNew(STextBlock)
-                            .Text(this, &SMiaIAEditorPanel::NetworkSummaryText)
-                            .Font(FAppStyle::GetFontStyle(TEXT("NormalFontBold")))
+                            SNew(SHorizontalBox)
+                            + SHorizontalBox::Slot()
+                            .AutoWidth()
+                            .Padding(0.0f, 0.0f, 8.0f, 0.0f)
+                            [
+                                SNew(SButton)
+                                .Visibility(
+                                    this,
+                                    &SMiaIAEditorPanel::LayerDetailVisibility)
+                                .ButtonStyle(&ButtonStyle)
+                                .Text(LOCTEXT("BackFromLayerDetail", "Back"))
+                                .ToolTipText(LOCTEXT(
+                                    "BackFromLayerDetailTooltip",
+                                    "Return one level in the network overview. Esc provides the same action."))
+                                .OnClicked(
+                                    this,
+                                    &SMiaIAEditorPanel::
+                                        HandleNavigateBackFromTopology)
+                            ]
+                            + SHorizontalBox::Slot()
+                            .FillWidth(1.0f)
+                            .VAlign(VAlign_Center)
+                            [
+                                SNew(STextBlock)
+                                .Text(
+                                    this,
+                                    &SMiaIAEditorPanel::NetworkSummaryText)
+                                .Font(FAppStyle::GetFontStyle(
+                                    TEXT("NormalFontBold")))
+                            ]
                         ]
                         + SVerticalBox::Slot()
                         .FillHeight(1.0f)
@@ -976,9 +1003,23 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
                                 .OnConnectionSelected(
                                     this,
                                     &SMiaIAEditorPanel::SelectConnection)
+                                .OnLayerSelected(
+                                    this,
+                                    &SMiaIAEditorPanel::SelectLayer)
                                 .OnNeuronNavigationRequested(
                                     this,
                                     &SMiaIAEditorPanel::NavigateNeuron)
+                                .OnLayerOpenRequested(
+                                    this,
+                                    &SMiaIAEditorPanel::OpenLayerDetail)
+                                .OnNetworkOpenRequested(
+                                    this,
+                                    &SMiaIAEditorPanel::
+                                        OpenNetworkFromPreview)
+                                .OnLayerFocusExitRequested(
+                                    this,
+                                    &SMiaIAEditorPanel::
+                                        NavigateBackFromTopology)
                             ]
                             + SWidgetSwitcher::Slot()
                             [
@@ -991,9 +1032,23 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
                                 .OnConnectionSelected(
                                     this,
                                     &SMiaIAEditorPanel::SelectConnection)
+                                .OnLayerSelected(
+                                    this,
+                                    &SMiaIAEditorPanel::SelectLayer)
                                 .OnNeuronNavigationRequested(
                                     this,
                                     &SMiaIAEditorPanel::NavigateNeuron)
+                                .OnLayerOpenRequested(
+                                    this,
+                                    &SMiaIAEditorPanel::OpenLayerDetail)
+                                .OnNetworkOpenRequested(
+                                    this,
+                                    &SMiaIAEditorPanel::
+                                        OpenNetworkFromPreview)
+                                .OnLayerFocusExitRequested(
+                                    this,
+                                    &SMiaIAEditorPanel::
+                                        NavigateBackFromTopology)
                             ]
                         ]
                         + SVerticalBox::Slot()
@@ -1806,13 +1861,37 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
 void SMiaIAEditorPanel::RefreshData()
 {
     PeriodicRefreshElapsedSeconds = 0.0;
+    const bool previouslyHadNetwork = !NetworkOverview.Layers.IsEmpty();
+    const FString previousOverviewKey = BuildOverviewKey(NetworkOverview);
     NetworkOverview = UMiaIABlueprintLibrary::GetNetworkOverview();
-    bCompactTopology =
+    const bool hasNetwork = !NetworkOverview.Layers.IsEmpty();
+    const bool networkDefinitionChanged = previouslyHadNetwork &&
+        hasNetwork &&
+        previousOverviewKey != BuildOverviewKey(NetworkOverview);
+    bNetworkRequiresCompactTopology =
         MiaIA::Studio::StudioTopologyBuilder::RequiresCompactMode(
             static_cast<std::size_t>(NetworkOverview.NeuronCount),
             static_cast<std::size_t>(NetworkOverview.ConnectionCount),
             static_cast<std::size_t>(DetailedNeuronLimit),
             static_cast<std::size_t>(DetailedConnectionLimit));
+
+    if (!hasNetwork)
+    {
+        FocusedLayerId = -1;
+        bNetworkPreview = false;
+    }
+    else if (!previouslyHadNetwork || networkDefinitionChanged)
+    {
+        FocusedLayerId = -1;
+        bNetworkPreview = true;
+    }
+    else if (!bNetworkRequiresCompactTopology && FocusedLayerId >= 0)
+    {
+        FocusedLayerId = -1;
+    }
+
+    bCompactTopology = bNetworkPreview ||
+        (bNetworkRequiresCompactTopology && FocusedLayerId < 0);
     Session = UMiaIABlueprintLibrary::GetTrainingSession();
     Breakpoints = Session.Breakpoints;
     const FString newBreakpointKey =
@@ -1821,12 +1900,32 @@ void SMiaIAEditorPanel::RefreshData()
         newBreakpointKey != BreakpointKey;
     BreakpointKey = newBreakpointKey;
 
+    Network = FMiaIANetworkSnapshot{};
+    Debug = FMiaIATrainingDebugSnapshot{};
+
+    if (FocusedLayerId >= 0)
+    {
+        FMiaIALayerSnapshot layer;
+
+        if (UMiaIABlueprintLibrary::GetLayerSnapshot(
+            FocusedLayerId,
+            layer))
+        {
+            Network.Layers.Add(MoveTemp(layer));
+        }
+        else
+        {
+            FocusedLayerId = -1;
+            bNetworkPreview = false;
+            bCompactTopology = bNetworkRequiresCompactTopology;
+        }
+    }
+
     if (bCompactTopology)
     {
         Network = FMiaIANetworkSnapshot{};
-        Debug = FMiaIATrainingDebugSnapshot{};
     }
-    else
+    else if (FocusedLayerId < 0)
     {
         Network = UMiaIABlueprintLibrary::GetNetworkSnapshot();
         Debug = UMiaIABlueprintLibrary::GetDebugStatus();
@@ -1839,10 +1938,24 @@ void SMiaIAEditorPanel::RefreshData()
     }
 
     const FString newTopologyKey = bCompactTopology
-        ? BuildOverviewKey(NetworkOverview)
-        : BuildTopologyKey(Network);
+        ? FString::Printf(
+            TEXT("%s:%s"),
+            bNetworkPreview ? TEXT("Network") : TEXT("Layers"),
+            *BuildOverviewKey(NetworkOverview))
+        : FocusedLayerId >= 0
+            ? FString::Printf(
+                TEXT("Focus%lld:%s"),
+                FocusedLayerId,
+                *BuildTopologyKey(Network))
+            : BuildTopologyKey(Network);
     const bool topologyChanged = newTopologyKey != TopologyKey;
     TopologyKey = newTopologyKey;
+
+    if (!bCompactTopology || bNetworkPreview ||
+        !FindOverviewLayer(SelectedLayerId))
+    {
+        SelectedLayerId = -1;
+    }
 
     if (!FindConnection(SelectedConnectionId))
     {
@@ -1968,12 +2081,16 @@ void SMiaIAEditorPanel::RefreshData()
     if (NetworkView.IsValid())
     {
         NetworkView->SetSnapshot(Network);
-        NetworkView->SetOverview(NetworkOverview, bCompactTopology);
+        NetworkView->SetOverview(
+            NetworkOverview,
+            bCompactTopology,
+            bNetworkPreview);
         NetworkView->SetDebugSnapshot(Debug);
         NetworkView->SetSelectedNeurons(
             SelectedNeuronIds,
             SelectedNeuronId);
         NetworkView->SetSelectedConnection(SelectedConnectionId);
+        NetworkView->SetSelectedLayer(SelectedLayerId);
     }
 
     if (Network3DView.IsValid())
@@ -1981,12 +2098,14 @@ void SMiaIAEditorPanel::RefreshData()
         Network3DView->SetSnapshot(Network);
         Network3DView->SetOverview(
             NetworkOverview,
-            bCompactTopology);
+            bCompactTopology,
+            bNetworkPreview);
         Network3DView->SetDebugSnapshot(Debug);
         Network3DView->SetSelectedNeurons(
             SelectedNeuronIds,
             SelectedNeuronId);
         Network3DView->SetSelectedConnection(SelectedConnectionId);
+        Network3DView->SetSelectedLayer(SelectedLayerId);
     }
 
     if (topologyChanged)
@@ -2208,6 +2327,41 @@ void SMiaIAEditorPanel::RebuildExplorer()
                     FMiaIAEditorTheme::Palette(Theme).SubduedText);
             })
         ];
+
+        if (bNetworkPreview)
+        {
+            ExplorerContent->AddSlot()
+            .AutoHeight()
+            .Padding(2.0f, 3.0f)
+            [
+                SNew(STextBlock)
+                .Text(FText::Format(
+                    LOCTEXT(
+                        "CompactNetworkEntry",
+                        "Network  |  {0} inputs  |  {1} layers  |  {2} outputs"),
+                    FText::AsNumber(NetworkInputCount()),
+                    FText::AsNumber(NetworkOverview.Layers.Num()),
+                    FText::AsNumber(NetworkOutputCount())))
+                .AutoWrapText(true)
+            ];
+
+            ExplorerContent->AddSlot()
+            .AutoHeight()
+            .Padding(2.0f, 5.0f)
+            [
+                SNew(STextBlock)
+                .Text(LOCTEXT(
+                    "CompactNetworkOpenHint",
+                    "Click the central network node or press Enter to inspect its layers."))
+                .AutoWrapText(true)
+                .ColorAndOpacity_Lambda([this]()
+                {
+                    return FSlateColor(
+                        FMiaIAEditorTheme::Palette(Theme).SubduedText);
+                })
+            ];
+            return;
+        }
 
         for (const FMiaIALayerOverview& layer : NetworkOverview.Layers)
         {
@@ -2443,6 +2597,7 @@ FReply SMiaIAEditorPanel::HandleCollapseAllExplorer()
 
 void SMiaIAEditorPanel::SelectNeuron(int64 NeuronId)
 {
+    SelectedLayerId = -1;
     SelectedNeuronId = NeuronId;
     SelectedNeuronIds.Reset();
 
@@ -2466,6 +2621,7 @@ void SMiaIAEditorPanel::SelectNeurons(
     const TSet<int64>& NeuronIds,
     int64 PrimaryNeuronId)
 {
+    SelectedLayerId = -1;
     SelectedNeuronIds = NeuronIds;
     SelectedNeuronId = SelectedNeuronIds.Contains(PrimaryNeuronId)
         ? PrimaryNeuronId
@@ -2610,6 +2766,7 @@ void SMiaIAEditorPanel::NavigateNeuron(
 
 void SMiaIAEditorPanel::SelectConnection(int64 ConnectionId)
 {
+    SelectedLayerId = -1;
     SelectedConnectionId = ConnectionId;
     SelectedNeuronId = -1;
     SelectedNeuronIds.Reset();
@@ -2628,6 +2785,104 @@ void SMiaIAEditorPanel::SelectConnection(int64 ConnectionId)
     {
         RebuildExplorer();
     }
+}
+
+void SMiaIAEditorPanel::SelectLayer(int64 LayerId)
+{
+    SelectedLayerId = FindOverviewLayer(LayerId) ? LayerId : -1;
+    SelectedConnectionId = -1;
+    SelectedNeuronId = -1;
+    SelectedNeuronIds.Reset();
+    RefreshData();
+}
+
+void SMiaIAEditorPanel::OpenNetworkFromPreview()
+{
+    if (!bNetworkPreview || NetworkOverview.Layers.IsEmpty())
+    {
+        return;
+    }
+
+    bNetworkPreview = false;
+    SelectedLayerId = -1;
+    SelectedConnectionId = -1;
+    SelectedNeuronId = -1;
+    SelectedNeuronIds.Reset();
+    ExpandedExplorerLayerIds.Reset();
+    bExplorerConnectionsExpanded = false;
+    bExplorerExpansionInitialized = false;
+    RefreshData();
+    RegisterActiveTimer(
+        0.05f,
+        FWidgetActiveTimerDelegate::CreateSP(
+            this,
+            &SMiaIAEditorPanel::HandleDeferredWorkspaceFit));
+}
+
+void SMiaIAEditorPanel::OpenLayerDetail(int64 LayerId)
+{
+    if (!bCompactTopology || bNetworkPreview || LayerId < 0 ||
+        !NetworkOverview.Layers.ContainsByPredicate(
+            [LayerId](const FMiaIALayerOverview& layer)
+            {
+                return layer.Id == LayerId;
+            }))
+    {
+        return;
+    }
+
+    FocusedLayerId = LayerId;
+    SelectedLayerId = -1;
+    SelectedConnectionId = -1;
+    SelectedNeuronId = -1;
+    SelectedNeuronIds.Reset();
+    ExpandedExplorerLayerIds.Reset();
+    bExplorerConnectionsExpanded = false;
+    bExplorerExpansionInitialized = false;
+    RefreshData();
+    RegisterActiveTimer(
+        0.05f,
+        FWidgetActiveTimerDelegate::CreateSP(
+            this,
+            &SMiaIAEditorPanel::HandleDeferredWorkspaceFit));
+}
+
+bool SMiaIAEditorPanel::NavigateBackFromTopology()
+{
+    if (FocusedLayerId >= 0)
+    {
+        FocusedLayerId = -1;
+        bNetworkPreview = false;
+    }
+    else if (!bNetworkPreview && !NetworkOverview.Layers.IsEmpty())
+    {
+        bNetworkPreview = true;
+    }
+    else
+    {
+        return false;
+    }
+
+    SelectedLayerId = -1;
+    SelectedConnectionId = -1;
+    SelectedNeuronId = -1;
+    SelectedNeuronIds.Reset();
+    ExpandedExplorerLayerIds.Reset();
+    bExplorerConnectionsExpanded = false;
+    bExplorerExpansionInitialized = false;
+    RefreshData();
+    RegisterActiveTimer(
+        0.05f,
+        FWidgetActiveTimerDelegate::CreateSP(
+            this,
+            &SMiaIAEditorPanel::HandleDeferredWorkspaceFit));
+    return true;
+}
+
+FReply SMiaIAEditorPanel::HandleNavigateBackFromTopology()
+{
+    NavigateBackFromTopology();
+    return FReply::Handled();
 }
 
 const FMiaIANeuronSnapshot* SMiaIAEditorPanel::FindNeuron(
@@ -2656,6 +2911,16 @@ const FMiaIAConnectionSnapshot* SMiaIAEditorPanel::FindConnection(
         [ConnectionId](const FMiaIAConnectionSnapshot& connection)
         {
             return connection.Id == ConnectionId;
+        });
+}
+
+const FMiaIALayerOverview* SMiaIAEditorPanel::FindOverviewLayer(
+    int64 LayerId) const
+{
+    return NetworkOverview.Layers.FindByPredicate(
+        [LayerId](const FMiaIALayerOverview& layer)
+        {
+            return layer.Id == LayerId;
         });
 }
 
@@ -4173,6 +4438,14 @@ FReply SMiaIAEditorPanel::HandleConfirmProjectPath()
         break;
     }
     UpdateConsoleOutput();
+
+    if (action == EMiaIAProjectPathAction::Open ||
+        action == EMiaIAProjectPathAction::ImportOnnx)
+    {
+        FocusedLayerId = -1;
+        bNetworkPreview = true;
+    }
+
     RefreshData();
     return FReply::Handled();
 }
@@ -4224,6 +4497,8 @@ FReply SMiaIAEditorPanel::HandleQuickHelp()
             "Drag empty space: select neurons with a rectangle.\n"
             "Ctrl + rectangle: add neurons to the current selection.\n"
             "Drag a selected neuron: move the complete selected group.\n"
+            "Every network starts on its whole-network preview. Click its central node or press Enter to continue with the normal detailed or compact topology.\n"
+            "Compact mode: click a layer aggregate to inspect its summary, then double-click it or press Enter to open that layer. Use Back or Esc to retrace the available levels to the preview.\n"
             "Click the topology, then use the arrow keys in the visible direction; their layer/neuron meaning follows Horizontal or Vertical flow and its Forward or Reverse direction.\n"
             "Mouse wheel: zoom. Middle drag: pan. Right drag pans in 2D and orbits in 3D.\n"
             "Use Layout for Expanded or Packed placement, Horizontal or Vertical flow, uniform neuron size, minimum gaps, and All or Selected connections. Click the active orientation again to mirror the layer direction. Packed with zero gaps makes symmetric nodes adjacent without overlap.\n\n"
@@ -4369,6 +4644,18 @@ void SMiaIAEditorPanel::HandleConsoleCommandCommitted(
 
     UpdateConsoleOutput();
     SetConsoleInputText(FString());
+
+    const bool replacedNetwork =
+        output.Contains(TEXT("Dense network created.")) ||
+        output.Contains(TEXT("ONNX model imported.")) ||
+        output.Contains(TEXT("New MiaIA project created.")) ||
+        output.Contains(TEXT("Project opened."));
+
+    if (replacedNetwork)
+    {
+        FocusedLayerId = -1;
+        bNetworkPreview = true;
+    }
 
     RefreshData();
 
@@ -4576,7 +4863,8 @@ bool SMiaIAEditorPanel::CanPause() const
 
 bool SMiaIAEditorPanel::CanStartDebug() const
 {
-    return !bCompactTopology &&
+    return !bNetworkPreview &&
+        !bNetworkRequiresCompactTopology &&
         Session.Status == EMiaIATrainingSessionStatus::Active &&
         Session.CompletedSteps < Session.TotalSteps &&
         (Debug.Phase == EMiaIATrainingDebugPhase::Idle ||
@@ -4585,14 +4873,16 @@ bool SMiaIAEditorPanel::CanStartDebug() const
 
 bool SMiaIAEditorPanel::CanAdvanceDebug() const
 {
-    return !bCompactTopology &&
+    return !bNetworkPreview &&
+        !bNetworkRequiresCompactTopology &&
         Debug.Phase != EMiaIATrainingDebugPhase::Idle &&
         Debug.Phase != EMiaIATrainingDebugPhase::Committed;
 }
 
 bool SMiaIAEditorPanel::CanCancelDebug() const
 {
-    return Debug.Phase != EMiaIATrainingDebugPhase::Idle &&
+    return !bNetworkPreview &&
+        Debug.Phase != EMiaIATrainingDebugPhase::Idle &&
         Debug.Phase != EMiaIATrainingDebugPhase::Committed;
 }
 
@@ -4623,11 +4913,36 @@ FText SMiaIAEditorPanel::DebugPhaseText() const
 
 FText SMiaIAEditorPanel::NetworkSummaryText() const
 {
+    if (FocusedLayerId >= 0 && !Network.Layers.IsEmpty())
+    {
+        const FMiaIALayerSnapshot& layer = Network.Layers[0];
+        return FText::Format(
+            LOCTEXT(
+                "LayerDetailSummary",
+                "Network  >  L{0} {1}  |  Layer detail  |  {2} neurons"),
+            FText::AsNumber(layer.Order),
+            FText::FromString(layer.Name),
+            FText::AsNumber(layer.Neurons.Num()));
+    }
+
+    if (IsNetworkAggregateOverview())
+    {
+        return FText::Format(
+            LOCTEXT(
+                "AggregateNetworkSummary",
+                "Network overview  |  {0} inputs  |  {1} layers  |  {2} outputs  |  {3} neurons  |  {4} connections"),
+            FText::AsNumber(NetworkInputCount()),
+            FText::AsNumber(NetworkOverview.Layers.Num()),
+            FText::AsNumber(NetworkOutputCount()),
+            FText::AsNumber(NetworkOverview.NeuronCount),
+            FText::AsNumber(NetworkOverview.ConnectionCount));
+    }
+
     return bCompactTopology
         ? FText::Format(
             LOCTEXT(
                 "CompactNetworkSummary",
-                "Network topology  |  Compact  |  {0} layers  |  {1} neurons  |  {2} connections"),
+                "Network  >  Layers  |  Compact  |  {0} layers  |  {1} neurons  |  {2} connections"),
             FText::AsNumber(NetworkOverview.Layers.Num()),
             FText::AsNumber(NetworkOverview.NeuronCount),
             FText::AsNumber(NetworkOverview.ConnectionCount))
@@ -4638,6 +4953,32 @@ FText SMiaIAEditorPanel::NetworkSummaryText() const
             FText::AsNumber(NetworkOverview.Layers.Num()),
             FText::AsNumber(NetworkOverview.NeuronCount),
             FText::AsNumber(NetworkOverview.ConnectionCount));
+}
+
+bool SMiaIAEditorPanel::IsNetworkAggregateOverview() const
+{
+    return bNetworkPreview && !NetworkOverview.Layers.IsEmpty();
+}
+
+int64 SMiaIAEditorPanel::NetworkInputCount() const
+{
+    return NetworkOverview.Layers.IsEmpty()
+        ? 0
+        : NetworkOverview.Layers[0].NeuronCount;
+}
+
+int64 SMiaIAEditorPanel::NetworkOutputCount() const
+{
+    return NetworkOverview.Layers.IsEmpty()
+        ? 0
+        : NetworkOverview.Layers.Last().NeuronCount;
+}
+
+EVisibility SMiaIAEditorPanel::LayerDetailVisibility() const
+{
+    return !bNetworkPreview && !NetworkOverview.Layers.IsEmpty()
+        ? EVisibility::Visible
+        : EVisibility::Collapsed;
 }
 
 FText SMiaIAEditorPanel::PositiveMetricLegendText() const
@@ -4673,6 +5014,20 @@ FText SMiaIAEditorPanel::ConsoleText() const
 
 FText SMiaIAEditorPanel::SelectionTitle() const
 {
+    if (IsNetworkAggregateOverview())
+    {
+        return LOCTEXT("SelectedNetworkAggregate", "Complete network");
+    }
+
+    if (const FMiaIALayerOverview* layer =
+        FindOverviewLayer(SelectedLayerId))
+    {
+        return FText::Format(
+            LOCTEXT("SelectedAggregateLayer", "Layer L{0}: {1}"),
+            FText::AsNumber(layer->Order),
+            FText::FromString(layer->Name));
+    }
+
     if (SelectedConnectionId >= 0)
     {
         return FText::Format(
@@ -4698,6 +5053,21 @@ FText SMiaIAEditorPanel::SelectionTitle() const
 
 FText SMiaIAEditorPanel::SelectionContextText() const
 {
+    if (IsNetworkAggregateOverview())
+    {
+        return LOCTEXT(
+            "SelectedNetworkContext",
+            "Compact whole-model overview");
+    }
+
+    if (const FMiaIALayerOverview* layer =
+        FindOverviewLayer(SelectedLayerId))
+    {
+        return FText::Format(
+            LOCTEXT("SelectedLayerActivation", "Activation: {0}"),
+            FText::FromString(ActivationName(layer->Activation)));
+    }
+
     if (const FMiaIAConnectionSnapshot* connection =
         FindConnection(SelectedConnectionId))
     {
@@ -4735,6 +5105,25 @@ FText SMiaIAEditorPanel::SelectionContextText() const
 
 FText SMiaIAEditorPanel::SelectionPrimaryText() const
 {
+    if (IsNetworkAggregateOverview())
+    {
+        return FText::Format(
+            LOCTEXT(
+                "SelectedNetworkDimensions",
+                "Inputs: {0}  |  Layers: {1}  |  Outputs: {2}"),
+            FText::AsNumber(NetworkInputCount()),
+            FText::AsNumber(NetworkOverview.Layers.Num()),
+            FText::AsNumber(NetworkOutputCount()));
+    }
+
+    if (const FMiaIALayerOverview* layer =
+        FindOverviewLayer(SelectedLayerId))
+    {
+        return FText::Format(
+            LOCTEXT("SelectedLayerNeuronCount", "Neurons: {0}"),
+            FText::AsNumber(layer->NeuronCount));
+    }
+
     if (const FMiaIAConnectionSnapshot* connection =
         FindConnection(SelectedConnectionId))
     {
@@ -4779,6 +5168,23 @@ FText SMiaIAEditorPanel::SelectionPrimaryText() const
 
 FText SMiaIAEditorPanel::SelectionSecondaryText() const
 {
+    if (IsNetworkAggregateOverview())
+    {
+        return FText::Format(
+            LOCTEXT(
+                "SelectedNetworkSize",
+                "Neurons: {0}  |  Connections: {1}"),
+            FText::AsNumber(NetworkOverview.NeuronCount),
+            FText::AsNumber(NetworkOverview.ConnectionCount));
+    }
+
+    if (FindOverviewLayer(SelectedLayerId))
+    {
+        return LOCTEXT(
+            "SelectedLayerOpenHint",
+            "Double-click the aggregate or press Enter to open it.");
+    }
+
     if (SelectedConnectionId >= 0)
     {
         return bHasDebugConnection
@@ -4823,6 +5229,20 @@ FText SMiaIAEditorPanel::SelectionSecondaryText() const
 
 FText SMiaIAEditorPanel::SelectionGradientText() const
 {
+    if (IsNetworkAggregateOverview())
+    {
+        return LOCTEXT(
+            "SelectedNetworkIndicatorMeaning",
+            "Left: inputs  |  Above: layers  |  Right: outputs");
+    }
+
+    if (FindOverviewLayer(SelectedLayerId))
+    {
+        return LOCTEXT(
+            "SelectedLayerGradientHint",
+            "Aggregate gradients are not displayed in the overview.");
+    }
+
     if (SelectedNeuronIds.Num() > 1)
     {
         return LOCTEXT(
@@ -4850,6 +5270,20 @@ FText SMiaIAEditorPanel::SelectionGradientText() const
 
 FText SMiaIAEditorPanel::SelectionUpdateText() const
 {
+    if (IsNetworkAggregateOverview())
+    {
+        return LOCTEXT(
+            "SelectedNetworkOpenHint",
+            "Click the central node or press Enter to inspect the layers.");
+    }
+
+    if (FindOverviewLayer(SelectedLayerId))
+    {
+        return LOCTEXT(
+            "SelectedLayerDetailHint",
+            "Open the layer to inspect individual neuron values.");
+    }
+
     if (SelectedNeuronIds.Num() > 1)
     {
         return LOCTEXT(
@@ -4906,6 +5340,20 @@ EVisibility SMiaIAEditorPanel::ConnectionWeightEditorVisibility() const
 
 FText SMiaIAEditorPanel::SelectionRelationshipsText() const
 {
+    if (IsNetworkAggregateOverview())
+    {
+        return LOCTEXT(
+            "SelectedNetworkRelationshipsHint",
+            "The central node summarizes the complete model. Its surrounding parallel indicators represent exact input, layer, and output counts; very large counts may be visually capped while the numeric values remain exact.");
+    }
+
+    if (FindOverviewLayer(SelectedLayerId))
+    {
+        return LOCTEXT(
+            "SelectedLayerRelationshipsHint",
+            "The compact node summarizes one complete layer. Opening it loads only that layer through the SDK, without requesting the complete network snapshot.");
+    }
+
     if (SelectedNeuronIds.Num() > 1)
     {
         return LOCTEXT(

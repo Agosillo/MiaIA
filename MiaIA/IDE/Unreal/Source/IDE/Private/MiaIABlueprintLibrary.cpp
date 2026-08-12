@@ -116,6 +116,28 @@ namespace
         return result;
     }
 
+    FMiaIALayerSnapshot ToBlueprint(
+        const MiaIA::Core::LayerSnapshot& source)
+    {
+        FMiaIALayerSnapshot result;
+        result.Id = static_cast<int64>(source.Id);
+        result.Name = UTF8_TO_TCHAR(source.Name.c_str());
+        result.Order = static_cast<int64>(source.Order);
+        result.Activation = ToBlueprint(source.Activation);
+        result.Neurons.Reserve(static_cast<int32>(source.Neurons.size()));
+
+        for (const auto& sourceNeuron : source.Neurons)
+        {
+            FMiaIANeuronSnapshot neuron;
+            neuron.Id = static_cast<int64>(sourceNeuron.Id);
+            neuron.Activation = sourceNeuron.Activation;
+            neuron.Bias = sourceNeuron.Bias;
+            result.Neurons.Add(MoveTemp(neuron));
+        }
+
+        return result;
+    }
+
     FMiaIANetworkSnapshot ToBlueprint(
         const MiaIA::Core::NetworkSnapshot& source)
     {
@@ -124,24 +146,7 @@ namespace
 
         for (const auto& sourceLayer : source.Layers)
         {
-            FMiaIALayerSnapshot layer;
-            layer.Id = static_cast<int64>(sourceLayer.Id);
-            layer.Name = UTF8_TO_TCHAR(sourceLayer.Name.c_str());
-            layer.Order = static_cast<int64>(sourceLayer.Order);
-            layer.Activation = ToBlueprint(sourceLayer.Activation);
-            layer.Neurons.Reserve(
-                static_cast<int32>(sourceLayer.Neurons.size()));
-
-            for (const auto& sourceNeuron : sourceLayer.Neurons)
-            {
-                FMiaIANeuronSnapshot neuron;
-                neuron.Id = static_cast<int64>(sourceNeuron.Id);
-                neuron.Activation = sourceNeuron.Activation;
-                neuron.Bias = sourceNeuron.Bias;
-                layer.Neurons.Add(MoveTemp(neuron));
-            }
-
-            result.Layers.Add(MoveTemp(layer));
+            result.Layers.Add(ToBlueprint(sourceLayer));
         }
 
         result.Connections.Reserve(
@@ -739,6 +744,28 @@ FMiaIANetworkSnapshot UMiaIABlueprintLibrary::GetNetworkSnapshot()
 FMiaIANetworkOverview UMiaIABlueprintLibrary::GetNetworkOverview()
 {
     return ToBlueprint(MiaIA::SDK::MiaIAClient::GetNetworkOverview());
+}
+
+bool UMiaIABlueprintLibrary::GetLayerSnapshot(
+    int64 LayerId,
+    FMiaIALayerSnapshot& OutLayer)
+{
+    if (LayerId < 0)
+    {
+        return false;
+    }
+
+    MiaIA::Core::LayerSnapshot layer;
+
+    if (!MiaIA::SDK::MiaIAClient::TryGetLayer(
+        static_cast<std::uint64_t>(LayerId),
+        layer))
+    {
+        return false;
+    }
+
+    OutLayer = ToBlueprint(layer);
+    return true;
 }
 
 bool UMiaIABlueprintLibrary::InspectNeuron(

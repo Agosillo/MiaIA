@@ -58,6 +58,7 @@ The roadmap is organized by dependency rather than by a fixed release date. Math
 - interactive 3D topology with aggregated sphere-and-cylinder geometry, projected identifiers, mouse and arrow-key selection navigation, camera navigation, and manual layout editing;
 - shared Expanded/Packed non-overlapping layout, persistent forward/reverse Horizontal/Vertical flow, uniform node sizing, configurable gaps, and All/Selected connection display across detailed and compact 2D/3D views;
 - adaptive tessellation and compact scene policies that avoid one Unreal Actor per graph element.
+- three-level compact navigation from a whole-network aggregate through linear layer aggregates to on-demand SDK layer detail, with shared 2D/3D Back or Escape navigation;
 - bounded selected-neuron relationship inspection with exact incoming and outgoing totals;
 - selected-connection inspection with contextual source and target neuron snapshots across SDK, CLI, StudioCore, Blueprint, 2D, and 3D clients.
 - engine-owned training breakpoints for debug phases, neuron activations and gradients, and connection updates;
@@ -139,10 +140,10 @@ The precise version 1 boundary is documented in the [MiaIA project format](../Pr
 - added a lightweight network overview and automatic compact layer rendering for large topologies;
 - broaden Blueprint coverage to the remaining appropriate SDK operations;
 - refine the IDE command console with persistent history and asynchronous long-running execution;
-- add paged drill-down from compact layer summaries into large-model neurons and connections;
+- extend compact layer drill-down with paged cross-layer neurons and connections;
 - expand neuron coloring beyond activation and current debug state;
 - animate forward signal flow and backward gradient flow;
-- navigate from network overview to an individual neuron or connection;
+- extend compact navigation from the current layer-bounded detail to paged cross-layer neurons and connections;
 - compare snapshots and training checkpoints;
 - keep Unreal-specific rendering data outside the mathematical Core.
 
@@ -150,7 +151,7 @@ The precise version 1 boundary is documented in the [MiaIA project format](../Pr
 
 The platform-neutral Studio application foundation, shared Unreal runtime host, Win64 packaging workflow, user-selectable 2D/3D topology mode, and first interactive runtime 3D renderer are implemented. The next delivery steps are:
 
-- extend the current sphere-and-cylinder 3D scene with filtering, compact-scene drill-down, and richer layout tools;
+- extend the current sphere-and-cylinder 3D scene with filtering, paged compact-scene relationships, and richer layout tools;
 - persist user visualization layouts in future MiaIA workspace metadata rather than ONNX;
 - retain StudioCore as the shared application boundary for a possible future Qt frontend.
 

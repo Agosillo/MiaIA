@@ -77,6 +77,11 @@ public:
     static FMiaIANetworkOverview GetNetworkOverview();
 
     UFUNCTION(BlueprintCallable, Category = "MiaIA|Network|Inspection")
+    static bool GetLayerSnapshot(
+        int64 LayerId,
+        FMiaIALayerSnapshot& OutLayer);
+
+    UFUNCTION(BlueprintCallable, Category = "MiaIA|Network|Inspection")
     static bool InspectNeuron(
         int64 NeuronId,
         int32 MaximumConnections,

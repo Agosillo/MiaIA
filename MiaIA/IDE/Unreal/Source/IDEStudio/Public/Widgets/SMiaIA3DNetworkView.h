@@ -21,9 +21,15 @@ public:
             FOnMiaIANeuronSelectionChanged,
             OnNeuronSelectionChanged)
         SLATE_EVENT(FOnMiaIAConnectionSelected, OnConnectionSelected)
+        SLATE_EVENT(FOnMiaIALayerSelected, OnLayerSelected)
         SLATE_EVENT(
             FOnMiaIANeuronNavigationRequested,
             OnNeuronNavigationRequested)
+        SLATE_EVENT(FOnMiaIALayerOpenRequested, OnLayerOpenRequested)
+        SLATE_EVENT(FSimpleDelegate, OnNetworkOpenRequested)
+        SLATE_EVENT(
+            FOnMiaIALayerFocusExitRequested,
+            OnLayerFocusExitRequested)
     SLATE_END_ARGS()
 
     virtual ~SMiaIA3DNetworkView() override;
@@ -32,12 +38,14 @@ public:
     void SetSnapshot(const FMiaIANetworkSnapshot& InSnapshot);
     void SetOverview(
         const FMiaIANetworkOverview& InOverview,
-        bool bInCompactMode);
+        bool bInCompactMode,
+        bool bInNetworkAggregateMode);
     void SetDebugSnapshot(const FMiaIATrainingDebugSnapshot& InDebug);
     void SetSelectedNeurons(
         const TSet<int64>& InNeuronIds,
         int64 InPrimaryNeuronId);
     void SetSelectedConnection(int64 InConnectionId);
+    void SetSelectedLayer(int64 InLayerId);
     void SetTheme(EMiaIAEditorTheme InTheme);
     void SetVisualizationSettings(
         const FMiaIAVisualizationSettings& InSettings);
@@ -59,6 +67,9 @@ public:
         const FWidgetStyle& InWidgetStyle,
         bool bParentEnabled) const override;
     virtual FReply OnMouseButtonDown(
+        const FGeometry& MyGeometry,
+        const FPointerEvent& MouseEvent) override;
+    virtual FReply OnMouseButtonDoubleClick(
         const FGeometry& MyGeometry,
         const FPointerEvent& MouseEvent) override;
     virtual FReply OnMouseButtonUp(
@@ -93,11 +104,14 @@ private:
     void RebuildScene();
     void RebuildDetailedScene();
     void RebuildCompactScene();
+    void RebuildNetworkAggregateScene();
     void UpdateCamera();
     bool ProjectToViewport(
         const FVector& WorldPosition,
         FVector2D& OutPosition) const;
-    float ProjectedSphereRadius(const FVector& WorldPosition) const;
+    float ProjectedSphereRadius(
+        const FVector& WorldPosition,
+        float WorldRadius) const;
     bool DeprojectFromViewport(
         const FVector2D& ViewportPosition,
         FVector& OutOrigin,
@@ -143,7 +157,11 @@ private:
     TSharedPtr<FSceneViewport> SceneViewport;
     FOnMiaIANeuronSelectionChanged OnNeuronSelectionChanged;
     FOnMiaIAConnectionSelected OnConnectionSelected;
+    FOnMiaIALayerSelected OnLayerSelected;
     FOnMiaIANeuronNavigationRequested OnNeuronNavigationRequested;
+    FOnMiaIALayerOpenRequested OnLayerOpenRequested;
+    FSimpleDelegate OnNetworkOpenRequested;
+    FOnMiaIALayerFocusExitRequested OnLayerFocusExitRequested;
     EMiaIAEditorTheme Theme{EMiaIAEditorTheme::FollowUnreal};
     FMiaIAVisualizationSettings VisualizationSettings;
     FVector LookAt{FVector::ZeroVector};
@@ -162,8 +180,10 @@ private:
     float CameraDistance{1150.0f};
     int64 SelectedNeuronId{-1};
     int64 SelectedConnectionId{-1};
+    int64 SelectedLayerId{-1};
     int64 DraggedNeuronId{-1};
     bool bCompactMode{};
+    bool bNetworkAggregateMode{};
     bool bSceneDirty{true};
     bool bOrbiting{};
     bool bPanning{};

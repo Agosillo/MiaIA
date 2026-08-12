@@ -67,9 +67,15 @@ private:
         int64 PrimaryNeuronId);
     void NavigateNeuron(EMiaIANeuronNavigationDirection Direction);
     void SelectConnection(int64 ConnectionId);
+    void SelectLayer(int64 LayerId);
+    void OpenNetworkFromPreview();
+    void OpenLayerDetail(int64 LayerId);
+    bool NavigateBackFromTopology();
+    FReply HandleNavigateBackFromTopology();
     const FMiaIANeuronSnapshot* FindNeuron(int64 NeuronId) const;
     const FMiaIAConnectionSnapshot* FindConnection(
         int64 ConnectionId) const;
+    const FMiaIALayerOverview* FindOverviewLayer(int64 LayerId) const;
 
     EActiveTimerReturnType HandleRefreshTimer(
         double CurrentTime,
@@ -165,6 +171,10 @@ private:
     FText SessionStatusText() const;
     FText DebugPhaseText() const;
     FText NetworkSummaryText() const;
+    bool IsNetworkAggregateOverview() const;
+    int64 NetworkInputCount() const;
+    int64 NetworkOutputCount() const;
+    EVisibility LayerDetailVisibility() const;
     FText PositiveMetricLegendText() const;
     FText NegativeMetricLegendText() const;
     FText ConsoleText() const;
@@ -206,6 +216,9 @@ private:
     TArray<FMiaIATrainingBreakpoint> Breakpoints;
     int64 SelectedNeuronId{-1};
     int64 SelectedConnectionId{-1};
+    int64 SelectedLayerId{-1};
+    int64 FocusedLayerId{-1};
+    bool bNetworkPreview{};
     TSet<int64> SelectedNeuronIds;
     FString SelectedLayerName;
     FString TopologyKey;
@@ -256,6 +269,7 @@ private:
     bool bExplorerExpansionInitialized{};
     bool bUpdatingConsoleInput{};
     bool bCompactTopology{};
+    bool bNetworkRequiresCompactTopology{};
     bool bStandaloneMode{};
     bool bTopologyWorkspaceExpanded{};
     bool bDialogVisible{};

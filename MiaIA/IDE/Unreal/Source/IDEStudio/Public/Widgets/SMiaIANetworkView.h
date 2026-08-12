@@ -12,6 +12,9 @@ DECLARE_DELEGATE_TwoParams(
     const TSet<int64>&,
     int64)
 DECLARE_DELEGATE_OneParam(FOnMiaIAConnectionSelected, int64)
+DECLARE_DELEGATE_OneParam(FOnMiaIALayerSelected, int64)
+DECLARE_DELEGATE_OneParam(FOnMiaIALayerOpenRequested, int64)
+DECLARE_DELEGATE_RetVal(bool, FOnMiaIALayerFocusExitRequested)
 
 enum class EMiaIANeuronNavigationDirection : uint8
 {
@@ -35,9 +38,15 @@ public:
             FOnMiaIANeuronSelectionChanged,
             OnNeuronSelectionChanged)
         SLATE_EVENT(FOnMiaIAConnectionSelected, OnConnectionSelected)
+        SLATE_EVENT(FOnMiaIALayerSelected, OnLayerSelected)
         SLATE_EVENT(
             FOnMiaIANeuronNavigationRequested,
             OnNeuronNavigationRequested)
+        SLATE_EVENT(FOnMiaIALayerOpenRequested, OnLayerOpenRequested)
+        SLATE_EVENT(FSimpleDelegate, OnNetworkOpenRequested)
+        SLATE_EVENT(
+            FOnMiaIALayerFocusExitRequested,
+            OnLayerFocusExitRequested)
     SLATE_END_ARGS()
 
     SMiaIANetworkView();
@@ -46,12 +55,14 @@ public:
     void SetSnapshot(const FMiaIANetworkSnapshot& InSnapshot);
     void SetOverview(
         const FMiaIANetworkOverview& InOverview,
-        bool bInCompactMode);
+        bool bInCompactMode,
+        bool bInNetworkAggregateMode);
     void SetDebugSnapshot(const FMiaIATrainingDebugSnapshot& InDebug);
     void SetSelectedNeurons(
         const TSet<int64>& InNeuronIds,
         int64 InPrimaryNeuronId);
     void SetSelectedConnection(int64 InConnectionId);
+    void SetSelectedLayer(int64 InLayerId);
     void SetTheme(EMiaIAEditorTheme InTheme);
     void SetVisualizationSettings(
         const FMiaIAVisualizationSettings& InSettings);
@@ -70,6 +81,9 @@ public:
         const FWidgetStyle& InWidgetStyle,
         bool bParentEnabled) const override;
     virtual FReply OnMouseButtonDown(
+        const FGeometry& MyGeometry,
+        const FPointerEvent& MouseEvent) override;
+    virtual FReply OnMouseButtonDoubleClick(
         const FGeometry& MyGeometry,
         const FPointerEvent& MouseEvent) override;
     virtual FReply OnMouseButtonUp(
@@ -98,6 +112,14 @@ private:
         const FGeometry& AllottedGeometry,
         FSlateWindowElementList& OutDrawElements,
         int32 LayerId) const;
+    int32 PaintNetworkAggregate(
+        const FGeometry& AllottedGeometry,
+        FSlateWindowElementList& OutDrawElements,
+        int32 LayerId) const;
+    FVector2D NetworkAggregatePosition(const FVector2D& Size) const;
+    FVector2D CompactLayerPosition(
+        int32 LayerIndex,
+        const FVector2D& Size) const;
     FVector2D AutomaticPosition(
         int32 LayerIndex,
         int32 NeuronIndex) const;
@@ -134,6 +156,7 @@ private:
     double MaximumConnectionMetric{1.0};
     int64 SelectedNeuronId{-1};
     int64 SelectedConnectionId{-1};
+    int64 SelectedLayerId{-1};
     int64 DraggedNeuronId{-1};
     TSet<int64> SelectedNeuronIds;
     EMiaIAEditorTheme Theme{EMiaIAEditorTheme::FollowUnreal};
@@ -149,13 +172,19 @@ private:
     TMap<int64, FVector2D> DragStartPositions;
     float Zoom{1.0f};
     bool bCompactMode{};
+    bool bNetworkAggregateMode{};
     bool bPanning{};
     bool bMarqueeSelecting{};
     bool bMarqueeAdditive{};
     mutable TMap<int64, FVector2D> NeuronPositions;
+    mutable TMap<int64, FVector2D> CompactLayerPositions;
     FOnMiaIANeuronSelectionChanged OnNeuronSelectionChanged;
     FOnMiaIAConnectionSelected OnConnectionSelected;
+    FOnMiaIALayerSelected OnLayerSelected;
     FOnMiaIANeuronNavigationRequested OnNeuronNavigationRequested;
+    FOnMiaIALayerOpenRequested OnLayerOpenRequested;
+    FSimpleDelegate OnNetworkOpenRequested;
+    FOnMiaIALayerFocusExitRequested OnLayerFocusExitRequested;
     FSlateRoundedBoxBrush NeuronBrush;
     FSlateRoundedBoxBrush SelectionBrush;
 };
