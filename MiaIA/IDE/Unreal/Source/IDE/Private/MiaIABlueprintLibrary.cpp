@@ -650,6 +650,67 @@ bool UMiaIABlueprintLibrary::CreateConfiguredDenseNetwork(
         configuration);
 }
 
+bool UMiaIABlueprintLibrary::ConfigureNetworkParameters(
+    bool bUpdateHiddenActivation,
+    EMiaIAActivationType HiddenActivation,
+    bool bUpdateOutputActivation,
+    EMiaIAActivationType OutputActivation,
+    bool bUpdateConnectionWeights,
+    double ConnectionWeight,
+    bool bUpdateNonInputBiases,
+    double NonInputBias,
+    FMiaIANetworkParameterUpdateResult& Result)
+{
+    if ((bUpdateConnectionWeights && !FMath::IsFinite(ConnectionWeight)) ||
+        (bUpdateNonInputBiases && !FMath::IsFinite(NonInputBias)))
+    {
+        return false;
+    }
+
+    MiaIA::Core::NetworkParameterUpdate update;
+
+    if (bUpdateHiddenActivation)
+    {
+        update.HiddenActivation = ToCore(HiddenActivation);
+    }
+
+    if (bUpdateOutputActivation)
+    {
+        update.OutputActivation = ToCore(OutputActivation);
+    }
+
+    if (bUpdateConnectionWeights)
+    {
+        update.ConnectionWeight = ConnectionWeight;
+    }
+
+    if (bUpdateNonInputBiases)
+    {
+        update.NonInputBias = NonInputBias;
+    }
+
+    MiaIA::Core::NetworkParameterUpdateSnapshot updateResult;
+
+    if (!MiaIA::SDK::MiaIAClient::ApplyNetworkParameterUpdate(
+        update,
+        updateResult))
+    {
+        return false;
+    }
+
+    FMiaIANetworkParameterUpdateResult blueprintResult;
+    blueprintResult.HiddenLayersChanged =
+        static_cast<int64>(updateResult.HiddenLayersChanged);
+    blueprintResult.bOutputLayerChanged =
+        updateResult.OutputLayerChanged;
+    blueprintResult.ConnectionWeightsChanged =
+        static_cast<int64>(updateResult.ConnectionWeightsChanged);
+    blueprintResult.NeuronBiasesChanged =
+        static_cast<int64>(updateResult.NeuronBiasesChanged);
+    Result = blueprintResult;
+    return true;
+}
+
 FMiaIANetworkSnapshot UMiaIABlueprintLibrary::GetNetworkSnapshot()
 {
     return ToBlueprint(MiaIA::SDK::MiaIAClient::GetSnapshot());

@@ -341,6 +341,23 @@ namespace MiaIA::SDK
             activation);
     }
 
+    bool MiaIAClient::ApplyNetworkParameterUpdate(
+        const Core::NetworkParameterUpdate& update,
+        Core::NetworkParameterUpdateSnapshot& result)
+    {
+        const std::scoped_lock lock(Detail::ClientMutex());
+
+        if (Detail::IsClientMutationBlocked())
+        {
+            return false;
+        }
+
+        return Engine::NetworkParameters::ApplyUpdate(
+            CurrentNetwork,
+            update,
+            result);
+    }
+
     bool MiaIAClient::Forward()
     {
         const std::scoped_lock lock(Detail::ClientMutex());

@@ -247,13 +247,41 @@ int main()
     assert(configuredNetwork.Layers[2].Neurons[0].Bias == 0.4);
     assert(configuredNetwork.Connections[0].Weight == -0.25);
 
+    const auto configuredUpdate = MiaIACommandProcessor::Execute(
+        "network configure --hidden-activation tanh "
+        "--output-activation sigmoid --weight 0.2 --bias -0.1");
+    assert(configuredUpdate.Output.find(
+        "Network parameters updated atomically") != std::string::npos);
+    assert(configuredUpdate.Output.find(
+        "Connection weights changed: 9") != std::string::npos);
+
+    const auto updatedNetwork = MiaIAClient::GetSnapshot();
+    assert(updatedNetwork.Layers[0].Activation ==
+        MiaIA::Core::ActivationType::Sigmoid);
+    assert(updatedNetwork.Layers[1].Activation ==
+        MiaIA::Core::ActivationType::Tanh);
+    assert(updatedNetwork.Layers[2].Activation ==
+        MiaIA::Core::ActivationType::Sigmoid);
+    assert(updatedNetwork.Layers[0].Neurons[0].Bias == 0.0);
+    assert(updatedNetwork.Layers[1].Neurons[0].Bias == -0.1);
+    assert(updatedNetwork.Layers[2].Neurons[0].Bias == -0.1);
+    assert(updatedNetwork.Connections[0].Weight == 0.2);
+
+    assert(MiaIACommandProcessor::Execute(
+        "network configure --weight invalid").Output.find(
+            "Usage:") != std::string::npos);
+    assert(MiaIACommandProcessor::Execute(
+        "network configure").Output.find("Usage:") !=
+        std::string::npos);
+    assert(MiaIAClient::GetSnapshot().Connections[0].Weight == 0.2);
+
     assert(MiaIACommandProcessor::Execute(
         "create 2 3 1 1 --hidden-activation invalid").Output.find(
             "Usage:") != std::string::npos);
     assert(MiaIACommandProcessor::Execute("create 2").Output.find(
         "Usage:") != std::string::npos);
     assert(MiaIAClient::GetSnapshot().Layers[1].Activation ==
-        MiaIA::Core::ActivationType::ReLU);
+        MiaIA::Core::ActivationType::Tanh);
 
     const auto testDirectory =
         std::filesystem::temp_directory_path() /
@@ -330,6 +358,12 @@ int main()
         MiaIACommandProcessor::GetSuggestions("create 2");
     assert(createArguments.size() == 1);
     assert(createArguments[0].Syntax.find("<inputs>") !=
+        std::string::npos);
+
+    const auto configureArguments =
+        MiaIACommandProcessor::GetSuggestions("network configure ");
+    assert(configureArguments.size() == 1);
+    assert(configureArguments[0].Syntax.find("--weight") !=
         std::string::npos);
 
     const auto limitedSuggestions =
@@ -2939,6 +2973,15 @@ int main()
     assert(debug.SampleIndex == 0);
     assert(debug.CandidateNetwork.Connections[0].Weight == 0.0);
     assert(!MiaIAClient::SetConnectionWeight(1, 42.0));
+    MiaIA::Core::NetworkParameterUpdate blockedUpdate;
+    blockedUpdate.ConnectionWeight = 42.0;
+    MiaIA::Core::NetworkParameterUpdateSnapshot blockedResult;
+    blockedResult.ConnectionWeightsChanged = 999;
+    assert(!MiaIAClient::ApplyNetworkParameterUpdate(
+        blockedUpdate,
+        blockedResult));
+    assert(blockedResult.ConnectionWeightsChanged == 999);
+    assert(MiaIAClient::GetSnapshot().Connections[0].Weight == 0.0);
     assert(MiaIAClient::TryGetTrainingDebugNeuron(
         1002,
         debugNeuron));
@@ -4009,6 +4052,55 @@ int main()
     assert(MiaIAClient::TryGetConnection(65664, finalConnection));
     assert(finalConnection.FromNeuron == 2088);
     assert(finalConnection.ToNeuron == 2090);
+
+    });
+
+    runner.Run("Transactional network parameter update", [&]()
+    {
+    MiaIAClient::ClearNetwork();
+    assert(MiaIAClient::CreateDenseNetwork(2, 2, 2, 1));
+
+    MiaIA::Core::NetworkParameterUpdate update;
+    update.HiddenActivation = MiaIA::Core::ActivationType::ReLU;
+    update.OutputActivation = MiaIA::Core::ActivationType::Linear;
+    update.ConnectionWeight = -0.3;
+    update.NonInputBias = 0.25;
+    MiaIA::Core::NetworkParameterUpdateSnapshot result;
+    assert(MiaIAClient::ApplyNetworkParameterUpdate(update, result));
+    assert(result.HiddenLayersChanged == 2);
+    assert(result.OutputLayerChanged);
+    assert(result.ConnectionWeightsChanged == 10);
+    assert(result.NeuronBiasesChanged == 5);
+
+    const auto updated = MiaIAClient::GetSnapshot();
+    assert(updated.Layers[0].Activation ==
+        MiaIA::Core::ActivationType::Sigmoid);
+    assert(updated.Layers[1].Activation ==
+        MiaIA::Core::ActivationType::ReLU);
+    assert(updated.Layers[2].Activation ==
+        MiaIA::Core::ActivationType::ReLU);
+    assert(updated.Layers[3].Activation ==
+        MiaIA::Core::ActivationType::Linear);
+    assert(updated.Layers[0].Neurons[0].Bias == 0.0);
+    assert(updated.Layers[1].Neurons[0].Bias == 0.25);
+    assert(updated.Layers[3].Neurons[0].Bias == 0.25);
+    assert(updated.Connections[0].Weight == -0.3);
+
+    result.HiddenLayersChanged = 999;
+    result.OutputLayerChanged = true;
+    result.ConnectionWeightsChanged = 999;
+    result.NeuronBiasesChanged = 999;
+    update.ConnectionWeight = std::numeric_limits<double>::infinity();
+    assert(!MiaIAClient::ApplyNetworkParameterUpdate(update, result));
+    assert(result.HiddenLayersChanged == 999);
+    assert(result.OutputLayerChanged);
+    assert(result.ConnectionWeightsChanged == 999);
+    assert(result.NeuronBiasesChanged == 999);
+    assert(MiaIAClient::GetSnapshot().Connections[0].Weight == -0.3);
+
+    update = {};
+    assert(!MiaIAClient::ApplyNetworkParameterUpdate(update, result));
+    assert(MiaIAClient::GetSnapshot().Connections[0].Weight == -0.3);
 
     });
 

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../../Core/Model/Network.h"
+#include "../../Core/Public/NetworkParameterUpdate.h"
 
 namespace MiaIA::Engine
 {
@@ -17,5 +18,10 @@ namespace MiaIA::Engine
             Core::Network& network,
             std::uint64_t layerId,
             Core::ActivationType activation);
+
+        static bool ApplyUpdate(
+            Core::Network& network,
+            const Core::NetworkParameterUpdate& update,
+            Core::NetworkParameterUpdateSnapshot& result);
     };
 }

@@ -109,6 +109,8 @@ const std::vector<CommandCatalogEntry>& CommandCatalog()
     {
         { "help", "help", "Show every available command.", true },
         { "create", "create <inputs> <hidden-width> <hidden-layers> <outputs> [--hidden-activation <type>] [--output-activation <type>] [--weight <value>] [--bias <value>]", "Create a configurable dense feed-forward network.", true },
+        { "network", "network configure <options>", "Modify parameters of the current network.", false },
+        { "network configure", "network configure [--hidden-activation <type>] [--output-activation <type>] [--weight <value>] [--bias <value>]", "Atomically update existing network parameters.", true },
         { "input", "input <value...>", "Assign values to the input layer.", true },
         { "predict", "predict <value...>", "Run inference for one input vector.", true },
         { "import", "import onnx <path>", "Import a model from a supported format.", false },
@@ -212,6 +214,16 @@ void PrintHelp()
         << "      Example:\n"
         << "        create 784 256 3 10 --hidden-activation relu "
            "--output-activation sigmoid\n\n"
+
+        << "  network configure [options]\n"
+        << "      --hidden-activation sigmoid|relu|tanh|linear\n"
+        << "      --output-activation sigmoid|relu|tanh|linear\n"
+        << "      --weight <value> --bias <value>\n"
+        << "      Atomically update parameters of the current network\n"
+        << "      Warning: weight or bias updates replace learned values\n\n"
+        << "      Example:\n"
+        << "        network configure --hidden-activation tanh "
+           "--weight 0.01\n\n"
 
         << "  input [values]\n"
         << "      Set the input layer activation values\n\n"
@@ -519,6 +531,122 @@ void CreateNetwork(const std::string& command)
         std::cout
             << "Network creation failed.\n";
     }
+}
+
+void PrintNetworkConfigureUsage()
+{
+    std::cout
+        << "Usage: network configure "
+           "[--hidden-activation <type>] "
+           "[--output-activation <type>] [--weight <value>] "
+           "[--bias <value>]\n"
+        << "Activation types: sigmoid, relu, tanh, linear\n";
+}
+
+void ConfigureNetwork(const std::string& command)
+{
+    using MiaIA::SDK::MiaIAClient;
+
+    std::stringstream stream(command);
+    std::string networkToken;
+    std::string configureToken;
+    stream >> networkToken >> configureToken;
+
+    if (networkToken != "network" || configureToken != "configure")
+    {
+        PrintNetworkConfigureUsage();
+        return;
+    }
+
+    MiaIA::Core::NetworkParameterUpdate update;
+    std::string option;
+
+    while (stream >> option)
+    {
+        if (option == "--hidden-activation")
+        {
+            std::string activation;
+            MiaIA::Core::ActivationType parsedActivation;
+
+            if (!(stream >> activation) ||
+                !TryParseActivation(activation, parsedActivation))
+            {
+                PrintNetworkConfigureUsage();
+                return;
+            }
+
+            update.HiddenActivation = parsedActivation;
+        }
+        else if (option == "--output-activation")
+        {
+            std::string activation;
+            MiaIA::Core::ActivationType parsedActivation;
+
+            if (!(stream >> activation) ||
+                !TryParseActivation(activation, parsedActivation))
+            {
+                PrintNetworkConfigureUsage();
+                return;
+            }
+
+            update.OutputActivation = parsedActivation;
+        }
+        else if (option == "--weight")
+        {
+            double value{};
+
+            if (!(stream >> value))
+            {
+                PrintNetworkConfigureUsage();
+                return;
+            }
+
+            update.ConnectionWeight = value;
+        }
+        else if (option == "--bias")
+        {
+            double value{};
+
+            if (!(stream >> value))
+            {
+                PrintNetworkConfigureUsage();
+                return;
+            }
+
+            update.NonInputBias = value;
+        }
+        else
+        {
+            PrintNetworkConfigureUsage();
+            return;
+        }
+    }
+
+    if (!update.HasRequestedChanges())
+    {
+        PrintNetworkConfigureUsage();
+        return;
+    }
+
+    MiaIA::Core::NetworkParameterUpdateSnapshot result;
+
+    if (!MiaIAClient::ApplyNetworkParameterUpdate(update, result))
+    {
+        std::cout
+            << "Network parameter update failed. Check the current "
+               "network, values and training/debug state.\n";
+        return;
+    }
+
+    std::cout
+        << "Network parameters updated atomically.\n"
+        << "Hidden layers changed: " << result.HiddenLayersChanged
+        << "\nOutput layer changed: "
+        << (result.OutputLayerChanged ? "yes" : "no")
+        << "\nConnection weights changed: "
+        << result.ConnectionWeightsChanged
+        << "\nNeuron biases changed: "
+        << result.NeuronBiasesChanged << "\n";
 }
 
 void SetInput(const std::string& command)
@@ -3465,6 +3593,10 @@ MiaIA::CLI::MiaIACommandProcessor::Execute(
     else if (command.rfind("create", 0) == 0)
     {
         CreateNetwork(command);
+    }
+    else if (command.rfind("network", 0) == 0)
+    {
+        ConfigureNetwork(command);
     }
     else if (command.rfind("input", 0) == 0)
     {

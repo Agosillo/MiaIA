@@ -113,6 +113,24 @@ struct IDE_API FMiaIANetworkSnapshot
 };
 
 USTRUCT(BlueprintType)
+struct IDE_API FMiaIANetworkParameterUpdateResult
+{
+    GENERATED_BODY()
+
+    UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
+    int64 HiddenLayersChanged{};
+
+    UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
+    bool bOutputLayerChanged{};
+
+    UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
+    int64 ConnectionWeightsChanged{};
+
+    UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
+    int64 NeuronBiasesChanged{};
+};
+
+USTRUCT(BlueprintType)
 struct IDE_API FMiaIALayerOverview
 {
     GENERATED_BODY()

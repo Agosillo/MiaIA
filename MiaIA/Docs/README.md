@@ -23,7 +23,7 @@ The project is currently in its foundation stage. The C++ engine, public SDK fac
 | --- | --- |
 | Network model | Ordered feed-forward layers, neurons, biases, weighted connections, and editable activations |
 | Activations | Sigmoid, ReLU, Tanh, and Linear |
-| Creation | Configurable hidden/output activations, uniform initial weights, and non-input biases with backward-compatible defaults |
+| Creation and editing | Configurable dense initialization plus transactional existing-network parameter updates with backward-compatible defaults |
 | Execution | Input assignment and forward propagation |
 | Inference | Direct input-to-output prediction through SDK and Console |
 | Inspection | Network, dataset, focused neuron/connection debug, gradient, session-history, and completed-step snapshots |

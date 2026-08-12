@@ -168,6 +168,26 @@ Dense size grows primarily with connections. For `I` inputs, hidden width `H`, `
 
 Calling `create` without arguments currently uses the Console defaults `10 32 2 3` together with the initialization defaults above. Once a shape is started, all four positional values are required before any optional argument. Supplying the full configuration explicitly is recommended because it makes the experiment reproducible and clear.
 
+### `network configure`
+
+```text
+network configure
+        [--hidden-activation sigmoid|relu|tanh|linear]
+        [--output-activation sigmoid|relu|tanh|linear]
+        [--weight <value>] [--bias <value>]
+```
+
+Atomically changes one or more parameter groups in the current network. Omitted options preserve their current values. At least one option is required.
+
+```text
+network configure --hidden-activation tanh --output-activation linear
+network configure --weight 0.01 --bias 0
+```
+
+The Engine applies the complete request to a candidate copy, validates it, and publishes it only when every requested value is valid. Input activations and biases are never changed. The command reports the number of hidden layers, output layers, connection weights, and neuron biases that actually changed.
+
+Changing activation functions preserves current weights and biases. In contrast, `--weight` replaces **every** connection weight and `--bias` replaces **every** hidden and output bias. Using either option after training therefore discards the corresponding learned parameter values. Network mutation is rejected while automatic training or a phase-debug transaction owns the model.
+
 ### `input`
 
 ```text

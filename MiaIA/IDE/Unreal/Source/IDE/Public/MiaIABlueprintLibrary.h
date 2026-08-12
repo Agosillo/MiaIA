@@ -52,6 +52,18 @@ public:
         double InitialWeight,
         double InitialBias);
 
+    UFUNCTION(BlueprintCallable, Category = "MiaIA|Network")
+    static bool ConfigureNetworkParameters(
+        bool bUpdateHiddenActivation,
+        EMiaIAActivationType HiddenActivation,
+        bool bUpdateOutputActivation,
+        EMiaIAActivationType OutputActivation,
+        bool bUpdateConnectionWeights,
+        double ConnectionWeight,
+        bool bUpdateNonInputBiases,
+        double NonInputBias,
+        FMiaIANetworkParameterUpdateResult& Result);
+
     UFUNCTION(BlueprintPure, Category = "MiaIA|Network")
     static FMiaIANetworkSnapshot GetNetworkSnapshot();
 

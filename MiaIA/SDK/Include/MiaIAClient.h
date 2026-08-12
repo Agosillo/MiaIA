@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "../../Core/Public/NetworkSnapshot.h"
+#include "../../Core/Public/NetworkParameterUpdate.h"
 #include "../../Core/Public/ConnectionInspectionSnapshot.h"
 #include "../../Core/Public/NeuronInspectionSnapshot.h"
 #include "../../Core/Public/DatasetSummary.h"
@@ -62,6 +63,9 @@ namespace MiaIA::SDK
         static bool RemoveNeuron(std::uint64_t neuronId);
         static bool RemoveLayer(std::uint64_t layerId);
         static bool SetLayerActivation(std::uint64_t layerId, Core::ActivationType activation);
+        static bool ApplyNetworkParameterUpdate(
+            const Core::NetworkParameterUpdate& update,
+            Core::NetworkParameterUpdateSnapshot& result);
         static bool GetConnectionWeight(std::uint64_t connectionId, double& weight);
         static bool CreateDenseNetwork(int inputCount, int hiddenCount, int hiddenLayers, int outputCount);
         static bool CreateDenseNetwork(

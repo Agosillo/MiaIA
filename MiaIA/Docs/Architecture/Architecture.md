@@ -108,6 +108,8 @@ The dense network factory currently creates:
 
 Dense creation is a transactional batch operation. The factory rejects unsupported activation values and non-finite parameters, calculates neuron and connection counts with checked arithmetic, reserves the required storage, constructs the graph directly, validates it once, and only then replaces the public network. The atomic `NetworkEditor` methods retain their stricter per-operation checks for interactive edits; repeatedly calling them is intentionally not the implementation path for generated dense graphs.
 
+`NetworkParameterUpdate` provides the corresponding batch contract for an existing network. Every field is optional, allowing one request to change hidden activation, output activation, all connection weights, and all non-input biases together. `NetworkParameters` applies the request to a candidate copy, validates it, and publishes both the network and a count-based result only after success. Layer zero is never modified. The SDK applies its normal training/debug mutation guard before entering this Engine operation.
+
 For `I` inputs, hidden width `H`, `L` hidden layers, and `O` outputs, the neuron count is `I + L*H + O`. With at least one hidden layer, the connection count is `I*H + (L-1)*H*H + H*O`; without hidden layers it is `I*O`.
 
 `NetworkSnapshot` contains every neuron and connection. `NetworkOverviewSnapshot` is the lightweight inspection boundary for clients that first need layer metadata and aggregate counts before deciding whether a complete graph copy is appropriate.

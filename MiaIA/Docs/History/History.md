@@ -154,8 +154,14 @@ Dense creation gained one shared Core configuration for hidden-layer activation,
 
 The SDK overload, shared CLI `create` options, and Unreal `Create Configured Dense Network` node expose the same contract without duplicating factory logic. Input values remain raw and layer zero is not activation-configurable. Random initialization and preprocessing policies remain deliberately separate future concerns.
 
+### Transactional parameter reconfiguration
+
+Existing networks gained a batch parameter-update contract above the single-element editing operations. A request can independently replace hidden activation types, the output activation type, every connection weight, and every non-input bias. Engine applies the complete request to a candidate network, validates it, and publishes both the network and change counts only after success. Invalid, empty, or training/debug-blocked requests preserve both the public network and the caller's previous result.
+
+The SDK, shared CLI `network configure` command, and Unreal `Configure Network Parameters` node expose the same operation. Layer zero remains untouched. Global weight and bias replacement is intentionally explicit because applying it to a trained network overwrites learned parameter values; fine-grained single-element operations remain available separately.
+
 ## Current position
 
-MiaIA can now create dense networks with explicit initialization choices, represent, execute, interchange, persist a `.mai` v1 project, inspect individual network relationships, evaluate, differentiate, debug one training step phase by phase, train through controlled foreground or background sessions, and navigate or compare the complete history of successful steps. It cannot yet persist visualization layouts or training history inside that project, retain complete hidden-neuron activations for every step, or deliver the planned complete graphical debugging experience.
+MiaIA can now create dense networks with explicit initialization choices, reconfigure existing parameters transactionally, represent, execute, interchange, persist a `.mai` v1 project, inspect individual network relationships, evaluate, differentiate, debug one training step phase by phase, train through controlled foreground or background sessions, and navigate or compare the complete history of successful steps. It cannot yet persist visualization layouts or training history inside that project, retain complete hidden-neuron activations for every step, or deliver the planned complete graphical debugging experience.
 
 Those next steps are tracked in the [Roadmap](../Roadmap/Roadmap.md).
