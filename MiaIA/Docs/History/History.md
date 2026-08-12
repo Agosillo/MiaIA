@@ -162,6 +162,16 @@ Existing networks gained a batch parameter-update contract above the single-elem
 
 The SDK, shared CLI `network configure` command, and Unreal `Configure Network Parameters` node expose the same operation. Layer zero remains untouched. Global weight and bias replacement is intentionally explicit because applying it to a trained network overwrites learned parameter values; fine-grained single-element operations remain available separately.
 
+### Targeted parameter editing
+
+Single-element parameter editing became consistent across the shared clients. `network set neuron-bias` and `network set connection-weight` address stable model IDs, while matching Blueprint functions allow graphical flows to use the same operations. The MiaIA Studio Inspector exposes the focused controls only for one selected editable element and explains why input-neuron biases are unavailable.
+
+The Engine owns finite-value, identifier, and input-layer rules; `MiaIAClient` owns the common training and phase-debug mutation guard. Unreal remains a forwarding and presentation layer, so Console, Blueprint, and Inspector requests cannot bypass the same model boundary.
+
+The Model Explorer was reorganized as an expandable hierarchy in the same panel update. Layers own their neuron rows, connections use an independent branch, and global expand/collapse actions avoid forcing complete long lists onto narrow windows. Selection from either topology renderer reveals the appropriate branch while compact mode continues to expose summaries only.
+
+Shared layout preferences then separated the layout axis from its layer direction. Re-selecting Horizontal or Vertical toggles Forward and Reverse, mirrors detailed and compact scenes consistently in 2D and 3D, persists the choice per user, clears obsolete manual positions, and reverses only the between-layer keyboard mapping so arrow navigation continues to follow the visible model.
+
 ## Current position
 
 MiaIA can now create dense networks with explicit initialization choices, reconfigure existing parameters transactionally, represent, execute, interchange, persist a `.mai` v1 project, inspect individual network relationships, evaluate, differentiate, debug one training step phase by phase, train through controlled foreground or background sessions, and navigate or compare the complete history of successful steps. It cannot yet persist visualization layouts or training history inside that project, retain complete hidden-neuron activations for every step, or deliver the planned complete graphical debugging experience.

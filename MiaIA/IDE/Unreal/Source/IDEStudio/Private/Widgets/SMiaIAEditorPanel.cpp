@@ -44,6 +44,8 @@ namespace
     constexpr TCHAR LayoutModeSettingsKey[] = TEXT("LayoutMode");
     constexpr TCHAR LayoutOrientationSettingsKey[] =
         TEXT("LayoutOrientation");
+    constexpr TCHAR LayoutDirectionSettingsKey[] =
+        TEXT("LayoutDirection");
     constexpr TCHAR ConnectionDisplaySettingsKey[] =
         TEXT("ConnectionDisplay");
     constexpr TCHAR NeuronScaleSettingsKey[] = TEXT("NeuronScale");
@@ -211,6 +213,17 @@ namespace
 
         if (GConfig->GetString(
             DataRefreshSettingsSection,
+            LayoutDirectionSettingsKey,
+            savedValue,
+            GGameUserSettingsIni) &&
+            savedValue.Equals(TEXT("Reverse"), ESearchCase::IgnoreCase))
+        {
+            settings.Layout.Direction =
+                MiaIA::Studio::StudioLayoutDirection::Reverse;
+        }
+
+        if (GConfig->GetString(
+            DataRefreshSettingsSection,
             ConnectionDisplaySettingsKey,
             savedValue,
             GGameUserSettingsIni))
@@ -279,6 +292,10 @@ namespace
             MiaIA::Studio::StudioLayoutOrientation::Vertical
             ? TEXT("Vertical")
             : TEXT("Horizontal");
+        const TCHAR* layoutDirection = Settings.Layout.Direction ==
+            MiaIA::Studio::StudioLayoutDirection::Reverse
+            ? TEXT("Reverse")
+            : TEXT("Forward");
         const TCHAR* connectionDisplay = TEXT("All");
 
         if (Settings.ConnectionDisplay ==
@@ -296,6 +313,11 @@ namespace
             DataRefreshSettingsSection,
             LayoutOrientationSettingsKey,
             layoutOrientation,
+            GGameUserSettingsIni);
+        GConfig->SetString(
+            DataRefreshSettingsSection,
+            LayoutDirectionSettingsKey,
+            layoutDirection,
             GGameUserSettingsIni);
         GConfig->SetString(
             DataRefreshSettingsSection,
@@ -1099,6 +1121,111 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
                         ]
                         + SVerticalBox::Slot()
                         .AutoHeight()
+                        .Padding(0.0f, 7.0f, 0.0f, 3.0f)
+                        [
+                            SNew(SHorizontalBox)
+                            .Visibility(
+                                this,
+                                &SMiaIAEditorPanel::NeuronBiasEditorVisibility)
+                            .IsEnabled(
+                                this,
+                                &SMiaIAEditorPanel::CanEditNetworkParameters)
+                            + SHorizontalBox::Slot()
+                            .FillWidth(1.0f)
+                            [
+                                SNew(SSpinBox<double>)
+                                .MinSliderValue(-1.0)
+                                .MaxSliderValue(1.0)
+                                .Delta(0.01)
+                                .Value_Lambda([this]()
+                                {
+                                    return PendingNeuronBias;
+                                })
+                                .OnValueChanged_Lambda([this](double value)
+                                {
+                                    PendingNeuronBias = value;
+                                    bPendingNeuronBiasDirty = true;
+                                })
+                                .ToolTipText(LOCTEXT(
+                                    "NeuronBiasEditorTooltip",
+                                    "Set the selected non-input neuron's bias."))
+                            ]
+                            + SHorizontalBox::Slot()
+                            .AutoWidth()
+                            .Padding(5.0f, 0.0f, 0.0f, 0.0f)
+                            [
+                                SNew(SButton)
+                                .ButtonStyle(&ButtonStyle)
+                                .Text(LOCTEXT("ApplyNeuronBias", "Apply bias"))
+                                .OnClicked(
+                                    this,
+                                    &SMiaIAEditorPanel::
+                                        HandleApplySelectedNeuronBias)
+                            ]
+                        ]
+                        + SVerticalBox::Slot()
+                        .AutoHeight()
+                        .Padding(0.0f, 4.0f)
+                        [
+                            SNew(STextBlock)
+                            .Visibility(
+                                this,
+                                &SMiaIAEditorPanel::
+                                    InputNeuronBiasNoticeVisibility)
+                            .Text(LOCTEXT(
+                                "InputNeuronBiasNotice",
+                                "Input neurons do not have an editable bias."))
+                            .AutoWrapText(true)
+                        ]
+                        + SVerticalBox::Slot()
+                        .AutoHeight()
+                        .Padding(0.0f, 7.0f, 0.0f, 3.0f)
+                        [
+                            SNew(SHorizontalBox)
+                            .Visibility(
+                                this,
+                                &SMiaIAEditorPanel::
+                                    ConnectionWeightEditorVisibility)
+                            .IsEnabled(
+                                this,
+                                &SMiaIAEditorPanel::CanEditNetworkParameters)
+                            + SHorizontalBox::Slot()
+                            .FillWidth(1.0f)
+                            [
+                                SNew(SSpinBox<double>)
+                                .MinSliderValue(-1.0)
+                                .MaxSliderValue(1.0)
+                                .Delta(0.01)
+                                .Value_Lambda([this]()
+                                {
+                                    return PendingConnectionWeight;
+                                })
+                                .OnValueChanged_Lambda([this](double value)
+                                {
+                                    PendingConnectionWeight = value;
+                                    bPendingConnectionWeightDirty = true;
+                                })
+                                .ToolTipText(LOCTEXT(
+                                    "ConnectionWeightEditorTooltip",
+                                    "Set the selected connection's weight."))
+                            ]
+                            + SHorizontalBox::Slot()
+                            .AutoWidth()
+                            .Padding(5.0f, 0.0f, 0.0f, 0.0f)
+                            [
+                                SNew(SButton)
+                                .ButtonStyle(&ButtonStyle)
+                                .Text(LOCTEXT(
+                                    "ApplyConnectionWeight",
+                                    "Apply weight"))
+                                .OnClicked(
+                                    this,
+                                    &SMiaIAEditorPanel::
+                                        HandleApplySelectedConnectionWeight)
+                            ]
+                        ]
+                        + SVerticalBox::Slot()
+                        .AutoHeight()
                         .Padding(0.0f, 3.0f)
                         [
                             SNew(STextBlock)
@@ -1782,6 +1909,43 @@ void SMiaIAEditorPanel::RefreshData()
             SelectedConnectionId,
             ConnectionInspection);
 
+    if (bHasNeuronInspection)
+    {
+        const int64 inspectedNeuronId =
+            NeuronInspection.Context.Neuron.Id;
+        if (PendingNeuronBiasId != inspectedNeuronId ||
+            !bPendingNeuronBiasDirty)
+        {
+            PendingNeuronBiasId = inspectedNeuronId;
+            PendingNeuronBias = NeuronInspection.Context.Neuron.Bias;
+            bPendingNeuronBiasDirty = false;
+        }
+    }
+    else
+    {
+        PendingNeuronBiasId = -1;
+        bPendingNeuronBiasDirty = false;
+    }
+
+    if (bHasConnectionInspection)
+    {
+        const int64 inspectedConnectionId =
+            ConnectionInspection.Connection.Id;
+        if (PendingConnectionWeightId != inspectedConnectionId ||
+            !bPendingConnectionWeightDirty)
+        {
+            PendingConnectionWeightId = inspectedConnectionId;
+            PendingConnectionWeight =
+                ConnectionInspection.Connection.Weight;
+            bPendingConnectionWeightDirty = false;
+        }
+    }
+    else
+    {
+        PendingConnectionWeightId = -1;
+        bPendingConnectionWeightDirty = false;
+    }
+
     SelectedLayerName.Reset();
 
     for (const FMiaIALayerSnapshot& layer : Network.Layers)
@@ -1938,13 +2102,93 @@ void SMiaIAEditorPanel::RebuildExplorer()
     }
 
     ExplorerContent->ClearChildren();
+
+    if (!bCompactTopology)
+    {
+        for (auto iterator = ExpandedExplorerLayerIds.CreateIterator();
+            iterator;
+            ++iterator)
+        {
+            const int64 layerId = *iterator;
+            if (!Network.Layers.ContainsByPredicate(
+                [layerId](const FMiaIALayerSnapshot& layer)
+                {
+                    return layer.Id == layerId;
+                }))
+            {
+                iterator.RemoveCurrent();
+            }
+        }
+
+        if (!bExplorerExpansionInitialized)
+        {
+            bExplorerExpansionInitialized = true;
+
+            if (!ExpandExplorerForNeuron(SelectedNeuronId))
+            {
+                const FMiaIALayerSnapshot* firstLayer =
+                    Network.Layers.FindByPredicate(
+                    [](const FMiaIALayerSnapshot& layer)
+                    {
+                        return !layer.Neurons.IsEmpty();
+                    });
+
+                if (firstLayer != nullptr)
+                {
+                    ExpandedExplorerLayerIds.Add(firstLayer->Id);
+                }
+            }
+        }
+    }
+
     ExplorerContent->AddSlot()
     .AutoHeight()
     .Padding(2.0f, 4.0f, 2.0f, 8.0f)
     [
-        SNew(STextBlock)
-        .Text(LOCTEXT("Explorer", "Model explorer"))
-        .Font(FAppStyle::GetFontStyle(TEXT("NormalFontBold")))
+        SNew(SHorizontalBox)
+        + SHorizontalBox::Slot()
+        .FillWidth(1.0f)
+        .VAlign(VAlign_Center)
+        [
+            SNew(STextBlock)
+            .Text(LOCTEXT("Explorer", "Model explorer"))
+            .Font(FAppStyle::GetFontStyle(TEXT("NormalFontBold")))
+        ]
+        + SHorizontalBox::Slot()
+        .AutoWidth()
+        .Padding(3.0f, 0.0f)
+        [
+            SNew(SButton)
+            .Visibility(bCompactTopology
+                ? EVisibility::Collapsed
+                : EVisibility::Visible)
+            .ButtonStyle(&ExplorerButtonStyle)
+            .ContentPadding(FMargin(4.0f, 2.0f))
+            .Text(LOCTEXT("ExpandExplorerAll", "Expand"))
+            .ToolTipText(LOCTEXT(
+                "ExpandExplorerAllTooltip",
+                "Expand every layer and the connection list."))
+            .OnClicked(
+                this,
+                &SMiaIAEditorPanel::HandleExpandAllExplorer)
+        ]
+        + SHorizontalBox::Slot()
+        .AutoWidth()
+        [
+            SNew(SButton)
+            .Visibility(bCompactTopology
+                ? EVisibility::Collapsed
+                : EVisibility::Visible)
+            .ButtonStyle(&ExplorerButtonStyle)
+            .ContentPadding(FMargin(4.0f, 2.0f))
+            .Text(LOCTEXT("CollapseExplorerAll", "Collapse"))
+            .ToolTipText(LOCTEXT(
+                "CollapseExplorerAllTooltip",
+                "Collapse every layer and the connection list."))
+            .OnClicked(
+                this,
+                &SMiaIAEditorPanel::HandleCollapseAllExplorer)
+        ]
     ];
 
     if (bCompactTopology)
@@ -1987,39 +2231,58 @@ void SMiaIAEditorPanel::RebuildExplorer()
 
     for (const FMiaIALayerSnapshot& layer : Network.Layers)
     {
+        const bool layerExpanded =
+            ExpandedExplorerLayerIds.Contains(layer.Id);
+        const int64 layerId = layer.Id;
+
         ExplorerContent->AddSlot()
         .AutoHeight()
-        .Padding(2.0f, 5.0f)
+        .Padding(2.0f, 3.0f)
         [
+            SNew(SButton)
+            .ButtonStyle(&ExplorerButtonStyle)
+            .ContentPadding(FMargin(4.0f, 3.0f))
+            .OnClicked(
+                this,
+                &SMiaIAEditorPanel::HandleToggleExplorerLayer,
+                layerId)
+            [
             SNew(STextBlock)
             .Text(FText::Format(
-                LOCTEXT("LayerEntry", "{0}  ·  {1} neurons"),
+                LOCTEXT("LayerTreeEntry", "{0}  {1}  |  {2} neurons"),
+                layerExpanded
+                    ? LOCTEXT("ExpandedTreeMarker", "[-]")
+                    : LOCTEXT("CollapsedTreeMarker", "[+]"),
                 FText::FromString(layer.Name),
                 FText::AsNumber(layer.Neurons.Num())))
+            ]
         ];
 
-        for (const FMiaIANeuronSnapshot& neuron : layer.Neurons)
+        if (layerExpanded)
         {
-            const int64 neuronId = neuron.Id;
-            ExplorerContent->AddSlot()
-            .AutoHeight()
-            .Padding(12.0f, 1.0f, 2.0f, 1.0f)
-            [
-                SNew(SButton)
-                .ButtonStyle(&ExplorerButtonStyle)
-                .ContentPadding(FMargin(4.0f, 2.0f))
-                .OnClicked_Lambda([this, neuronId]()
-                {
-                    SelectNeuron(neuronId);
-                    return FReply::Handled();
-                })
+            for (const FMiaIANeuronSnapshot& neuron : layer.Neurons)
+            {
+                const int64 neuronId = neuron.Id;
+                ExplorerContent->AddSlot()
+                .AutoHeight()
+                .Padding(16.0f, 1.0f, 2.0f, 1.0f)
                 [
-                    SNew(STextBlock)
-                    .Text(FText::Format(
-                        LOCTEXT("NeuronEntry", "Neuron #{0}"),
-                        FText::AsNumber(neuronId)))
-                ]
-            ];
+                    SNew(SButton)
+                    .ButtonStyle(&ExplorerButtonStyle)
+                    .ContentPadding(FMargin(4.0f, 2.0f))
+                    .OnClicked_Lambda([this, neuronId]()
+                    {
+                        SelectNeuron(neuronId);
+                        return FReply::Handled();
+                    })
+                    [
+                        SNew(STextBlock)
+                        .Text(FText::Format(
+                            LOCTEXT("NeuronTreeEntry", "- Neuron #{0}"),
+                            FText::AsNumber(neuronId)))
+                    ]
+                ];
+            }
         }
     }
 
@@ -2029,43 +2292,153 @@ void SMiaIAEditorPanel::RebuildExplorer()
         .AutoHeight()
         .Padding(2.0f, 10.0f, 2.0f, 5.0f)
         [
-            SNew(STextBlock)
-            .Text(FText::Format(
-                LOCTEXT("ConnectionsEntry", "Connections  |  {0}"),
-                FText::AsNumber(Network.Connections.Num())))
+            SNew(SButton)
+            .ButtonStyle(&ExplorerButtonStyle)
+            .ContentPadding(FMargin(4.0f, 3.0f))
+            .OnClicked(
+                this,
+                &SMiaIAEditorPanel::HandleToggleExplorerConnections)
+            [
+                SNew(STextBlock)
+                .Text(FText::Format(
+                    LOCTEXT(
+                        "ConnectionsTreeEntry",
+                        "{0}  Connections  |  {1}"),
+                    bExplorerConnectionsExpanded
+                        ? LOCTEXT("ExpandedConnectionsMarker", "[-]")
+                        : LOCTEXT("CollapsedConnectionsMarker", "[+]"),
+                    FText::AsNumber(Network.Connections.Num())))
+            ]
         ];
 
-        for (const FMiaIAConnectionSnapshot& connection :
-            Network.Connections)
+        if (bExplorerConnectionsExpanded)
         {
-            const int64 connectionId = connection.Id;
-            const int64 fromNeuron = connection.FromNeuron;
-            const int64 toNeuron = connection.ToNeuron;
-            ExplorerContent->AddSlot()
-            .AutoHeight()
-            .Padding(12.0f, 1.0f, 2.0f, 1.0f)
-            [
-                SNew(SButton)
-                .ButtonStyle(&ExplorerButtonStyle)
-                .ContentPadding(FMargin(4.0f, 2.0f))
-                .OnClicked_Lambda([this, connectionId]()
-                {
-                    SelectConnection(connectionId);
-                    return FReply::Handled();
-                })
+            for (const FMiaIAConnectionSnapshot& connection :
+                Network.Connections)
+            {
+                const int64 connectionId = connection.Id;
+                const int64 fromNeuron = connection.FromNeuron;
+                const int64 toNeuron = connection.ToNeuron;
+                ExplorerContent->AddSlot()
+                .AutoHeight()
+                .Padding(16.0f, 1.0f, 2.0f, 1.0f)
                 [
-                    SNew(STextBlock)
-                    .Text(FText::Format(
-                        LOCTEXT(
-                            "ConnectionEntry",
-                            "#{0}: {1} -> {2}"),
-                        FText::AsNumber(connectionId),
-                        FText::AsNumber(fromNeuron),
-                        FText::AsNumber(toNeuron)))
-                ]
-            ];
+                    SNew(SButton)
+                    .ButtonStyle(&ExplorerButtonStyle)
+                    .ContentPadding(FMargin(4.0f, 2.0f))
+                    .OnClicked_Lambda([this, connectionId]()
+                    {
+                        SelectConnection(connectionId);
+                        return FReply::Handled();
+                    })
+                    [
+                        SNew(STextBlock)
+                        .Text(FText::Format(
+                            LOCTEXT(
+                                "ConnectionTreeChildEntry",
+                                "- #{0}: {1} -> {2}"),
+                            FText::AsNumber(connectionId),
+                            FText::AsNumber(fromNeuron),
+                            FText::AsNumber(toNeuron)))
+                    ]
+                ];
+            }
         }
     }
+}
+
+bool SMiaIAEditorPanel::ExpandExplorerForNeuron(int64 NeuronId)
+{
+    if (NeuronId < 0)
+    {
+        return false;
+    }
+
+    for (const FMiaIALayerSnapshot& layer : Network.Layers)
+    {
+        if (layer.Neurons.ContainsByPredicate(
+            [NeuronId](const FMiaIANeuronSnapshot& neuron)
+            {
+                return neuron.Id == NeuronId;
+            }))
+        {
+            if (ExpandedExplorerLayerIds.Contains(layer.Id))
+            {
+                return false;
+            }
+
+            ExpandedExplorerLayerIds.Add(layer.Id);
+            return true;
+        }
+    }
+
+    return false;
+}
+
+bool SMiaIAEditorPanel::ExpandExplorerForNeurons(
+    const TSet<int64>& NeuronIds)
+{
+    bool changed = false;
+
+    for (const FMiaIALayerSnapshot& layer : Network.Layers)
+    {
+        if (!ExpandedExplorerLayerIds.Contains(layer.Id) &&
+            layer.Neurons.ContainsByPredicate(
+            [&NeuronIds](const FMiaIANeuronSnapshot& neuron)
+            {
+                return NeuronIds.Contains(neuron.Id);
+            }))
+        {
+            ExpandedExplorerLayerIds.Add(layer.Id);
+            changed = true;
+        }
+    }
+
+    return changed;
+}
+
+FReply SMiaIAEditorPanel::HandleToggleExplorerLayer(int64 LayerId)
+{
+    if (ExpandedExplorerLayerIds.Contains(LayerId))
+    {
+        ExpandedExplorerLayerIds.Remove(LayerId);
+    }
+    else
+    {
+        ExpandedExplorerLayerIds.Add(LayerId);
+    }
+
+    RebuildExplorer();
+    return FReply::Handled();
+}
+
+FReply SMiaIAEditorPanel::HandleToggleExplorerConnections()
+{
+    bExplorerConnectionsExpanded = !bExplorerConnectionsExpanded;
+    RebuildExplorer();
+    return FReply::Handled();
+}
+
+FReply SMiaIAEditorPanel::HandleExpandAllExplorer()
+{
+    for (const FMiaIALayerSnapshot& layer : Network.Layers)
+    {
+        ExpandedExplorerLayerIds.Add(layer.Id);
+    }
+
+    bExplorerConnectionsExpanded = !Network.Connections.IsEmpty();
+    bExplorerExpansionInitialized = true;
+    RebuildExplorer();
+    return FReply::Handled();
+}
+
+FReply SMiaIAEditorPanel::HandleCollapseAllExplorer()
+{
+    ExpandedExplorerLayerIds.Reset();
+    bExplorerConnectionsExpanded = false;
+    bExplorerExpansionInitialized = true;
+    RebuildExplorer();
+    return FReply::Handled();
 }
 
 void SMiaIAEditorPanel::SelectNeuron(int64 NeuronId)
@@ -2079,7 +2452,14 @@ void SMiaIAEditorPanel::SelectNeuron(int64 NeuronId)
     }
 
     SelectedConnectionId = -1;
+    const bool explorerChanged = ExpandExplorerForNeuron(NeuronId);
+    bExplorerExpansionInitialized = true;
     RefreshData();
+
+    if (explorerChanged)
+    {
+        RebuildExplorer();
+    }
 }
 
 void SMiaIAEditorPanel::SelectNeurons(
@@ -2101,7 +2481,15 @@ void SMiaIAEditorPanel::SelectNeurons(
     }
 
     SelectedConnectionId = -1;
+    const bool explorerChanged =
+        ExpandExplorerForNeurons(SelectedNeuronIds);
+    bExplorerExpansionInitialized = true;
     RefreshData();
+
+    if (explorerChanged)
+    {
+        RebuildExplorer();
+    }
 }
 
 void SMiaIAEditorPanel::NavigateNeuron(
@@ -2225,7 +2613,21 @@ void SMiaIAEditorPanel::SelectConnection(int64 ConnectionId)
     SelectedConnectionId = ConnectionId;
     SelectedNeuronId = -1;
     SelectedNeuronIds.Reset();
+    bool explorerChanged = false;
+
+    if (ConnectionId >= 0)
+    {
+        explorerChanged = !bExplorerConnectionsExpanded;
+        bExplorerConnectionsExpanded = true;
+        bExplorerExpansionInitialized = true;
+    }
+
     RefreshData();
+
+    if (explorerChanged)
+    {
+        RebuildExplorer();
+    }
 }
 
 const FMiaIANeuronSnapshot* SMiaIAEditorPanel::FindNeuron(
@@ -2353,10 +2755,28 @@ TSharedRef<SWidget> SMiaIAEditorPanel::BuildLayoutMenu()
                 [
                     SNew(SButton)
                     .ButtonStyle(&ButtonStyle)
-                    .Text(LOCTEXT("HorizontalLayout", "Horizontal"))
+                    .Text_Lambda([this]()
+                    {
+                        if (VisualizationSettings.Layout.Orientation !=
+                            MiaIA::Studio::StudioLayoutOrientation::Horizontal)
+                        {
+                            return LOCTEXT(
+                                "HorizontalLayout",
+                                "Horizontal");
+                        }
+
+                        return VisualizationSettings.Layout.Direction ==
+                            MiaIA::Studio::StudioLayoutDirection::Reverse
+                            ? LOCTEXT(
+                                "HorizontalReverseLayout",
+                                "< Horizontal")
+                            : LOCTEXT(
+                                "HorizontalForwardLayout",
+                                "Horizontal >");
+                    })
                     .ToolTipText(LOCTEXT(
                         "HorizontalLayoutTooltip",
-                        "Arrange layers from left to right and neurons from top to bottom."))
+                        "Use horizontal flow. Click the active orientation again to reverse its layer direction."))
                     .OnClicked(
                         this,
                         &SMiaIAEditorPanel::SelectLayoutOrientation,
@@ -2368,10 +2788,28 @@ TSharedRef<SWidget> SMiaIAEditorPanel::BuildLayoutMenu()
                 [
                     SNew(SButton)
                     .ButtonStyle(&ButtonStyle)
-                    .Text(LOCTEXT("VerticalLayout", "Vertical"))
+                    .Text_Lambda([this]()
+                    {
+                        if (VisualizationSettings.Layout.Orientation !=
+                            MiaIA::Studio::StudioLayoutOrientation::Vertical)
+                        {
+                            return LOCTEXT(
+                                "VerticalLayout",
+                                "Vertical");
+                        }
+
+                        return VisualizationSettings.Layout.Direction ==
+                            MiaIA::Studio::StudioLayoutDirection::Reverse
+                            ? LOCTEXT(
+                                "VerticalReverseLayout",
+                                "Vertical ^")
+                            : LOCTEXT(
+                                "VerticalForwardLayout",
+                                "Vertical v");
+                    })
                     .ToolTipText(LOCTEXT(
                         "VerticalLayoutTooltip",
-                        "Arrange layers from top to bottom and neurons from left to right."))
+                        "Use vertical flow. Click the active orientation again to reverse its layer direction."))
                     .OnClicked(
                         this,
                         &SMiaIAEditorPanel::SelectLayoutOrientation,
@@ -2554,7 +2992,21 @@ FReply SMiaIAEditorPanel::SelectLayoutMode(
 FReply SMiaIAEditorPanel::SelectLayoutOrientation(
     MiaIA::Studio::StudioLayoutOrientation InOrientation)
 {
-    VisualizationSettings.Layout.Orientation = InOrientation;
+    if (VisualizationSettings.Layout.Orientation == InOrientation)
+    {
+        VisualizationSettings.Layout.Direction =
+            VisualizationSettings.Layout.Direction ==
+                MiaIA::Studio::StudioLayoutDirection::Forward
+            ? MiaIA::Studio::StudioLayoutDirection::Reverse
+            : MiaIA::Studio::StudioLayoutDirection::Forward;
+    }
+    else
+    {
+        VisualizationSettings.Layout.Orientation = InOrientation;
+        VisualizationSettings.Layout.Direction =
+            MiaIA::Studio::StudioLayoutDirection::Forward;
+    }
+
     SaveVisualizationSettings(VisualizationSettings);
     NetworkView->SetVisualizationSettings(VisualizationSettings);
     Network3DView->SetVisualizationSettings(VisualizationSettings);
@@ -2702,6 +3154,48 @@ FReply SMiaIAEditorPanel::HandleAdvanceDebug()
 FReply SMiaIAEditorPanel::HandleCancelDebug()
 {
     UMiaIABlueprintLibrary::CancelDebug();
+    RefreshData();
+    return FReply::Handled();
+}
+
+FReply SMiaIAEditorPanel::HandleApplySelectedNeuronBias()
+{
+    if (PendingNeuronBiasId < 0 ||
+        !FMath::IsFinite(PendingNeuronBias) ||
+        !UMiaIABlueprintLibrary::SetNeuronBias(
+            PendingNeuronBiasId,
+            PendingNeuronBias))
+    {
+        ShowDialog(
+            LOCTEXT("NeuronBiasUpdateFailed", "Bias Update Failed"),
+            LOCTEXT(
+                "NeuronBiasUpdateFailedBody",
+                "The bias could not be updated. Input neurons are not editable, and parameter changes are unavailable while training is running or phase debug is active."));
+        return FReply::Handled();
+    }
+
+    bPendingNeuronBiasDirty = false;
+    RefreshData();
+    return FReply::Handled();
+}
+
+FReply SMiaIAEditorPanel::HandleApplySelectedConnectionWeight()
+{
+    if (PendingConnectionWeightId < 0 ||
+        !FMath::IsFinite(PendingConnectionWeight) ||
+        !UMiaIABlueprintLibrary::SetConnectionWeight(
+            PendingConnectionWeightId,
+            PendingConnectionWeight))
+    {
+        ShowDialog(
+            LOCTEXT("ConnectionWeightUpdateFailed", "Weight Update Failed"),
+            LOCTEXT(
+                "ConnectionWeightUpdateFailedBody",
+                "The weight could not be updated. Check the selected connection and value; parameter changes are unavailable while training is running or phase debug is active."));
+        return FReply::Handled();
+    }
+
+    bPendingConnectionWeightDirty = false;
     RefreshData();
     return FReply::Handled();
 }
@@ -3730,9 +4224,9 @@ FReply SMiaIAEditorPanel::HandleQuickHelp()
             "Drag empty space: select neurons with a rectangle.\n"
             "Ctrl + rectangle: add neurons to the current selection.\n"
             "Drag a selected neuron: move the complete selected group.\n"
-            "Click the topology, then use the arrow keys in the visible direction; their layer/neuron meaning follows Horizontal or Vertical flow.\n"
+            "Click the topology, then use the arrow keys in the visible direction; their layer/neuron meaning follows Horizontal or Vertical flow and its Forward or Reverse direction.\n"
             "Mouse wheel: zoom. Middle drag: pan. Right drag pans in 2D and orbits in 3D.\n"
-            "Use Layout for Expanded or Packed placement, Horizontal or Vertical flow, uniform neuron size, minimum gaps, and All or Selected connections. Packed with zero gaps makes symmetric nodes adjacent without overlap.\n\n"
+            "Use Layout for Expanded or Packed placement, Horizontal or Vertical flow, uniform neuron size, minimum gaps, and All or Selected connections. Click the active orientation again to mirror the layer direction. Packed with zero gaps makes symmetric nodes adjacent without overlap.\n\n"
             "INSPECTION AND DEBUG\n"
             "The Inspector follows the current element or group. Use Start debug and Step phase to inspect forward, backward, update, verify, and commit states.\n\n"
 
@@ -4102,6 +4596,15 @@ bool SMiaIAEditorPanel::CanCancelDebug() const
         Debug.Phase != EMiaIATrainingDebugPhase::Committed;
 }
 
+bool SMiaIAEditorPanel::CanEditNetworkParameters() const
+{
+    const bool debugOwnsCandidate =
+        Debug.Phase >= EMiaIATrainingDebugPhase::BeforeForward &&
+        Debug.Phase < EMiaIATrainingDebugPhase::Committed;
+    return Session.Status != EMiaIATrainingSessionStatus::Running &&
+        !debugOwnsCandidate;
+}
+
 FText SMiaIAEditorPanel::SessionStatusText() const
 {
     return FText::Format(
@@ -4374,6 +4877,31 @@ FText SMiaIAEditorPanel::SelectionUpdateText() const
             FText::AsNumber(DebugNeuron.Delta),
             FText::AsNumber(DebugNeuron.UpdatedBias))
         : LOCTEXT("BiasUpdateUnavailable", "Bias update: unavailable");
+}
+
+EVisibility SMiaIAEditorPanel::NeuronBiasEditorVisibility() const
+{
+    return bHasNeuronInspection &&
+        SelectedConnectionId < 0 &&
+        NeuronInspection.Context.LayerOrder > 0
+        ? EVisibility::Visible
+        : EVisibility::Collapsed;
+}
+
+EVisibility SMiaIAEditorPanel::InputNeuronBiasNoticeVisibility() const
+{
+    return bHasNeuronInspection &&
+        SelectedConnectionId < 0 &&
+        NeuronInspection.Context.LayerOrder == 0
+        ? EVisibility::Visible
+        : EVisibility::Collapsed;
+}
+
+EVisibility SMiaIAEditorPanel::ConnectionWeightEditorVisibility() const
+{
+    return bHasConnectionInspection && SelectedConnectionId >= 0
+        ? EVisibility::Visible
+        : EVisibility::Collapsed;
 }
 
 FText SMiaIAEditorPanel::SelectionRelationshipsText() const

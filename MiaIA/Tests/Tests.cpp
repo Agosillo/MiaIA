@@ -131,6 +131,27 @@ int main()
         assert(verticalCompact.Nodes[0].Position.Y == 0.0);
         assert(verticalCompact.Nodes[2].Position.Y == 1.0);
 
+        StudioLayoutPreferences reversePreferences;
+        reversePreferences.Direction =
+            StudioLayoutDirection::Reverse;
+        const auto reverseCompact =
+            StudioTopologyBuilder::BuildCompact(
+                overview,
+                StudioViewMode::ThreeDimensional,
+                reversePreferences);
+        assert(reverseCompact.Nodes[0].Position.X == 1.0);
+        assert(reverseCompact.Nodes[2].Position.X == 0.0);
+
+        reversePreferences.Orientation =
+            StudioLayoutOrientation::Vertical;
+        const auto reverseVerticalCompact =
+            StudioTopologyBuilder::BuildCompact(
+                overview,
+                StudioViewMode::ThreeDimensional,
+                reversePreferences);
+        assert(reverseVerticalCompact.Nodes[0].Position.Y == 1.0);
+        assert(reverseVerticalCompact.Nodes[2].Position.Y == 0.0);
+
         const StudioLayoutPreferences expandedPreferences;
         const auto expandedFirst =
             StudioTopologyBuilder::DetailedLayoutPosition(
@@ -147,6 +168,18 @@ int main()
                 3,
                 expandedPreferences);
         assert(std::abs(expandedSecond.Y - expandedFirst.Y) >= 1.0);
+
+        reversePreferences.Orientation =
+            StudioLayoutOrientation::Horizontal;
+        const auto reverseFirst =
+            StudioTopologyBuilder::DetailedLayoutPosition(
+                0,
+                3,
+                0,
+                3,
+                reversePreferences);
+        assert(reverseFirst.X == 5.0);
+        assert(reverseFirst.Y == expandedFirst.Y);
 
         const auto verticalLayerPosition =
             StudioTopologyBuilder::DetailedLayoutPosition(
@@ -354,13 +387,36 @@ int main()
     assert(updatedNetwork.Layers[2].Neurons[0].Bias == -0.1);
     assert(updatedNetwork.Connections[0].Weight == 0.2);
 
+    const auto targetedBiasUpdate = MiaIACommandProcessor::Execute(
+        "network set neuron-bias 1003 0.35");
+    assert(targetedBiasUpdate.Output.find("Neuron bias updated") !=
+        std::string::npos);
+    assert(MiaIAClient::GetSnapshot().Layers[1].Neurons[0].Bias == 0.35);
+
+    const auto targetedWeightUpdate = MiaIACommandProcessor::Execute(
+        "network set connection-weight 1 -0.45");
+    assert(targetedWeightUpdate.Output.find("Connection weight updated") !=
+        std::string::npos);
+    assert(MiaIAClient::GetSnapshot().Connections[0].Weight == -0.45);
+
+    assert(MiaIACommandProcessor::Execute(
+        "network set neuron-bias 1001 1").Output.find("failed") !=
+        std::string::npos);
+    assert(MiaIAClient::GetSnapshot().Layers[0].Neurons[0].Bias == 0.0);
+    assert(MiaIACommandProcessor::Execute(
+        "network set connection-weight 999999 1").Output.find("failed") !=
+        std::string::npos);
+    assert(MiaIACommandProcessor::Execute(
+        "network set neuron-bias invalid 1").Output.find("Usage:") !=
+        std::string::npos);
+
     assert(MiaIACommandProcessor::Execute(
         "network configure --weight invalid").Output.find(
             "Usage:") != std::string::npos);
     assert(MiaIACommandProcessor::Execute(
         "network configure").Output.find("Usage:") !=
         std::string::npos);
-    assert(MiaIAClient::GetSnapshot().Connections[0].Weight == 0.2);
+    assert(MiaIAClient::GetSnapshot().Connections[0].Weight == -0.45);
 
     assert(MiaIACommandProcessor::Execute(
         "create 2 3 1 1 --hidden-activation invalid").Output.find(
@@ -452,6 +508,10 @@ int main()
     assert(configureArguments.size() == 1);
     assert(configureArguments[0].Syntax.find("--weight") !=
         std::string::npos);
+
+    const auto targetedNetworkActions =
+        MiaIACommandProcessor::GetSuggestions("network set ");
+    assert(targetedNetworkActions.size() == 2);
 
     const auto limitedSuggestions =
         MiaIACommandProcessor::GetSuggestions("", 3);
@@ -769,13 +829,15 @@ int main()
     assert(!MiaIAClient::AddConnection(2, 1001, 9999, 0.5));
     
     assert(MiaIAClient::SetNeuronActivation(1001, 0.95));
-    assert(MiaIAClient::SetNeuronBias(1001, 0.85));
+    assert(!MiaIAClient::SetNeuronBias(1001, 0.85));
+    assert(MiaIAClient::SetNeuronBias(2001, 0.85));
     assert(MiaIAClient::SetConnectionWeight(1, 0.65));
 
     const auto snapshot = MiaIAClient::GetSnapshot();
 
     assert(snapshot.Layers[0].Neurons[0].Activation == 0.95);
-    assert(snapshot.Layers[0].Neurons[0].Bias == 0.85);
+    assert(snapshot.Layers[0].Neurons[0].Bias == 0.75);
+    assert(snapshot.Layers[1].Neurons[0].Bias == 0.85);
     assert(snapshot.Connections[0].Weight == 0.65);
 
 
@@ -3060,6 +3122,7 @@ int main()
     assert(debug.SampleIndex == 0);
     assert(debug.CandidateNetwork.Connections[0].Weight == 0.0);
     assert(!MiaIAClient::SetConnectionWeight(1, 42.0));
+    assert(!MiaIAClient::SetNeuronBias(1002, 42.0));
     MiaIA::Core::NetworkParameterUpdate blockedUpdate;
     blockedUpdate.ConnectionWeight = 42.0;
     MiaIA::Core::NetworkParameterUpdateSnapshot blockedResult;
@@ -3069,6 +3132,7 @@ int main()
         blockedResult));
     assert(blockedResult.ConnectionWeightsChanged == 999);
     assert(MiaIAClient::GetSnapshot().Connections[0].Weight == 0.0);
+    assert(MiaIAClient::GetSnapshot().Layers[1].Neurons[0].Bias == 0.0);
     assert(MiaIAClient::TryGetTrainingDebugNeuron(
         1002,
         debugNeuron));

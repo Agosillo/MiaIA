@@ -109,8 +109,11 @@ const std::vector<CommandCatalogEntry>& CommandCatalog()
     {
         { "help", "help", "Show every available command.", true },
         { "create", "create <inputs> <hidden-width> <hidden-layers> <outputs> [--hidden-activation <type>] [--output-activation <type>] [--weight <value>] [--bias <value>]", "Create a configurable dense feed-forward network.", true },
-        { "network", "network configure <options>", "Modify parameters of the current network.", false },
+        { "network", "network <configure|set>", "Modify parameters of the current network.", false },
         { "network configure", "network configure [--hidden-activation <type>] [--output-activation <type>] [--weight <value>] [--bias <value>]", "Atomically update existing network parameters.", true },
+        { "network set", "network set <neuron-bias|connection-weight>", "Modify one identified network parameter.", false },
+        { "network set neuron-bias", "network set neuron-bias <neuron-id> <value>", "Set one non-input neuron bias.", true },
+        { "network set connection-weight", "network set connection-weight <connection-id> <value>", "Set one connection weight.", true },
         { "input", "input <value...>", "Assign values to the input layer.", true },
         { "predict", "predict <value...>", "Run inference for one input vector.", true },
         { "import", "import onnx <path>", "Import a model from a supported format.", false },
@@ -224,6 +227,13 @@ void PrintHelp()
         << "      Example:\n"
         << "        network configure --hidden-activation tanh "
            "--weight 0.01\n\n"
+
+        << "  network set neuron-bias <neuron-id> <value>\n"
+        << "      Set one hidden or output neuron bias\n"
+        << "      Input neuron biases are not model parameters\n\n"
+
+        << "  network set connection-weight <connection-id> <value>\n"
+        << "      Set one connection weight\n\n"
 
         << "  input [values]\n"
         << "      Set the input layer activation values\n\n"
@@ -541,6 +551,84 @@ void PrintNetworkConfigureUsage()
            "[--output-activation <type>] [--weight <value>] "
            "[--bias <value>]\n"
         << "Activation types: sigmoid, relu, tanh, linear\n";
+}
+
+void PrintNetworkSetUsage()
+{
+    std::cout
+        << "Usage: network set neuron-bias <neuron-id> <value>\n"
+        << "   or: network set connection-weight <connection-id> <value>\n";
+}
+
+void ConfigureNetwork(const std::string& command);
+
+void SetNetworkParameter(const std::string& command)
+{
+    using MiaIA::SDK::MiaIAClient;
+
+    std::stringstream stream(command);
+    std::string networkToken;
+    std::string setToken;
+    std::string parameterToken;
+    std::uint64_t id{};
+    double value{};
+    std::string trailingToken;
+
+    if (!(stream >> networkToken >> setToken >> parameterToken >> id >> value) ||
+        networkToken != "network" || setToken != "set" ||
+        (stream >> trailingToken))
+    {
+        PrintNetworkSetUsage();
+        return;
+    }
+
+    bool updated{};
+
+    if (parameterToken == "neuron-bias")
+    {
+        updated = MiaIAClient::SetNeuronBias(id, value);
+    }
+    else if (parameterToken == "connection-weight")
+    {
+        updated = MiaIAClient::SetConnectionWeight(id, value);
+    }
+    else
+    {
+        PrintNetworkSetUsage();
+        return;
+    }
+
+    if (!updated)
+    {
+        std::cout
+            << "Network parameter update failed. Check the element ID, "
+               "finite value, non-input bias rule and training/debug state.\n";
+        return;
+    }
+
+    std::cout
+        << (parameterToken == "neuron-bias"
+            ? "Neuron bias updated.\n"
+            : "Connection weight updated.\n");
+}
+
+void HandleNetworkCommand(const std::string& command)
+{
+    if (command == "network configure" ||
+        command.rfind("network configure ", 0) == 0)
+    {
+        ConfigureNetwork(command);
+        return;
+    }
+
+    if (command == "network set" ||
+        command.rfind("network set ", 0) == 0)
+    {
+        SetNetworkParameter(command);
+        return;
+    }
+
+    PrintNetworkSetUsage();
 }
 
 void ConfigureNetwork(const std::string& command)
@@ -3596,7 +3684,7 @@ MiaIA::CLI::MiaIACommandProcessor::Execute(
     }
     else if (command.rfind("network", 0) == 0)
     {
-        ConfigureNetwork(command);
+        HandleNetworkCommand(command);
     }
     else if (command.rfind("input", 0) == 0)
     {

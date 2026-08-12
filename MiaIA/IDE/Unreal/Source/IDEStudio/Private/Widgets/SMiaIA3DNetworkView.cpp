@@ -378,15 +378,23 @@ namespace
 
     MiaIA::Studio::StudioPosition OrientCompactPosition(
         const MiaIA::Studio::StudioPosition& Position,
-        MiaIA::Studio::StudioLayoutOrientation Orientation)
+        MiaIA::Studio::StudioLayoutOrientation Orientation,
+        MiaIA::Studio::StudioLayoutDirection Direction)
     {
+        const MiaIA::Studio::StudioPosition directed = Direction ==
+            MiaIA::Studio::StudioLayoutDirection::Reverse
+            ? MiaIA::Studio::StudioPosition{
+                1.0 - Position.X,
+                Position.Y,
+                Position.Z}
+            : Position;
         return Orientation ==
             MiaIA::Studio::StudioLayoutOrientation::Vertical
             ? MiaIA::Studio::StudioPosition{
-                Position.Y,
-                Position.X,
-                Position.Z}
-            : Position;
+                directed.Y,
+                directed.X,
+                directed.Z}
+            : directed;
     }
 }
 
@@ -551,6 +559,8 @@ void SMiaIA3DNetworkView::SetVisualizationSettings(
         VisualizationSettings.Layout.Mode != InSettings.Layout.Mode ||
         VisualizationSettings.Layout.Orientation !=
             InSettings.Layout.Orientation ||
+        VisualizationSettings.Layout.Direction !=
+            InSettings.Layout.Direction ||
         !FMath::IsNearlyEqual(
             VisualizationSettings.Layout.NeuronGap,
             InSettings.Layout.NeuronGap) ||
@@ -597,7 +607,8 @@ void SMiaIA3DNetworkView::FitView()
                         Overview.Layers.Num(),
                         0,
                         1),
-                    VisualizationSettings.Layout.Orientation);
+                    VisualizationSettings.Layout.Orientation,
+                    VisualizationSettings.Layout.Direction);
             sceneBounds += CompactWorldPosition(position2D);
         }
     }
@@ -1146,12 +1157,16 @@ FReply SMiaIA3DNetworkView::OnKeyDown(
     const FKey key = KeyEvent.GetKey();
     const bool isVertical = VisualizationSettings.Layout.Orientation ==
         MiaIA::Studio::StudioLayoutOrientation::Vertical;
+    const bool isReverse = VisualizationSettings.Layout.Direction ==
+        MiaIA::Studio::StudioLayoutDirection::Reverse;
 
     if (key == EKeys::Up)
     {
         OnNeuronNavigationRequested.ExecuteIfBound(
             isVertical
-                ? EMiaIANeuronNavigationDirection::PreviousLayer
+                ? (isReverse
+                    ? EMiaIANeuronNavigationDirection::NextLayer
+                    : EMiaIANeuronNavigationDirection::PreviousLayer)
                 : EMiaIANeuronNavigationDirection::PreviousNeuron);
         return FReply::Handled();
     }
@@ -1160,7 +1175,9 @@ FReply SMiaIA3DNetworkView::OnKeyDown(
     {
         OnNeuronNavigationRequested.ExecuteIfBound(
             isVertical
-                ? EMiaIANeuronNavigationDirection::NextLayer
+                ? (isReverse
+                    ? EMiaIANeuronNavigationDirection::PreviousLayer
+                    : EMiaIANeuronNavigationDirection::NextLayer)
                 : EMiaIANeuronNavigationDirection::NextNeuron);
         return FReply::Handled();
     }
@@ -1170,7 +1187,9 @@ FReply SMiaIA3DNetworkView::OnKeyDown(
         OnNeuronNavigationRequested.ExecuteIfBound(
             isVertical
                 ? EMiaIANeuronNavigationDirection::PreviousNeuron
-                : EMiaIANeuronNavigationDirection::PreviousLayer);
+                : (isReverse
+                    ? EMiaIANeuronNavigationDirection::NextLayer
+                    : EMiaIANeuronNavigationDirection::PreviousLayer));
         return FReply::Handled();
     }
 
@@ -1179,7 +1198,9 @@ FReply SMiaIA3DNetworkView::OnKeyDown(
         OnNeuronNavigationRequested.ExecuteIfBound(
             isVertical
                 ? EMiaIANeuronNavigationDirection::NextNeuron
-                : EMiaIANeuronNavigationDirection::NextLayer);
+                : (isReverse
+                    ? EMiaIANeuronNavigationDirection::PreviousLayer
+                    : EMiaIANeuronNavigationDirection::NextLayer));
         return FReply::Handled();
     }
 
@@ -1450,7 +1471,8 @@ void SMiaIA3DNetworkView::RebuildCompactScene()
                     layerCount,
                     0,
                     1),
-                VisualizationSettings.Layout.Orientation);
+                VisualizationSettings.Layout.Orientation,
+                VisualizationSettings.Layout.Direction);
         const FVector position = CompactWorldPosition(position2D);
         ViewportClient->AddSphere(
             position,

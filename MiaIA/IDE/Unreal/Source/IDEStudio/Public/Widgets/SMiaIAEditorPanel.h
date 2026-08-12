@@ -55,6 +55,12 @@ private:
     void RefreshData();
     void RebuildExplorer();
     void RebuildBreakpoints();
+    bool ExpandExplorerForNeuron(int64 NeuronId);
+    bool ExpandExplorerForNeurons(const TSet<int64>& NeuronIds);
+    FReply HandleToggleExplorerLayer(int64 LayerId);
+    FReply HandleToggleExplorerConnections();
+    FReply HandleExpandAllExplorer();
+    FReply HandleCollapseAllExplorer();
     void SelectNeuron(int64 NeuronId);
     void SelectNeurons(
         const TSet<int64>& NeuronIds,
@@ -91,6 +97,8 @@ private:
     FReply HandleStartDebug();
     FReply HandleAdvanceDebug();
     FReply HandleCancelDebug();
+    FReply HandleApplySelectedNeuronBias();
+    FReply HandleApplySelectedConnectionWeight();
     FReply HandleExit();
     FReply SelectBottomTab(int32 TabIndex);
     TSharedRef<SWidget> BuildProjectMenu();
@@ -152,6 +160,7 @@ private:
     bool CanStartDebug() const;
     bool CanAdvanceDebug() const;
     bool CanCancelDebug() const;
+    bool CanEditNetworkParameters() const;
 
     FText SessionStatusText() const;
     FText DebugPhaseText() const;
@@ -166,6 +175,9 @@ private:
     FText SelectionGradientText() const;
     FText SelectionUpdateText() const;
     FText SelectionRelationshipsText() const;
+    EVisibility NeuronBiasEditorVisibility() const;
+    EVisibility InputNeuronBiasNoticeVisibility() const;
+    EVisibility ConnectionWeightEditorVisibility() const;
     FSlateColor PhaseColor(EMiaIATrainingDebugPhase Phase) const;
     FSlateColor BackgroundColor() const;
     FSlateColor PanelColor() const;
@@ -198,6 +210,7 @@ private:
     FString SelectedLayerName;
     FString TopologyKey;
     FString BreakpointKey;
+    TSet<int64> ExpandedExplorerLayerIds;
     FString ConsoleHistory;
     TArray<FString> ConsoleCommandHistory;
     FString ConsoleHistoryDraft;
@@ -211,6 +224,10 @@ private:
     int32 PendingDetailedConnectionLimit{};
     int32 InspectorConnectionLimit{};
     int32 PendingInspectorConnectionLimit{};
+    int64 PendingNeuronBiasId{-1};
+    int64 PendingConnectionWeightId{-1};
+    double PendingNeuronBias{};
+    double PendingConnectionWeight{};
     EMiaIAStudioViewMode ViewMode{
         EMiaIAStudioViewMode::TwoDimensional};
     EMiaIAEditorTheme Theme{EMiaIAEditorTheme::FollowUnreal};
@@ -233,6 +250,10 @@ private:
     bool bHasDebugConnection{};
     bool bHasNeuronInspection{};
     bool bHasConnectionInspection{};
+    bool bPendingNeuronBiasDirty{};
+    bool bPendingConnectionWeightDirty{};
+    bool bExplorerConnectionsExpanded{};
+    bool bExplorerExpansionInitialized{};
     bool bUpdatingConsoleInput{};
     bool bCompactTopology{};
     bool bStandaloneMode{};

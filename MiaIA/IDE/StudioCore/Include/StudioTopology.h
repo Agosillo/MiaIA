@@ -33,11 +33,19 @@ namespace MiaIA::Studio
         Vertical
     };
 
+    enum class StudioLayoutDirection
+    {
+        Forward,
+        Reverse
+    };
+
     struct StudioLayoutPreferences
     {
         StudioLayoutMode Mode{ StudioLayoutMode::Expanded };
         StudioLayoutOrientation Orientation{
             StudioLayoutOrientation::Horizontal };
+        StudioLayoutDirection Direction{
+            StudioLayoutDirection::Forward };
         double NeuronScale{ 1.0 };
         double NeuronGap{};
         double LayerGap{};

@@ -116,7 +116,11 @@ MiaIA::Studio::StudioTopologyBuilder::DetailedLayoutPosition(
     const double centeredNeuron = static_cast<double>(neuronIndex) -
         (static_cast<double>(neuronCount) - 1.0) * 0.5;
 
-    const double layerPosition = centeredLayer * layerStep;
+    const double direction = preferences.Direction ==
+        StudioLayoutDirection::Reverse
+        ? -1.0
+        : 1.0;
+    const double layerPosition = centeredLayer * layerStep * direction;
     const double neuronPosition = centeredNeuron * neuronStep;
 
     return preferences.Orientation == StudioLayoutOrientation::Vertical
@@ -221,6 +225,10 @@ MiaIA::Studio::StudioTopologyBuilder::BuildCompact(
         const double progress = NormalizedIndex(
             layerIndex,
             overview.Layers.size());
+        const double directedProgress = preferences.Direction ==
+            StudioLayoutDirection::Reverse
+            ? 1.0 - progress
+            : progress;
         StudioTopologyNode node;
         node.Id = layer.Id;
         node.LayerId = layer.Id;
@@ -232,15 +240,15 @@ MiaIA::Studio::StudioTopologyBuilder::BuildCompact(
         {
             node.Position = preferences.Orientation ==
                 StudioLayoutOrientation::Vertical
-                ? StudioPosition{ 0.5, progress, 0.0 }
-                : StudioPosition{ progress, 0.5, 0.0 };
+                ? StudioPosition{ 0.5, directedProgress, 0.0 }
+                : StudioPosition{ directedProgress, 0.5, 0.0 };
         }
         else
         {
             node.Position = preferences.Orientation ==
                 StudioLayoutOrientation::Vertical
-                ? StudioPosition{ 0.5, progress, 0.0 }
-                : StudioPosition{ progress, 0.5, 0.0 };
+                ? StudioPosition{ 0.5, directedProgress, 0.0 }
+                : StudioPosition{ directedProgress, 0.5, 0.0 };
         }
         scene.Nodes.push_back(std::move(node));
 

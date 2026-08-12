@@ -118,9 +118,9 @@ The animation is slowed down for documentation. The demonstration itself advance
 ### Panel layout
 
 - **Two-row toolbar** keeps layout, view, theme, refresh, scalability, help, and application actions on the first row. Training and phase-debug controls occupy a dedicated second row with session and debug status aligned to the right, preserving access when the editor tab or standalone window is narrow.
-- **Model explorer** lists layers, neurons, and connections. Selecting an item here also selects it in the topology.
+- **Model explorer** presents each layer as an expandable tree branch with its neurons as children, plus a separate expandable connection branch. `Expand` and `Collapse` operate on the complete tree. Branch state survives ordinary refreshes and renderer changes, while selecting an element from the 2D or 3D topology automatically opens the branch containing it. Compact mode retains layer summaries without exposing unavailable element children.
 - **Network topology** switches between interactive 2D and 3D renderers for the same current layers, neurons, and weighted connections. Its semantic overlay follows the active debug phase: forward uses candidate activations, backward uses gradient sign and normalized magnitude, update uses parameter-delta sign and normalized magnitude, and verified or committed states return to candidate or committed activations and weights.
-- **Inspector** shows neuron activation and bias data or connection weight data, including phase-dependent gradients and candidate updates.
+- **Inspector** shows neuron activation and bias data or connection weight data, including phase-dependent gradients and candidate updates. A single non-input neuron exposes a numeric bias control, while a selected connection exposes a numeric weight control. Apply actions use the same guarded SDK operations as the Console; input bias editing is deliberately unavailable.
 - **Session and debug status** report training progress and the currently inspected phase.
 - **Console** is the first and initially selected lower tab. It uses a narrow command-suggestion column on the left and a larger output/input workspace on the right. It accepts the same commands as `Console.exe` and operates on the same process-local state displayed by the panel and used by Blueprint nodes.
 - **Training timeline** follows the Console and summarizes the forward, backward, update, verification, and commit sequence.
@@ -161,7 +161,7 @@ Detailed 3D rendering keeps every neuron and connection individually identifiabl
 - `Fit view` fits the active renderer: it adjusts 2D zoom and pan or derives a centered front-facing 3D camera from the current topology bounds, viewport size, and aspect ratio while preserving manual neuron positions.
 - `Reset layout` discards manual positions and restores the automatic layout and default framing in both 2D and detailed 3D modes.
 - `Layout: Expanded` opens the topology for reading; `Layout: Packed` places symmetric neurons and layers as closely as the configured gaps allow. A zero gap makes equal-size nodes tangent, never intersecting.
-- `Flow direction: Horizontal` places layers from left to right; `Vertical` rotates the shared automatic plane so layers run from top to bottom. Both detailed and compact 2D/3D views follow the same preference.
+- `Flow direction: Horizontal` places layers from left to right; `Vertical` rotates the shared automatic plane so layers run from top to bottom. Clicking the active choice again toggles its direction: `Horizontal >`, `< Horizontal`, `Vertical v`, or `Vertical ^`. Detailed and compact 2D/3D views, automatic fit, and visible-direction keyboard navigation follow the same persistent preference.
 - `Neuron size` uniformly scales every detailed 2D circle and 3D sphere independently from camera zoom. Automatic spacing accounts for the chosen size so nodes remain tangent or separated instead of intersecting. `Neuron gap` and `Layer gap` add space without changing model topology.
 - `Connection visibility` independently changes connection opacity and thickness from hidden at 0% through the normal 100% presentation to an emphasized 200% presentation. It never changes neuron geometry.
 - Connection display can show `All` links or only links incident to the current `Selected` neurons or connection.
@@ -186,7 +186,7 @@ The 2D topology view supports navigation and layout editing:
 - use `Ctrl + left click` to add or remove neurons from the selection;
 - drag on empty space to select every enclosed neuron, or hold `Ctrl` to add the rectangle to the current selection;
 - drag any selected neuron to move the complete selected group while preserving its relative layout;
-- after clicking the topology, use the arrow keys in their visible direction. With Horizontal flow, `Up`/`Down` move within a layer and `Left`/`Right` move between layers; Vertical flow rotates that mapping. The destination in an adjacent layer preserves the nearest relative position, and the view follows only when the selected neuron leaves the visible canvas;
+- after clicking the topology, use the arrow keys in their visible direction. With Horizontal flow, `Up`/`Down` move within a layer and `Left`/`Right` move between layers; Vertical flow rotates that mapping, and Reverse flow swaps the two layer-direction keys. The destination in an adjacent layer preserves the nearest relative position, and the view follows only when the selected neuron leaves the visible canvas;
 - select `Fit view` to recover the complete topology after zooming, panning, or moving neurons;
 - select `Reset layout` to remove every manual position and restore the original automatic arrangement.
 
@@ -200,7 +200,7 @@ The 3D topology view uses these controls:
 - click a neuron marker or connection with the left mouse button to select it and update the shared Inspector;
 - use `Ctrl + left click` or an optional `Ctrl` selection rectangle to build a multiple-neuron selection;
 - drag any selected neuron marker to move the complete selected group on the camera-facing plane while preserving relative positions;
-- after clicking the topology, use the arrow keys in their visible direction. Horizontal flow uses `Up`/`Down` within a layer and `Left`/`Right` between layers, while Vertical flow rotates that mapping. An off-screen destination recenters the camera target while visible selections leave the current camera unchanged;
+- after clicking the topology, use the arrow keys in their visible direction. Horizontal flow uses `Up`/`Down` within a layer and `Left`/`Right` between layers, while Vertical flow rotates that mapping and Reverse flow swaps the two layer-direction keys. An off-screen destination recenters the camera target while visible selections leave the current camera unchanged;
 - select `Fit view` to restore the complete front-facing camera framing without discarding manual positions;
 - select `Reset layout` to discard manual positions and restore the automatic arrangement and default framing.
 
@@ -278,7 +278,7 @@ The first panel increment established:
 - an interactive command console shared with `Console.exe`.
 - safe breakpoint authoring shared with the SDK, CLI, and Blueprint nodes.
 
-The panel refreshes runtime values automatically while rebuilding its explorer and breakpoint list only when their corresponding state changes. Command history is currently memory-only and belongs to the open panel instance. Persistent history, weight editing, asynchronous command dispatch, compact-scene drill-down, and more advanced 3D filtering and analysis remain outside the current implementation.
+The panel refreshes runtime values automatically while rebuilding its explorer and breakpoint list only when their corresponding state changes. Command history is currently memory-only and belongs to the open panel instance. Persistent history, asynchronous command dispatch, compact-scene drill-down, and more advanced 3D filtering and analysis remain outside the current implementation.
 
 ## Build order
 

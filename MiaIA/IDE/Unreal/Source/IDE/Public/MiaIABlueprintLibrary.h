@@ -64,6 +64,12 @@ public:
         double NonInputBias,
         FMiaIANetworkParameterUpdateResult& Result);
 
+    UFUNCTION(BlueprintCallable, Category = "MiaIA|Network|Parameters")
+    static bool SetNeuronBias(int64 NeuronId, double Bias);
+
+    UFUNCTION(BlueprintCallable, Category = "MiaIA|Network|Parameters")
+    static bool SetConnectionWeight(int64 ConnectionId, double Weight);
+
     UFUNCTION(BlueprintPure, Category = "MiaIA|Network")
     static FMiaIANetworkSnapshot GetNetworkSnapshot();
 

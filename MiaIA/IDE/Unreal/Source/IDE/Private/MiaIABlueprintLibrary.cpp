@@ -711,6 +711,26 @@ bool UMiaIABlueprintLibrary::ConfigureNetworkParameters(
     return true;
 }
 
+bool UMiaIABlueprintLibrary::SetNeuronBias(int64 NeuronId, double Bias)
+{
+    return NeuronId >= 0 &&
+        FMath::IsFinite(Bias) &&
+        MiaIA::SDK::MiaIAClient::SetNeuronBias(
+            static_cast<std::uint64_t>(NeuronId),
+            Bias);
+}
+
+bool UMiaIABlueprintLibrary::SetConnectionWeight(
+    int64 ConnectionId,
+    double Weight)
+{
+    return ConnectionId >= 0 &&
+        FMath::IsFinite(Weight) &&
+        MiaIA::SDK::MiaIAClient::SetConnectionWeight(
+            static_cast<std::uint64_t>(ConnectionId),
+            Weight);
+}
+
 FMiaIANetworkSnapshot UMiaIABlueprintLibrary::GetNetworkSnapshot()
 {
     return ToBlueprint(MiaIA::SDK::MiaIAClient::GetSnapshot());

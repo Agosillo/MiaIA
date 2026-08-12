@@ -8,6 +8,7 @@ The roadmap is organized by dependency rather than by a fixed release date. Math
 - network creation, editing, validation, and snapshots;
 - configurable hidden and output activations, uniform initial connection weights, and non-input biases for dense creation across SDK, CLI, and Blueprint;
 - transactional existing-network updates for hidden/output activations, all connection weights, and all non-input biases;
+- targeted non-input neuron-bias and connection-weight editing across SDK, CLI, Blueprint, and Studio Inspector;
 - Sigmoid, ReLU, Tanh, and Linear forward propagation;
 - Console client and initial Unreal Engine linkage;
 - Debug- and Release-capable named test harness;
@@ -55,7 +56,7 @@ The roadmap is organized by dependency rather than by a fixed release date. Math
 - runtime-capable Unreal Studio UI shared by the editor panel and the `MiaIAStudio` game target;
 - verified Win64 BuildCookRun archive with provisional application branding.
 - interactive 3D topology with aggregated sphere-and-cylinder geometry, projected identifiers, mouse and arrow-key selection navigation, camera navigation, and manual layout editing;
-- shared Expanded/Packed non-overlapping layout, Horizontal/Vertical flow, uniform node sizing, configurable gaps, and All/Selected connection display across 2D and 3D;
+- shared Expanded/Packed non-overlapping layout, persistent forward/reverse Horizontal/Vertical flow, uniform node sizing, configurable gaps, and All/Selected connection display across detailed and compact 2D/3D views;
 - adaptive tessellation and compact scene policies that avoid one Unreal Actor per graph element.
 - bounded selected-neuron relationship inspection with exact incoming and outgoing totals;
 - selected-connection inspection with contextual source and target neuron snapshots across SDK, CLI, StudioCore, Blueprint, 2D, and 3D clients.

@@ -188,6 +188,32 @@ The Engine applies the complete request to a candidate copy, validates it, and p
 
 Changing activation functions preserves current weights and biases. In contrast, `--weight` replaces **every** connection weight and `--bias` replaces **every** hidden and output bias. Using either option after training therefore discards the corresponding learned parameter values. Network mutation is rejected while automatic training or a phase-debug transaction owns the model.
 
+### `network set neuron-bias`
+
+```text
+network set neuron-bias <neuron-id> <value>
+```
+
+Changes one non-input neuron bias identified by its stable model ID. Input-layer biases are not trainable parameters and the command rejects them. The value must be finite.
+
+```text
+network set neuron-bias 1003 0.25
+```
+
+### `network set connection-weight`
+
+```text
+network set connection-weight <connection-id> <value>
+```
+
+Changes one connection weight without affecting any other model parameter.
+
+```text
+network set connection-weight 7 -0.1
+```
+
+Both targeted commands use the same serialized `MiaIAClient` mutation boundary as every other frontend. Unknown IDs, invalid values, automatic training, and an active phase-debug transaction leave the public network unchanged.
+
 ### `input`
 
 ```text

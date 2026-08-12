@@ -110,6 +110,8 @@ Dense creation is a transactional batch operation. The factory rejects unsupport
 
 `NetworkParameterUpdate` provides the corresponding batch contract for an existing network. Every field is optional, allowing one request to change hidden activation, output activation, all connection weights, and all non-input biases together. `NetworkParameters` applies the request to a candidate copy, validates it, and publishes both the network and a count-based result only after success. Layer zero is never modified. The SDK applies its normal training/debug mutation guard before entering this Engine operation.
 
+Targeted parameter editing remains a separate operation for experiments that must change exactly one stable model element. `NetworkParameters::SetBias` rejects layer-zero neurons, while `NetworkWeights::SetWeight` validates one connection ID; both reject non-finite values. `MiaIAClient` applies the shared training/debug mutation guard before either Engine operation. The CLI, Blueprint library, and Studio Inspector only forward IDs and values through this boundary and never implement model rules themselves.
+
 For `I` inputs, hidden width `H`, `L` hidden layers, and `O` outputs, the neuron count is `I + L*H + O`. With at least one hidden layer, the connection count is `I*H + (L-1)*H*H + H*O`; without hidden layers it is `I*O`.
 
 `NetworkSnapshot` contains every neuron and connection. `NetworkOverviewSnapshot` is the lightweight inspection boundary for clients that first need layer metadata and aggregate counts before deciding whether a complete graph copy is appropriate.

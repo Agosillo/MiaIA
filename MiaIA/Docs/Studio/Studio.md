@@ -46,6 +46,8 @@ Detailed mode defaults to networks with at most 2,000 neurons and 5,000 connecti
 
 For a single selected neuron, StudioCore retains its layer context, exact incoming and outgoing connection counts, and a bounded subset of each direction. A selected connection retains contextual snapshots of both endpoint neurons. The relationship limit changes the amount displayed, not the reported totals, and allows a frontend to avoid filling the Inspector with thousands of rows.
 
+The Unreal-hosted Inspector also provides focused parameter controls. One selected hidden or output neuron can apply a finite bias, and one selected connection can apply a finite weight. Input neurons display an explanatory non-editable state. These controls call the public Blueprint adapter, which forwards to `MiaIAClient`; training/debug ownership and all mathematical validation remain below the frontend.
+
 ## Layout conventions
 
 In the two-dimensional layout:
@@ -61,7 +63,7 @@ The initial three-dimensional layout deliberately preserves the same reading:
 - every automatic node starts on one shared plane;
 - orbiting, camera-relative dragging, and manual group movement reveal and introduce depth without changing the model.
 
-Detailed automatic positions are measured in neuron diameters. `Expanded` spacing keeps the topology readable, while `Packed` spacing can place symmetric neurons and layers directly adjacent without intersecting them. `Horizontal` flow places layers from left to right and neurons from top to bottom; `Vertical` flow places layers from top to bottom and neurons from left to right. Uniform node size determines the minimum safe spacing; additional neuron and layer gaps, camera zoom, and connection visibility remain separate controls. This lets 2D and 3D choose different pixel or world scales while preserving the same symmetry, orientation, and non-overlap rule. Compact scenes apply the same flow direction, place one node per layer, and use aggregate links to describe layer progression rather than pretending to display individual model connections.
+Detailed automatic positions are measured in neuron diameters. `Expanded` spacing keeps the topology readable, while `Packed` spacing can place symmetric neurons and layers directly adjacent without intersecting them. `Horizontal` flow places layers from left to right and neurons from top to bottom; `Vertical` flow places layers from top to bottom and neurons from left to right. Clicking the already-active orientation toggles Forward and Reverse layer direction, producing the corresponding left/right or top/bottom mirror while preserving neuron order within each layer. Uniform node size determines the minimum safe spacing; additional neuron and layer gaps, camera zoom, and connection visibility remain separate controls. This lets 2D and 3D choose different pixel or world scales while preserving the same symmetry, orientation, direction, and non-overlap rule. Compact scenes apply the same flow direction, place one node per layer, and use aggregate links to describe layer progression rather than pretending to display individual model connections.
 
 ## Unreal delivery path
 
@@ -80,6 +82,8 @@ All breakpoint operations are also exposed by the Unreal Blueprint function libr
 Quick Help also identifies the public source location and license boundary. About displays the MPL-covered source location and the Unreal Engine attribution required for the packaged frontend. Public archives are created through `Build/Package-Windows.ps1`, which adds the MiaIA license, end-user terms, trademark policy, third-party notice index, and collected dependency licenses beside the top-level launcher after Unreal packaging succeeds.
 
 The Unreal renderer batches neuron markers and weighted links in one runtime component instead of creating one Actor per model element. Detailed mode still retains every element ID for selection and Inspector queries. Compact mode remains a separate scalability policy that summarizes each layer when the full graph exceeds the shared limits.
+
+The detailed Model Explorer uses expandable layer branches, neuron children, and one independent connection branch. Expand-all and collapse-all controls make dense models manageable, and selection from either topology renderer reveals the corresponding branch without changing the renderer-neutral selection state. Expansion is frontend-only state and never becomes part of the network model.
 
 The packaged executable does not require Unreal Editor to run. It still contains the Unreal runtime. A future Qt frontend would instead render the same `StudioCore` state through Qt and its selected graphics backend.
 

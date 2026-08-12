@@ -36,10 +36,12 @@ namespace MiaIA::Engine
 
         NetworkTopology topology(network);
 
+        Core::Layer* layer =
+            topology.FindLayerForNeuron(neuronId);
         Core::Neuron* neuron =
             topology.FindNeuron(neuronId);
 
-        if (neuron == nullptr)
+        if (layer == nullptr || layer->Order == 0 || neuron == nullptr)
         {
             return false;
         }

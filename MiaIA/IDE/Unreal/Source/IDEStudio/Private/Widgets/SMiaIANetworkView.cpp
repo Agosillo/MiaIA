@@ -142,6 +142,8 @@ void SMiaIANetworkView::SetVisualizationSettings(
         VisualizationSettings.Layout.Mode != InSettings.Layout.Mode ||
         VisualizationSettings.Layout.Orientation !=
             InSettings.Layout.Orientation ||
+        VisualizationSettings.Layout.Direction !=
+            InSettings.Layout.Direction ||
         !FMath::IsNearlyEqual(
             VisualizationSettings.Layout.NeuronGap,
             InSettings.Layout.NeuronGap) ||
@@ -441,8 +443,12 @@ int32 SMiaIANetworkView::PaintCompactOverview(
 
     for (int32 index = 0; index < layerCount; ++index)
     {
-        const int32 row = index / columns;
-        const int32 positionInRow = index % columns;
+        const int32 flowIndex = VisualizationSettings.Layout.Direction ==
+            MiaIA::Studio::StudioLayoutDirection::Reverse
+            ? layerCount - index - 1
+            : index;
+        const int32 row = flowIndex / columns;
+        const int32 positionInRow = flowIndex % columns;
         const int32 column = row % 2 == 0
             ? positionInRow
             : columns - positionInRow - 1;
@@ -1232,12 +1238,16 @@ FReply SMiaIANetworkView::OnKeyDown(
     const FKey key = KeyEvent.GetKey();
     const bool isVertical = VisualizationSettings.Layout.Orientation ==
         MiaIA::Studio::StudioLayoutOrientation::Vertical;
+    const bool isReverse = VisualizationSettings.Layout.Direction ==
+        MiaIA::Studio::StudioLayoutDirection::Reverse;
 
     if (key == EKeys::Up)
     {
         OnNeuronNavigationRequested.ExecuteIfBound(
             isVertical
-                ? EMiaIANeuronNavigationDirection::PreviousLayer
+                ? (isReverse
+                    ? EMiaIANeuronNavigationDirection::NextLayer
+                    : EMiaIANeuronNavigationDirection::PreviousLayer)
                 : EMiaIANeuronNavigationDirection::PreviousNeuron);
         return FReply::Handled();
     }
@@ -1246,7 +1256,9 @@ FReply SMiaIANetworkView::OnKeyDown(
     {
         OnNeuronNavigationRequested.ExecuteIfBound(
             isVertical
-                ? EMiaIANeuronNavigationDirection::NextLayer
+                ? (isReverse
+                    ? EMiaIANeuronNavigationDirection::PreviousLayer
+                    : EMiaIANeuronNavigationDirection::NextLayer)
                 : EMiaIANeuronNavigationDirection::NextNeuron);
         return FReply::Handled();
     }
@@ -1256,7 +1268,9 @@ FReply SMiaIANetworkView::OnKeyDown(
         OnNeuronNavigationRequested.ExecuteIfBound(
             isVertical
                 ? EMiaIANeuronNavigationDirection::PreviousNeuron
-                : EMiaIANeuronNavigationDirection::PreviousLayer);
+                : (isReverse
+                    ? EMiaIANeuronNavigationDirection::NextLayer
+                    : EMiaIANeuronNavigationDirection::PreviousLayer));
         return FReply::Handled();
     }
 
@@ -1265,7 +1279,9 @@ FReply SMiaIANetworkView::OnKeyDown(
         OnNeuronNavigationRequested.ExecuteIfBound(
             isVertical
                 ? EMiaIANeuronNavigationDirection::NextNeuron
-                : EMiaIANeuronNavigationDirection::NextLayer);
+                : (isReverse
+                    ? EMiaIANeuronNavigationDirection::PreviousLayer
+                    : EMiaIANeuronNavigationDirection::NextLayer));
         return FReply::Handled();
     }
 
