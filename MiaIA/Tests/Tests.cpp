@@ -12,6 +12,7 @@
 #include "../IDE/StudioCore/Include/StudioController.h"
 #include "../SDK/Include/MiaIAClient.h"
 #include "../Core/Execution/Activation.h"
+#include "../Engine/Training/TrainingStepComparer.h"
 #include "../Engine/Validation/NetworkValidator.h"
 
 // Keep the existing checks active in every build configuration.
@@ -2450,6 +2451,136 @@ int main()
 
     });
 
+    runner.Run("Training step comparison identity matching", [&]()
+    {
+    MiaIA::Core::TrainingStepSnapshot first;
+    first.SampleIndex = 0;
+    first.Before.Evaluation.Loss = 1.0;
+    first.After.Loss = 0.5;
+    first.Before.Evaluation.Predictions = { 0.1, 0.2 };
+    first.After.Predictions = { 0.3, 0.4 };
+    first.Before.Neurons = {
+        { 20, 1, 2.0, 3.0, 4.0 },
+        { 10, 0, 1.0, 1.5, 2.0 },
+        { 30, 2, 6.0, 7.0, 8.0 }
+    };
+    first.NeuronUpdates = {
+        { 20, 0.0, 4.0, -0.4, -0.4 },
+        { 10, 0.0, 2.0, -0.2, -0.2 },
+        { 30, 0.0, 8.0, -0.8, -0.8 }
+    };
+    first.Before.Connections = {
+        { 200, 20, 30, 8.0 },
+        { 100, 10, 20, 6.0 },
+        { 300, 30, 40, 16.0 }
+    };
+    first.ConnectionUpdates = {
+        { 200, 1.0, 8.0, -0.8, 0.2 },
+        { 100, 1.0, 6.0, -0.6, 0.4 },
+        { 300, 1.0, 16.0, -1.6, -0.6 }
+    };
+
+    MiaIA::Core::TrainingStepSnapshot second;
+    second.SampleIndex = 1;
+    second.Before.Evaluation.Loss = 0.8;
+    second.After.Loss = 0.2;
+    second.Before.Evaluation.Predictions = { 0.2, 0.5, 0.9 };
+    second.After.Predictions = { 0.4, 0.8, 1.0 };
+    second.Before.Neurons = {
+        { 10, 0, 3.0, 4.5, 5.0 },
+        { 20, 1, 5.0, 7.0, 9.0 },
+        { 40, 2, 10.0, 11.0, 12.0 }
+    };
+    second.NeuronUpdates = {
+        { 10, -0.2, 5.0, -0.5, -0.7 },
+        { 20, -0.4, 9.0, -0.9, -1.3 },
+        { 40, 0.0, 12.0, -1.2, -1.2 }
+    };
+    second.Before.Connections = {
+        { 100, 10, 20, 10.0 },
+        { 200, 20, 30, 14.0 },
+        { 400, 40, 50, 18.0 }
+    };
+    second.ConnectionUpdates = {
+        { 100, 0.4, 10.0, -1.0, -0.6 },
+        { 200, 0.2, 14.0, -1.4, -1.2 },
+        { 400, 1.0, 18.0, -1.8, -0.8 }
+    };
+
+    MiaIA::Core::TrainingStepComparisonSnapshot comparison;
+    assert(MiaIA::Engine::TrainingStepComparer::Compare(
+        first,
+        3,
+        second,
+        7,
+        comparison));
+    assert(comparison.FirstStepIndex == 3);
+    assert(comparison.SecondStepIndex == 7);
+    assert(comparison.FirstSampleIndex == 0);
+    assert(comparison.SecondSampleIndex == 1);
+    assert(!comparison.SameSample);
+    assert(std::abs(comparison.LossBefore.Delta + 0.2) < 1e-12);
+    assert(std::abs(comparison.LossBefore.AbsoluteDelta - 0.2) < 1e-12);
+    assert(std::abs(comparison.LossAfter.Delta + 0.3) < 1e-12);
+    assert(comparison.Outputs.size() == 3);
+    assert(std::abs(
+        comparison.Outputs[1].BeforePrediction.Delta - 0.3) < 1e-12);
+    assert(std::abs(
+        comparison.Outputs[1].AfterPrediction.Delta - 0.4) < 1e-12);
+    assert(!comparison.Outputs[2].HasFirstPrediction);
+    assert(comparison.Outputs[2].HasSecondPrediction);
+
+    assert(comparison.Neurons.size() == 4);
+    assert(comparison.Neurons[0].Id == 10);
+    assert(comparison.Neurons[1].Id == 20);
+    assert(comparison.Neurons[2].Id == 30);
+    assert(comparison.Neurons[3].Id == 40);
+    assert(std::abs(
+        comparison.Neurons[0].ActivationGradient.Delta - 2.0) < 1e-12);
+    assert(std::abs(
+        comparison.Neurons[1].BiasGradient.Delta - 5.0) < 1e-12);
+    assert(std::abs(comparison.Neurons[0].Bias.Delta + 0.5) < 1e-12);
+    assert(std::abs(comparison.Neurons[1].Bias.Delta + 0.9) < 1e-12);
+    assert(comparison.Neurons[2].HasFirstGradient);
+    assert(!comparison.Neurons[2].HasSecondGradient);
+    assert(comparison.Neurons[2].HasFirstUpdate);
+    assert(!comparison.Neurons[2].HasSecondUpdate);
+    assert(!comparison.Neurons[3].HasFirstGradient);
+    assert(comparison.Neurons[3].HasSecondGradient);
+
+    assert(comparison.Connections.size() == 4);
+    assert(comparison.Connections[0].Id == 100);
+    assert(comparison.Connections[1].Id == 200);
+    assert(comparison.Connections[2].Id == 300);
+    assert(comparison.Connections[3].Id == 400);
+    assert(std::abs(
+        comparison.Connections[0].WeightGradient.Delta - 4.0) < 1e-12);
+    assert(std::abs(
+        comparison.Connections[1].WeightGradient.Delta - 6.0) < 1e-12);
+    assert(std::abs(
+        comparison.Connections[0].Weight.Delta + 1.0) < 1e-12);
+    assert(std::abs(
+        comparison.Connections[1].Weight.Delta + 1.4) < 1e-12);
+    assert(comparison.Connections[2].HasFirstGradient);
+    assert(!comparison.Connections[2].HasSecondGradient);
+    assert(!comparison.Connections[3].HasFirstUpdate);
+    assert(comparison.Connections[3].HasSecondUpdate);
+
+    MiaIA::Core::TrainingStepComparisonSnapshot sameStep;
+    assert(MiaIA::Engine::TrainingStepComparer::Compare(
+        first,
+        3,
+        first,
+        3,
+        sameStep));
+    assert(sameStep.SameSample);
+    assert(sameStep.LossBefore.AbsoluteDelta == 0.0);
+    assert(sameStep.Outputs[0].AfterPrediction.AbsoluteDelta == 0.0);
+    assert(sameStep.Neurons[0].Bias.AbsoluteDelta == 0.0);
+    assert(sameStep.Connections[0].Weight.AbsoluteDelta == 0.0);
+
+    });
+
     runner.Run("Training session history inspection", [&]()
     {
     const std::filesystem::path historyPath =
@@ -2528,6 +2659,76 @@ int main()
         rejectedStep));
     assert(rejectedStep.SampleIndex == 999);
     assert(rejectedStep.LearningRate == 42.0);
+
+    MiaIA::Core::TrainingStepComparisonSnapshot comparison;
+    assert(MiaIAClient::TryCompareTrainingSessionSteps(
+        0,
+        2,
+        comparison));
+    assert(comparison.FirstStepIndex == 0);
+    assert(comparison.SecondStepIndex == 2);
+    assert(comparison.FirstSampleIndex == 0);
+    assert(comparison.SecondSampleIndex == 0);
+    assert(comparison.SameSample);
+    assert(std::abs(
+        comparison.LossBefore.FirstValue - history[0].LossBefore) <
+        1e-12);
+    assert(std::abs(
+        comparison.LossBefore.SecondValue - history[2].LossBefore) <
+        1e-12);
+    assert(comparison.Outputs.size() == 1);
+    assert(comparison.Connections.size() == 1);
+    assert(comparison.Neurons.size() >= 1);
+
+    MiaIA::Core::TrainingStepComparisonSnapshot sameStep;
+    assert(MiaIAClient::TryCompareTrainingSessionSteps(
+        1,
+        1,
+        sameStep));
+    assert(sameStep.SameSample);
+    assert(sameStep.LossBefore.AbsoluteDelta == 0.0);
+    assert(sameStep.LossAfter.AbsoluteDelta == 0.0);
+
+    MiaIA::Core::TrainingStepComparisonSnapshot rejectedComparison;
+    rejectedComparison.FirstStepIndex = 777;
+    rejectedComparison.SecondStepIndex = 888;
+    rejectedComparison.LossBefore.Delta = 42.0;
+    assert(!MiaIAClient::TryCompareTrainingSessionSteps(
+        0,
+        3,
+        rejectedComparison));
+    assert(rejectedComparison.FirstStepIndex == 777);
+    assert(rejectedComparison.SecondStepIndex == 888);
+    assert(rejectedComparison.LossBefore.Delta == 42.0);
+
+    const auto compareSuggestions =
+        MiaIA::CLI::MiaIACommandProcessor::GetSuggestions(
+            "train session comp");
+    assert(compareSuggestions.size() == 1);
+    assert(compareSuggestions[0].Completion ==
+        "train session compare");
+
+    const auto compareCommand =
+        MiaIA::CLI::MiaIACommandProcessor::Execute(
+            "train session compare 0 2 1");
+    assert(compareCommand.Output.find(
+        "Training Session Comparison 0 -> 2") != std::string::npos);
+    assert(compareCommand.Output.find("(same sample)") !=
+        std::string::npos);
+    assert(compareCommand.Output.find("Top Weight Changes") !=
+        std::string::npos);
+
+    const auto rejectedCompareCommand =
+        MiaIA::CLI::MiaIACommandProcessor::Execute(
+            "train session compare 0 3");
+    assert(rejectedCompareCommand.Output.find(
+        "could not be compared") != std::string::npos);
+
+    const auto invalidCompareLimit =
+        MiaIA::CLI::MiaIACommandProcessor::Execute(
+            "train session compare 0 2 0");
+    assert(invalidCompareLimit.Output.find(
+        "Usage: train session start") != std::string::npos);
     assert(MiaIAClient::CancelTrainingSession());
 
     assert(MiaIAClient::ClearDataset());

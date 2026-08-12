@@ -228,7 +228,9 @@ All SDK access to the process-local network, dataset, and session is serialized 
 
 A bounded run composes repeated `next` operations synchronously. It can stop because its requested step limit was reached, the session completed, or a step failed. Unlike the separately atomic `train epoch` operation, a session run is progressive: successful steps remain published if a later step fails. The session stays Active at the failed sample so a client can inspect state, intervene, retry, or cancel. `TrainingRunSnapshot` contains the start/end cursors, executed steps, trace means, detailed step snapshots, and an explicit stop reason.
 
-`TrainingSessionInspector` provides two read-only views over retained steps. History entries are lightweight indexes containing epoch, sample, loss transition, and update counts. Detailed lookup returns the original `TrainingStepSnapshot`, including evaluation, gradients, and every parameter update. Both operations use the SDK state lock and are safe at a coherent boundary while background training is Running.
+`TrainingSessionInspector` provides three read-only views over retained steps. History entries are lightweight indexes containing epoch, sample, loss transition, and update counts. Detailed lookup returns the original `TrainingStepSnapshot`, including evaluation, gradients, and every parameter update. Comparison delegates two valid history entries to `TrainingStepComparer`, which associates neurons and connections by stable model ID and produces signed and absolute differences for loss, output predictions, gradients, final weights, and final biases. All three operations use the SDK state lock and are safe at a coherent boundary while background training is Running.
+
+`TrainingStepComparer` is independent of session ownership and clients. It compares immutable step snapshots into a new result before publishing it to the caller, preserving caller state if either history index is rejected by the inspector. Availability flags distinguish a missing gradient or update from a mathematical zero and keep the contract usable if later optimizers update only selected parameters. Comparisons across different samples are numerically valid but explicitly marked because their loss and predictions describe different inputs and targets. Full hidden-neuron activations are intentionally absent until history adopts an explicit bounded retention policy for network state.
 
 `TrainingDebugController` is the transaction boundary for a single inspectable SGD step. It owns a private candidate copy and advances through `BeforeForward`, `ForwardComplete`, `BackwardComplete`, `UpdateComplete`, `Verified`, and `Committed`. Phase snapshots include the candidate network and all calculations available at that point. The public network is assigned only at commit, while cancellation destroys the candidate. `TrainingStepExecutor` runs this same controller to completion, so atomic and interactive execution share one mathematical implementation.
 
@@ -252,6 +254,7 @@ Current public snapshots include:
 - background worker state and stop reason.
 - breakpoint definitions, hit counts, and the latest structured trigger;
 - lightweight training-history entries and complete retained steps.
+- two-step training comparisons for loss, output predictions, gradients, weights, and biases.
 
 This boundary is important for future graphical debugging: visual components can consume a stable description without becoming owners of engine internals.
 

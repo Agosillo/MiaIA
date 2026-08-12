@@ -167,6 +167,11 @@
     <ClInclude Include="Public\SampleGradientSnapshot.h" />
     <ClInclude Include="Public\SampleSnapshot.h" />
     <ClInclude Include="Public\TrainingStepSnapshot.h" />
+    <ClInclude Include="Public\TrainingValueComparisonSnapshot.h" />
+    <ClInclude Include="Public\TrainingOutputComparisonSnapshot.h" />
+    <ClInclude Include="Public\TrainingNeuronComparisonSnapshot.h" />
+    <ClInclude Include="Public\TrainingConnectionComparisonSnapshot.h" />
+    <ClInclude Include="Public\TrainingStepComparisonSnapshot.h" />
     <ClInclude Include="Public\TrainingEpochSnapshot.h" />
     <ClInclude Include="Public\TrainingHistoryEntrySnapshot.h" />
     <ClInclude Include="Public\TrainingRunSnapshot.h" />

@@ -100,10 +100,12 @@ Building on trustworthy single steps and one explicit epoch, the current session
 
 The first debugger-like training workflow is implemented for one sample: clients can stop before forward propagation, advance through forward, backward, candidate update and verification, then commit or cancel without changing the public network prematurely.
 
+Retained session steps can now be compared through one renderer-neutral Engine operation and the public SDK. The first comparison contract covers loss, output predictions, neuron and connection gradients, final weights, and final biases, associates elements by stable ID, and exposes both signed and absolute differences. The shared CLI ranks the largest changes without requiring a client to print the complete result.
+
 The debugging experience should next evolve toward:
 
 - expand selected-neuron and selected-connection inspection with incoming and outgoing relationships;
-- compare current and previous activations, gradients, weights, and biases;
+- extend retained history with an explicit bounded policy for hidden-neuron activations;
 - identify inactive or consistently saturated neurons;
 - trace signal and gradient flow through the network;
 - preserve selected checkpoints for comparison;

@@ -1,6 +1,7 @@
 #include "TrainingSessionInspector.h"
 
 #include "../../Core/Model/TrainingSession.h"
+#include "TrainingStepComparer.h"
 
 namespace MiaIA::Engine
 {
@@ -46,5 +47,25 @@ namespace MiaIA::Engine
 
         result = session.Steps[stepIndex];
         return true;
+    }
+
+    bool TrainingSessionInspector::TryCompareSteps(
+        const Core::TrainingSession& session,
+        std::size_t firstStepIndex,
+        std::size_t secondStepIndex,
+        Core::TrainingStepComparisonSnapshot& result)
+    {
+        if (firstStepIndex >= session.Steps.size() ||
+            secondStepIndex >= session.Steps.size())
+        {
+            return false;
+        }
+
+        return TrainingStepComparer::Compare(
+            session.Steps[firstStepIndex],
+            firstStepIndex,
+            session.Steps[secondStepIndex],
+            secondStepIndex,
+            result);
     }
 }

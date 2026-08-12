@@ -120,6 +120,21 @@
     <ClInclude Include="Public\TrainingStepSnapshot.h">
       <Filter>File di intestazione</Filter>
     </ClInclude>
+    <ClInclude Include="Public\TrainingValueComparisonSnapshot.h">
+      <Filter>File di intestazione</Filter>
+    </ClInclude>
+    <ClInclude Include="Public\TrainingOutputComparisonSnapshot.h">
+      <Filter>File di intestazione</Filter>
+    </ClInclude>
+    <ClInclude Include="Public\TrainingNeuronComparisonSnapshot.h">
+      <Filter>File di intestazione</Filter>
+    </ClInclude>
+    <ClInclude Include="Public\TrainingConnectionComparisonSnapshot.h">
+      <Filter>File di intestazione</Filter>
+    </ClInclude>
+    <ClInclude Include="Public\TrainingStepComparisonSnapshot.h">
+      <Filter>File di intestazione</Filter>
+    </ClInclude>
     <ClInclude Include="Public\PredictionSnapshot.h">
       <Filter>File di intestazione</Filter>
     </ClInclude>

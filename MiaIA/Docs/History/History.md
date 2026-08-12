@@ -136,8 +136,14 @@ The first `.mai` project format established persistence above ONNX without chang
 
 The SDK, shared CLI, Unreal Blueprint library, and MiaIA Studio `Project` menu expose the same new, open, save, and information operations. Tests cover round trips, atomic overwrite, missing datasets, corrupt archives, unsupported versions, and unchanged client state after a rejected open.
 
+### Retained training-step comparison
+
+Controlled-session history gained a renderer-neutral comparison operation above the existing retained step snapshots. `TrainingStepComparer` associates neurons and connections by stable ID rather than vector position and reports signed and absolute differences for loss, output predictions, gradients, final weights, and final biases. Availability flags preserve the distinction between missing information and a mathematical zero.
+
+`TrainingSessionInspector` validates both history indexes, `MiaIAClient` serializes access through the existing client-state lock, and the shared CLI exposes bounded ranked output through `train session compare`. Comparisons remain read-only while foreground or background training continues. Full hidden-neuron activation comparison remains deliberately deferred because retaining complete network state for every step requires an explicit memory policy.
+
 ## Current position
 
-MiaIA can now represent, execute, interchange, persist a `.mai` v1 project, inspect, evaluate, differentiate, debug one training step phase by phase, train through controlled foreground or background sessions, and navigate the complete history of successful steps. It cannot yet persist visualization layouts or training history inside that project, or deliver the planned complete graphical debugging experience.
+MiaIA can now represent, execute, interchange, persist a `.mai` v1 project, inspect, evaluate, differentiate, debug one training step phase by phase, train through controlled foreground or background sessions, and navigate or compare the complete history of successful steps. It cannot yet persist visualization layouts or training history inside that project, retain complete hidden-neuron activations for every step, or deliver the planned complete graphical debugging experience.
 
 Those next steps are tracked in the [Roadmap](../Roadmap/Roadmap.md).

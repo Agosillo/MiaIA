@@ -1,4 +1,7 @@
+#include <algorithm>
+#include <cmath>
 #include <iostream>
+#include <limits>
 #include <string>
 #include <chrono>
 #include <cctype>
@@ -156,6 +159,7 @@ const std::vector<CommandCatalogEntry>& CommandCatalog()
         { "train session debug", "train session debug", "Attach phase debugging to the next sample.", true },
         { "train session history", "train session history", "List completed session steps.", true },
         { "train session inspect", "train session inspect <step-index>", "Inspect one retained training step.", true },
+        { "train session compare", "train session compare <first-step-index> <second-step-index> [maximum-items]", "Compare two retained training steps.", true },
         { "train session cancel", "train session cancel", "Cancel future session execution.", true },
         { "summary", "summary", "Show the current network structure.", true },
         { "inspect", "inspect", "Inspect current network values.", true },
@@ -314,6 +318,10 @@ void PrintHelp()
 
         << "  train session inspect <step-index>\n"
         << "      Show gradients and updates for one completed step\n\n"
+
+        << "  train session compare <first-step-index> "
+           "<second-step-index> [maximum-items]\n"
+        << "      Compare two completed steps and rank their changes\n\n"
 
         << "  train session next\n"
         << "      Execute exactly one sample training step\n\n"
@@ -1163,6 +1171,23 @@ const char* TrainingWorkerStopReasonName(
     return "Unknown";
 }
 
+void PrintValueComparison(
+    const MiaIA::Core::TrainingValueComparisonSnapshot& comparison)
+{
+    std::cout
+        << comparison.FirstValue
+        << " -> " << comparison.SecondValue
+        << " Delta " << comparison.Delta
+        << " |Delta| " << comparison.AbsoluteDelta;
+}
+
+double ComparisonRank(double absoluteDelta)
+{
+    return std::isfinite(absoluteDelta)
+        ? absoluteDelta
+        : std::numeric_limits<double>::infinity();
+}
+
 const char* TrainingDebugPhaseName(
     MiaIA::Core::TrainingDebugPhase phase);
 
@@ -1223,6 +1248,8 @@ void PrintTrainingSessionUsage()
         << "       train session debug\n"
         << "       train session history\n"
         << "       train session inspect <step-index>\n"
+        << "       train session compare <first-step-index> "
+           "<second-step-index> [maximum-items]\n"
         << "       train session next\n"
         << "       train session run <steps|all>\n"
         << "       train session resume\n"
@@ -1941,6 +1968,269 @@ void HandleTrainCommand(const std::string& command)
 
             std::cout << "\n";
             PrintTrainingSession(MiaIAClient::GetTrainingSession());
+            return;
+        }
+
+        if (sessionAction == "compare")
+        {
+            std::size_t firstStepIndex{};
+            std::size_t secondStepIndex{};
+            std::size_t maximumItems{ 10 };
+
+            if (!(stream >> firstStepIndex >> secondStepIndex))
+            {
+                PrintTrainingSessionUsage();
+                return;
+            }
+
+            stream >> std::ws;
+
+            if (!stream.eof())
+            {
+                if (!(stream >> maximumItems) || maximumItems == 0)
+                {
+                    PrintTrainingSessionUsage();
+                    return;
+                }
+
+                stream >> std::ws;
+
+                if (!stream.eof())
+                {
+                    PrintTrainingSessionUsage();
+                    return;
+                }
+            }
+
+            MiaIA::Core::TrainingStepComparisonSnapshot comparison;
+
+            if (!MiaIAClient::TryCompareTrainingSessionSteps(
+                firstStepIndex,
+                secondStepIndex,
+                comparison))
+            {
+                std::cout
+                    << "Training session steps could not be compared. "
+                       "Check both history indexes.\n";
+                return;
+            }
+
+            std::cout
+                << "\nTraining Session Comparison "
+                << comparison.FirstStepIndex
+                << " -> " << comparison.SecondStepIndex
+                << "\nSamples: " << comparison.FirstSampleIndex
+                << " -> " << comparison.SecondSampleIndex;
+
+            if (comparison.SameSample)
+            {
+                std::cout << " (same sample)";
+            }
+            else
+            {
+                std::cout
+                    << " (different samples; loss and prediction "
+                       "deltas are contextual)";
+            }
+
+            std::cout << "\nLoss before: ";
+            PrintValueComparison(comparison.LossBefore);
+            std::cout << "\nLoss after: ";
+            PrintValueComparison(comparison.LossAfter);
+            std::cout << "\n\nOutput Predictions\n";
+
+            for (const auto& output : comparison.Outputs)
+            {
+                std::cout << "Output " << output.OutputIndex;
+
+                if (!output.HasFirstPrediction ||
+                    !output.HasSecondPrediction)
+                {
+                    std::cout << " unavailable in one step\n";
+                    continue;
+                }
+
+                std::cout << " Before ";
+                PrintValueComparison(output.BeforePrediction);
+                std::cout << " After ";
+                PrintValueComparison(output.AfterPrediction);
+                std::cout << "\n";
+            }
+
+            auto neuronGradients = comparison.Neurons;
+            neuronGradients.erase(
+                std::remove_if(
+                    neuronGradients.begin(),
+                    neuronGradients.end(),
+                    [](const auto& neuron)
+                    {
+                        return !neuron.HasFirstGradient ||
+                            !neuron.HasSecondGradient;
+                    }),
+                neuronGradients.end());
+            std::sort(
+                neuronGradients.begin(),
+                neuronGradients.end(),
+                [](const auto& left, const auto& right)
+                {
+                    const double leftChange = std::max({
+                        ComparisonRank(
+                            left.ActivationGradient.AbsoluteDelta),
+                        ComparisonRank(
+                            left.PreActivationGradient.AbsoluteDelta),
+                        ComparisonRank(
+                            left.BiasGradient.AbsoluteDelta) });
+                    const double rightChange = std::max({
+                        ComparisonRank(
+                            right.ActivationGradient.AbsoluteDelta),
+                        ComparisonRank(
+                            right.PreActivationGradient.AbsoluteDelta),
+                        ComparisonRank(
+                            right.BiasGradient.AbsoluteDelta) });
+                    return leftChange != rightChange
+                        ? leftChange > rightChange
+                        : left.Id < right.Id;
+                });
+
+            if (neuronGradients.size() > maximumItems)
+            {
+                neuronGradients.resize(maximumItems);
+            }
+
+            std::cout << "\nTop Neuron Gradient Changes\n";
+
+            for (const auto& neuron : neuronGradients)
+            {
+                std::cout << "Neuron " << neuron.Id << " Activation ";
+                PrintValueComparison(neuron.ActivationGradient);
+                std::cout << " Pre-activation ";
+                PrintValueComparison(neuron.PreActivationGradient);
+                std::cout << " Bias ";
+                PrintValueComparison(neuron.BiasGradient);
+                std::cout << "\n";
+            }
+
+            auto connectionGradients = comparison.Connections;
+            connectionGradients.erase(
+                std::remove_if(
+                    connectionGradients.begin(),
+                    connectionGradients.end(),
+                    [](const auto& connection)
+                    {
+                        return !connection.HasFirstGradient ||
+                            !connection.HasSecondGradient;
+                    }),
+                connectionGradients.end());
+            std::sort(
+                connectionGradients.begin(),
+                connectionGradients.end(),
+                [](const auto& left, const auto& right)
+                {
+                    const double leftChange = ComparisonRank(
+                        left.WeightGradient.AbsoluteDelta);
+                    const double rightChange = ComparisonRank(
+                        right.WeightGradient.AbsoluteDelta);
+                    return leftChange != rightChange
+                        ? leftChange > rightChange
+                        : left.Id < right.Id;
+                });
+
+            if (connectionGradients.size() > maximumItems)
+            {
+                connectionGradients.resize(maximumItems);
+            }
+
+            std::cout << "\nTop Connection Gradient Changes\n";
+
+            for (const auto& connection : connectionGradients)
+            {
+                std::cout
+                    << "Connection " << connection.Id
+                    << " (" << connection.FromNeuron
+                    << " -> " << connection.ToNeuron << ") ";
+                PrintValueComparison(connection.WeightGradient);
+                std::cout << "\n";
+            }
+
+            auto weightChanges = comparison.Connections;
+            weightChanges.erase(
+                std::remove_if(
+                    weightChanges.begin(),
+                    weightChanges.end(),
+                    [](const auto& connection)
+                    {
+                        return !connection.HasFirstUpdate ||
+                            !connection.HasSecondUpdate;
+                    }),
+                weightChanges.end());
+            std::sort(
+                weightChanges.begin(),
+                weightChanges.end(),
+                [](const auto& left, const auto& right)
+                {
+                    const double leftChange = ComparisonRank(
+                        left.Weight.AbsoluteDelta);
+                    const double rightChange = ComparisonRank(
+                        right.Weight.AbsoluteDelta);
+                    return leftChange != rightChange
+                        ? leftChange > rightChange
+                        : left.Id < right.Id;
+                });
+
+            if (weightChanges.size() > maximumItems)
+            {
+                weightChanges.resize(maximumItems);
+            }
+
+            std::cout << "\nTop Weight Changes\n";
+
+            for (const auto& connection : weightChanges)
+            {
+                std::cout << "Connection " << connection.Id << " ";
+                PrintValueComparison(connection.Weight);
+                std::cout << "\n";
+            }
+
+            auto biasChanges = comparison.Neurons;
+            biasChanges.erase(
+                std::remove_if(
+                    biasChanges.begin(),
+                    biasChanges.end(),
+                    [](const auto& neuron)
+                    {
+                        return !neuron.HasFirstUpdate ||
+                            !neuron.HasSecondUpdate;
+                    }),
+                biasChanges.end());
+            std::sort(
+                biasChanges.begin(),
+                biasChanges.end(),
+                [](const auto& left, const auto& right)
+                {
+                    const double leftChange = ComparisonRank(
+                        left.Bias.AbsoluteDelta);
+                    const double rightChange = ComparisonRank(
+                        right.Bias.AbsoluteDelta);
+                    return leftChange != rightChange
+                        ? leftChange > rightChange
+                        : left.Id < right.Id;
+                });
+
+            if (biasChanges.size() > maximumItems)
+            {
+                biasChanges.resize(maximumItems);
+            }
+
+            std::cout << "\nTop Bias Changes\n";
+
+            for (const auto& neuron : biasChanges)
+            {
+                std::cout << "Neuron " << neuron.Id << " ";
+                PrintValueComparison(neuron.Bias);
+                std::cout << "\n";
+            }
+
+            std::cout << "\n";
             return;
         }
 

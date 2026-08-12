@@ -40,7 +40,7 @@ The current early-alpha foundation includes:
 - interactive 2D and 3D topology views in MiaIA Studio;
 - a renderer-neutral StudioCore application layer and Windows standalone host.
 
-> **Project status:** the mathematical and application foundations are implemented and tested. Persistent `.mia` workspaces and the complete production debugging experience remain planned work. APIs and file formats may change during early development.
+> **Project status:** the mathematical and application foundations and versioned `.mai` v1 project persistence are implemented and tested. Persisted training history, checkpoints, visualization layouts, and the complete production debugging experience remain planned work. APIs and file formats may change during early development.
 
 Official releases are published at [www.nonop.biz](https://www.nonop.biz). The corresponding source code is maintained in this repository.
 

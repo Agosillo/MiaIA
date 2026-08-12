@@ -20,6 +20,7 @@
 #include "../../Core/Public/TrainingSessionSnapshot.h"
 #include "../../Core/Public/TrainingRunSnapshot.h"
 #include "../../Core/Public/TrainingHistoryEntrySnapshot.h"
+#include "../../Core/Public/TrainingStepComparisonSnapshot.h"
 #include "../../Core/Public/TrainingDebugSnapshot.h"
 #include "../../Core/Public/TrainingDebugNeuronSnapshot.h"
 #include "../../Core/Public/TrainingDebugConnectionSnapshot.h"
@@ -108,6 +109,10 @@ namespace MiaIA::SDK
         static bool TryGetTrainingSessionStep(
             std::size_t stepIndex,
             Core::TrainingStepSnapshot& result);
+        static bool TryCompareTrainingSessionSteps(
+            std::size_t firstStepIndex,
+            std::size_t secondStepIndex,
+            Core::TrainingStepComparisonSnapshot& result);
         static bool AdvanceTrainingSession(
             Core::TrainingStepSnapshot& result);
         static bool RunTrainingSession(

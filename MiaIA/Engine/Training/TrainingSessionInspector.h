@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../../Core/Public/TrainingHistoryEntrySnapshot.h"
+#include "../../Core/Public/TrainingStepComparisonSnapshot.h"
 #include "../../Core/Public/TrainingStepSnapshot.h"
 
 #include <cstddef>
@@ -24,5 +25,11 @@ namespace MiaIA::Engine
             const Core::TrainingSession& session,
             std::size_t stepIndex,
             Core::TrainingStepSnapshot& result);
+
+        static bool TryCompareSteps(
+            const Core::TrainingSession& session,
+            std::size_t firstStepIndex,
+            std::size_t secondStepIndex,
+            Core::TrainingStepComparisonSnapshot& result);
     };
 }

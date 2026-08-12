@@ -107,6 +107,19 @@ namespace MiaIA::SDK
             result);
     }
 
+    bool MiaIAClient::TryCompareTrainingSessionSteps(
+        std::size_t firstStepIndex,
+        std::size_t secondStepIndex,
+        Core::TrainingStepComparisonSnapshot& result)
+    {
+        const std::scoped_lock lock(Detail::ClientMutex());
+        return Engine::TrainingSessionInspector::TryCompareSteps(
+            Detail::ClientTrainingSession(),
+            firstStepIndex,
+            secondStepIndex,
+            result);
+    }
+
     bool MiaIAClient::AdvanceTrainingSession(
         Core::TrainingStepSnapshot& result)
     {

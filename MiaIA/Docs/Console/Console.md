@@ -84,6 +84,7 @@ train session status
 train session run 1
 train session history
 train session inspect 0
+train session compare 0 2
 train session cancel
 train session start 100 0.01 mse
 train session resume
@@ -661,6 +662,18 @@ train session inspect <step-index>
 
 Retrieves one completed step by its global history index. It prints targets, predictions, signed errors, loss before and after, neuron gradients, and every weight and bias update with previous value, gradient, delta, and updated value. An invalid index leaves the caller result unchanged.
 
+### `train session compare`
+
+```text
+train session compare <first-step-index> <second-step-index> [maximum-items]
+```
+
+Compares two completed steps retained by the current session without changing the network, session cursor, or history. The result reports loss and output-prediction differences, then ranks neuron gradients, connection gradients, final weights, and final biases by absolute change. Every scalar uses `second - first` as its signed delta and also reports the absolute delta.
+
+The optional positive item limit defaults to `10` and bounds each ranked section independently, so large networks do not flood the Console. The complete comparison remains available through the SDK. Comparing two steps from different dataset samples is allowed, but the command marks loss and prediction deltas as contextual because their inputs and targets differ. Invalid indexes and a zero limit are rejected without changing caller state.
+
+Individual hidden-neuron activations are not part of this first comparison contract because completed session history does not currently retain a full network snapshot for every step. Output predictions, gradients, and parameter endpoints are compared from the data already retained by `TrainingStepSnapshot`.
+
 ### `train session run`
 
 ```text
@@ -742,6 +755,7 @@ train session status
 train session run 1
 train session history
 train session inspect 0
+train session compare 0 2
 train session cancel
 train session start 100 0.01 mse
 train session resume
@@ -778,9 +792,10 @@ This sequence demonstrates the difference between stages:
 14. `train session run 1` executes one additional synchronous step;
 15. `train session history` lists the retained updates;
 16. `train session inspect 0` opens one complete mathematical step;
-17. `train session cancel` stops future steps without reverting completed updates;
-18. `train session resume` starts non-blocking background execution;
-19. `train session pause` joins the worker at the next atomic step boundary.
+17. `train session compare 0 2` compares two retained mathematical steps;
+18. `train session cancel` stops future steps without reverting completed updates;
+19. `train session resume` starts non-blocking background execution;
+20. `train session pause` joins the worker at the next atomic step boundary.
 
 ## Common failures
 
