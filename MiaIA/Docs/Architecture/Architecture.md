@@ -100,11 +100,13 @@ The dense network factory currently creates:
 - zero or more hidden layers of equal width;
 - one output layer;
 - fully connected transitions;
-- initial connection weights of `0.1`;
-- initial biases and activations of `0.0`;
-- Sigmoid as the default activation for created non-input layers.
+- independently configurable hidden-layer and output-layer activation types;
+- a configurable uniform initial connection weight;
+- a configurable uniform initial bias for hidden and output neurons.
 
-Dense creation is a transactional batch operation. The factory calculates neuron and connection counts with checked arithmetic, reserves the required storage, constructs the graph directly, validates it once, and only then replaces the public network. The atomic `NetworkEditor` methods retain their stricter per-operation checks for interactive edits; repeatedly calling them is intentionally not the implementation path for generated dense graphs.
+`DenseNetworkConfiguration` carries those mathematical initialization choices across Core, Engine, and SDK. Its defaults retain the original contract: Sigmoid hidden and output activations, connection weights of `0.1`, and non-input biases of `0.0`. Input neurons retain zero bias and receive raw values; forward execution does not apply an activation function to layer zero.
+
+Dense creation is a transactional batch operation. The factory rejects unsupported activation values and non-finite parameters, calculates neuron and connection counts with checked arithmetic, reserves the required storage, constructs the graph directly, validates it once, and only then replaces the public network. The atomic `NetworkEditor` methods retain their stricter per-operation checks for interactive edits; repeatedly calling them is intentionally not the implementation path for generated dense graphs.
 
 For `I` inputs, hidden width `H`, `L` hidden layers, and `O` outputs, the neuron count is `I + L*H + O`. With at least one hidden layer, the connection count is `I*H + (L-1)*H*H + H*O`; without hidden layers it is `I*O`.
 

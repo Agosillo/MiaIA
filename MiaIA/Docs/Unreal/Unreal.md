@@ -37,6 +37,7 @@ Get Project Info
 Import Onnx
 Export Onnx
 Create Dense Network
+Create Configured Dense Network
 Get Network Snapshot
 Import Csv Dataset
 Start Training Session
@@ -58,6 +59,8 @@ Get Debug Neuron
 Get Debug Connection
 Execute Command
 ```
+
+`Create Dense Network` preserves the original Sigmoid, `0.1` weight, and zero-bias defaults. `Create Configured Dense Network` adds separate hidden and output activation pins plus uniform initial weight and non-input bias pins. The input layer remains raw data and therefore has no activation-selection pin.
 
 The training nodes currently select MSE and SGD internally because those are the only implemented loss and optimizer choices. Future enum pins should be added when the Engine supports more than one valid choice.
 

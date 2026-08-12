@@ -6,6 +6,7 @@ The roadmap is organized by dependency rather than by a fixed release date. Math
 
 - layered Core, Engine, SDK, and Client architecture;
 - network creation, editing, validation, and snapshots;
+- configurable hidden and output activations, uniform initial connection weights, and non-input biases for dense creation across SDK, CLI, and Blueprint;
 - Sigmoid, ReLU, Tanh, and Linear forward propagation;
 - Console client and initial Unreal Engine linkage;
 - Debug- and Release-capable named test harness;

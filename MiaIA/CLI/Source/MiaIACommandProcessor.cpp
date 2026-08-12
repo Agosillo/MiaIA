@@ -108,7 +108,7 @@ const std::vector<CommandCatalogEntry>& CommandCatalog()
     static const std::vector<CommandCatalogEntry> entries =
     {
         { "help", "help", "Show every available command.", true },
-        { "create", "create <inputs> <hidden-width> <hidden-layers> <outputs>", "Create a dense feed-forward network.", true },
+        { "create", "create <inputs> <hidden-width> <hidden-layers> <outputs> [--hidden-activation <type>] [--output-activation <type>] [--weight <value>] [--bias <value>]", "Create a configurable dense feed-forward network.", true },
         { "input", "input <value...>", "Assign values to the input layer.", true },
         { "predict", "predict <value...>", "Run inference for one input vector.", true },
         { "import", "import onnx <path>", "Import a model from a supported format.", false },
@@ -205,9 +205,13 @@ void PrintHelp()
         << "      Show available commands\n\n"
 
         << "  create <inputs> <neurons-per-hidden-layer> <hidden-layers> <outputs>\n"
+        << "      [--hidden-activation sigmoid|relu|tanh|linear]\n"
+        << "      [--output-activation sigmoid|relu|tanh|linear]\n"
+        << "      [--weight <initial-weight>] [--bias <initial-bias>]\n"
         << "      Create a dense neural network\n\n"
         << "      Example:\n"
-        << "        create 784 256 3 10\n\n"
+        << "        create 784 256 3 10 --hidden-activation relu "
+           "--output-activation sigmoid\n\n"
 
         << "  input [values]\n"
         << "      Set the input layer activation values\n\n"
@@ -364,40 +368,151 @@ void PrintHelp()
 }
 
 
+const char* ActivationTypeName(MiaIA::Core::ActivationType activation);
+
+bool TryParseActivation(
+    std::string value,
+    MiaIA::Core::ActivationType& result)
+{
+    std::transform(
+        value.begin(),
+        value.end(),
+        value.begin(),
+        [](unsigned char character)
+        {
+            return static_cast<char>(std::tolower(character));
+        });
+
+    if (value == "sigmoid")
+    {
+        result = MiaIA::Core::ActivationType::Sigmoid;
+        return true;
+    }
+
+    if (value == "relu")
+    {
+        result = MiaIA::Core::ActivationType::ReLU;
+        return true;
+    }
+
+    if (value == "tanh")
+    {
+        result = MiaIA::Core::ActivationType::Tanh;
+        return true;
+    }
+
+    if (value == "linear")
+    {
+        result = MiaIA::Core::ActivationType::Linear;
+        return true;
+    }
+
+    return false;
+}
+
+void PrintCreateUsage()
+{
+    std::cout
+        << "Usage: create <inputs> <hidden-width> <hidden-layers> "
+           "<outputs> [--hidden-activation <type>] "
+           "[--output-activation <type>] [--weight <value>] "
+           "[--bias <value>]\n"
+        << "Activation types: sigmoid, relu, tanh, linear\n";
+}
+
 void CreateNetwork(const std::string& command)
 {
     using MiaIA::SDK::MiaIAClient;
-
 
     int inputCount = 10;
     int hiddenCount = 32;
     int hiddenLayers = 2;
     int outputCount = 3;
-
-
-    std::stringstream ss(command);
-
+    MiaIA::Core::DenseNetworkConfiguration configuration;
+    std::stringstream stream(command);
     std::string token;
+    stream >> token;
+    stream >> std::ws;
 
-    ss >> token; // Remove "create".
-
-
-    if (ss >> inputCount
-        >> hiddenCount
-        >> hiddenLayers
-        >> outputCount)
+    if (!stream.eof() &&
+        !(stream >> inputCount
+            >> hiddenCount
+            >> hiddenLayers
+            >> outputCount))
     {
-        // Parameters received.
+        PrintCreateUsage();
+        return;
+    }
+
+    std::string option;
+
+    while (stream >> option)
+    {
+        if (option == "--hidden-activation")
+        {
+            std::string activation;
+
+            if (!(stream >> activation) ||
+                !TryParseActivation(
+                    activation,
+                    configuration.HiddenActivation))
+            {
+                PrintCreateUsage();
+                return;
+            }
+        }
+        else if (option == "--output-activation")
+        {
+            std::string activation;
+
+            if (!(stream >> activation) ||
+                !TryParseActivation(
+                    activation,
+                    configuration.OutputActivation))
+            {
+                PrintCreateUsage();
+                return;
+            }
+        }
+        else if (option == "--weight")
+        {
+            if (!(stream >> configuration.InitialWeight))
+            {
+                PrintCreateUsage();
+                return;
+            }
+        }
+        else if (option == "--bias")
+        {
+            if (!(stream >> configuration.InitialBias))
+            {
+                PrintCreateUsage();
+                return;
+            }
+        }
+        else
+        {
+            PrintCreateUsage();
+            return;
+        }
     }
 
     if (MiaIAClient::CreateDenseNetwork(
         inputCount,
         hiddenCount,
         hiddenLayers,
-        outputCount))
+        outputCount,
+        configuration))
     {
         std::cout
-            << "Dense network created.\n";
+            << "Dense network created.\n"
+            << "Hidden activation: "
+            << ActivationTypeName(configuration.HiddenActivation)
+            << "\nOutput activation: "
+            << ActivationTypeName(configuration.OutputActivation)
+            << "\nInitial weight: " << configuration.InitialWeight
+            << "\nInitial non-input bias: "
+            << configuration.InitialBias << "\n";
     }
     else
     {

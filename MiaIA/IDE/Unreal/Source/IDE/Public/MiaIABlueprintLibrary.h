@@ -41,6 +41,17 @@ public:
         int32 HiddenLayers,
         int32 OutputCount);
 
+    UFUNCTION(BlueprintCallable, Category = "MiaIA|Network")
+    static bool CreateConfiguredDenseNetwork(
+        int32 InputCount,
+        int32 HiddenCount,
+        int32 HiddenLayers,
+        int32 OutputCount,
+        EMiaIAActivationType HiddenActivation,
+        EMiaIAActivationType OutputActivation,
+        double InitialWeight,
+        double InitialBias);
+
     UFUNCTION(BlueprintPure, Category = "MiaIA|Network")
     static FMiaIANetworkSnapshot GetNetworkSnapshot();
 

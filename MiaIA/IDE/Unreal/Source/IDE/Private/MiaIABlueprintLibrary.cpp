@@ -28,6 +28,24 @@ namespace
         return EMiaIAActivationType::Sigmoid;
     }
 
+    MiaIA::Core::ActivationType ToCore(
+        EMiaIAActivationType activation)
+    {
+        switch (activation)
+        {
+        case EMiaIAActivationType::Sigmoid:
+            return MiaIA::Core::ActivationType::Sigmoid;
+        case EMiaIAActivationType::ReLU:
+            return MiaIA::Core::ActivationType::ReLU;
+        case EMiaIAActivationType::Tanh:
+            return MiaIA::Core::ActivationType::Tanh;
+        case EMiaIAActivationType::Linear:
+            return MiaIA::Core::ActivationType::Linear;
+        }
+
+        return MiaIA::Core::ActivationType::Sigmoid;
+    }
+
     FMiaIANeuronSnapshot ToBlueprint(
         const MiaIA::Core::NeuronSnapshot& source)
     {
@@ -596,6 +614,40 @@ bool UMiaIABlueprintLibrary::CreateDenseNetwork(
         HiddenCount,
         HiddenLayers,
         OutputCount);
+}
+
+bool UMiaIABlueprintLibrary::CreateConfiguredDenseNetwork(
+    int32 InputCount,
+    int32 HiddenCount,
+    int32 HiddenLayers,
+    int32 OutputCount,
+    EMiaIAActivationType HiddenActivation,
+    EMiaIAActivationType OutputActivation,
+    double InitialWeight,
+    double InitialBias)
+{
+    if (InputCount <= 0 ||
+        HiddenCount <= 0 ||
+        HiddenLayers < 0 ||
+        OutputCount <= 0 ||
+        !FMath::IsFinite(InitialWeight) ||
+        !FMath::IsFinite(InitialBias))
+    {
+        return false;
+    }
+
+    MiaIA::Core::DenseNetworkConfiguration configuration;
+    configuration.HiddenActivation = ToCore(HiddenActivation);
+    configuration.OutputActivation = ToCore(OutputActivation);
+    configuration.InitialWeight = InitialWeight;
+    configuration.InitialBias = InitialBias;
+
+    return MiaIA::SDK::MiaIAClient::CreateDenseNetwork(
+        InputCount,
+        HiddenCount,
+        HiddenLayers,
+        OutputCount,
+        configuration);
 }
 
 FMiaIANetworkSnapshot UMiaIABlueprintLibrary::GetNetworkSnapshot()

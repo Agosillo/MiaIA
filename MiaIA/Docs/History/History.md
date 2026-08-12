@@ -148,8 +148,14 @@ Ordinary network inspection gained element-level contracts independent of the tr
 
 `NetworkInspector` and `NetworkTopology` own the read-only Engine operation, `MiaIAClient` exposes it through the serialized SDK facade, and the shared CLI provides `inspect neuron` and `inspect connection`. StudioCore retains the selected element's inspection state, while the Unreal Blueprint adapter and shared 2D/3D Inspector present the same information with a persistent configurable relationship limit. Complete topology snapshots are no longer required merely to explain one selected element.
 
+### Configurable dense-network creation
+
+Dense creation gained one shared Core configuration for hidden-layer activation, output-layer activation, uniform initial connection weight, and uniform non-input bias. Engine creation remains transactional: unsupported activation values, non-finite parameters, invalid dimensions, and invalid generated graphs leave the published network unchanged. The original overload remains available and preserves Sigmoid activations, `0.1` weights, and zero biases.
+
+The SDK overload, shared CLI `create` options, and Unreal `Create Configured Dense Network` node expose the same contract without duplicating factory logic. Input values remain raw and layer zero is not activation-configurable. Random initialization and preprocessing policies remain deliberately separate future concerns.
+
 ## Current position
 
-MiaIA can now represent, execute, interchange, persist a `.mai` v1 project, inspect individual network relationships, evaluate, differentiate, debug one training step phase by phase, train through controlled foreground or background sessions, and navigate or compare the complete history of successful steps. It cannot yet persist visualization layouts or training history inside that project, retain complete hidden-neuron activations for every step, or deliver the planned complete graphical debugging experience.
+MiaIA can now create dense networks with explicit initialization choices, represent, execute, interchange, persist a `.mai` v1 project, inspect individual network relationships, evaluate, differentiate, debug one training step phase by phase, train through controlled foreground or background sessions, and navigate or compare the complete history of successful steps. It cannot yet persist visualization layouts or training history inside that project, retain complete hidden-neuron activations for every step, or deliver the planned complete graphical debugging experience.
 
 Those next steps are tracked in the [Roadmap](../Roadmap/Roadmap.md).

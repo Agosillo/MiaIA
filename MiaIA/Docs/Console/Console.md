@@ -36,7 +36,7 @@ project
     -> project info
 ```
 
-Once a command starts accepting values, its complete syntax remains visible while the values are entered. For example, `create 2` continues to display `create <inputs> <hidden-width> <hidden-layers> <outputs>`.
+Once a command starts accepting values, its complete syntax remains visible while the values are entered. For example, `create 2` continues to display the four required shape arguments and every optional initialization argument.
 
 History belongs to the host because keyboard behavior is an interface concern. The Unreal editor panel currently provides session-local Up/Down history, clickable suggestions, and Tab completion. The thin `Console.exe` host still relies on the terminal's ordinary line input and does not yet provide interactive suggestion rendering. Neither host persists command history after it closes.
 
@@ -120,6 +120,9 @@ Closes the Console. The current in-memory network and dataset are discarded.
 
 ```text
 create <inputs> <neurons-per-hidden-layer> <hidden-layers> <outputs>
+       [--hidden-activation sigmoid|relu|tanh|linear]
+       [--output-activation sigmoid|relu|tanh|linear]
+       [--weight <initial-weight>] [--bias <initial-bias>]
 ```
 
 Creates a new fully connected feed-forward network and replaces the current network.
@@ -129,7 +132,11 @@ Arguments:
 - `inputs`: number of input neurons;
 - `neurons-per-hidden-layer`: width shared by every hidden layer;
 - `hidden-layers`: number of hidden layers; zero is allowed by the engine;
-- `outputs`: number of output neurons.
+- `outputs`: number of output neurons;
+- `--hidden-activation`: activation used by every hidden layer;
+- `--output-activation`: activation used by the output layer;
+- `--weight`: finite initial value assigned to every connection;
+- `--bias`: finite initial value assigned to every hidden and output neuron.
 
 Example:
 
@@ -143,11 +150,23 @@ This describes the shape:
 784 -> 256 -> 256 -> 256 -> 10
 ```
 
-The dense factory initializes connection weights to `0.1`, biases to `0.0`, and non-input layer activations to Sigmoid. The current Console command does not expose weight initialization or activation selection; those capabilities exist at the SDK level and will eventually receive richer client controls.
+The optional arguments can describe different experiments without changing Engine code. A classification-oriented example can retain a Sigmoid output while using ReLU hidden layers:
+
+```text
+create 784 256 3 10 --hidden-activation relu --output-activation sigmoid
+```
+
+A regression-oriented network can instead use a Linear output and a smaller uniform starting weight:
+
+```text
+create 4 16 2 1 --hidden-activation tanh --output-activation linear --weight 0.01 --bias 0
+```
+
+Defaults preserve the original behavior: hidden and output activations are Sigmoid, every connection starts at `0.1`, and every non-input bias starts at `0.0`. The input layer is deliberately not activation-configurable: `input` and `predict` assign raw values to it, and preprocessing belongs in a separate future data pipeline rather than being hidden inside network creation. Its biases remain `0.0`.
 
 Dense size grows primarily with connections. For `I` inputs, hidden width `H`, `L` hidden layers, and `O` outputs, a network with hidden layers contains `I*H + (L-1)*H*H + H*O` connections. For example, `create 100 100 100 1` creates 10,101 neurons and 1,000,100 connections. The factory builds this graph in a preallocated linear batch and publishes it only after final validation. Graphical clients may intentionally switch to an aggregate layer view rather than drawing every connection.
 
-Calling `create` without arguments currently uses the Console defaults `10 32 2 3`. Supplying all four values explicitly is recommended because it makes the experiment reproducible and clear.
+Calling `create` without arguments currently uses the Console defaults `10 32 2 3` together with the initialization defaults above. Once a shape is started, all four positional values are required before any optional argument. Supplying the full configuration explicitly is recommended because it makes the experiment reproducible and clear.
 
 ### `input`
 

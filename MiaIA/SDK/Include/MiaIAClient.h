@@ -10,6 +10,7 @@
 #include "../../Core/Public/NeuronInspectionSnapshot.h"
 #include "../../Core/Public/DatasetSummary.h"
 #include "../../Core/Public/DatasetEvaluationSnapshot.h"
+#include "../../Core/Public/DenseNetworkConfiguration.h"
 #include "../../Core/Public/LossType.h"
 #include "../../Core/Public/OptimizerType.h"
 #include "../../Core/Public/PredictionSnapshot.h"
@@ -63,6 +64,12 @@ namespace MiaIA::SDK
         static bool SetLayerActivation(std::uint64_t layerId, Core::ActivationType activation);
         static bool GetConnectionWeight(std::uint64_t connectionId, double& weight);
         static bool CreateDenseNetwork(int inputCount, int hiddenCount, int hiddenLayers, int outputCount);
+        static bool CreateDenseNetwork(
+            int inputCount,
+            int hiddenCount,
+            int hiddenLayers,
+            int outputCount,
+            const Core::DenseNetworkConfiguration& configuration);
         static bool ImportOnnx(const std::string& path);
         static bool ExportOnnx(const std::string& path);
         static bool NewProject();

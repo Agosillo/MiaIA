@@ -156,6 +156,7 @@
     <ClInclude Include="Public\ConnectionGradientSnapshot.h" />
     <ClInclude Include="Public\ConnectionUpdateSnapshot.h" />
     <ClInclude Include="Public\DatasetSummary.h" />
+    <ClInclude Include="Public\DenseNetworkConfiguration.h" />
     <ClInclude Include="Public\LossType.h" />
     <ClInclude Include="Public\NetworkSnapshot.h" />
     <ClInclude Include="Public\NeuronContextSnapshot.h" />

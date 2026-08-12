@@ -376,6 +376,21 @@ namespace MiaIA::SDK
         int hiddenLayers,
         int outputCount)
     {
+        return CreateDenseNetwork(
+            inputCount,
+            hiddenCount,
+            hiddenLayers,
+            outputCount,
+            Core::DenseNetworkConfiguration{});
+    }
+
+    bool MiaIAClient::CreateDenseNetwork(
+        int inputCount,
+        int hiddenCount,
+        int hiddenLayers,
+        int outputCount,
+        const Core::DenseNetworkConfiguration& configuration)
+    {
         const std::scoped_lock lock(Detail::ClientMutex());
 
         if (Detail::IsClientMutationBlocked())
@@ -388,7 +403,8 @@ namespace MiaIA::SDK
             inputCount,
             hiddenCount,
             hiddenLayers,
-            outputCount);
+            outputCount,
+            configuration);
     }
 
 }

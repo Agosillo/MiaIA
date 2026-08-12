@@ -1,6 +1,7 @@
 #include "NetworkFactory.h"
 #include "../Validation/NetworkValidator.h"
 
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <limits>
@@ -103,6 +104,20 @@ namespace
 
         return true;
     }
+
+    bool IsSupportedActivation(MiaIA::Core::ActivationType activation)
+    {
+        switch (activation)
+        {
+        case MiaIA::Core::ActivationType::Sigmoid:
+        case MiaIA::Core::ActivationType::ReLU:
+        case MiaIA::Core::ActivationType::Tanh:
+        case MiaIA::Core::ActivationType::Linear:
+            return true;
+        }
+
+        return false;
+    }
 }
 
 namespace MiaIA::Engine
@@ -119,10 +134,31 @@ namespace MiaIA::Engine
         int hiddenLayers,
         int outputCount)
     {
+        return CreateDense(
+            network,
+            inputCount,
+            hiddenCount,
+            hiddenLayers,
+            outputCount,
+            Core::DenseNetworkConfiguration{});
+    }
+
+    bool NetworkFactory::CreateDense(
+        Core::Network& network,
+        int inputCount,
+        int hiddenCount,
+        int hiddenLayers,
+        int outputCount,
+        const Core::DenseNetworkConfiguration& configuration)
+    {
         if (inputCount <= 0 ||
             hiddenCount <= 0 ||
             hiddenLayers < 0 ||
-            outputCount <= 0)
+            outputCount <= 0 ||
+            !IsSupportedActivation(configuration.HiddenActivation) ||
+            !IsSupportedActivation(configuration.OutputActivation) ||
+            !std::isfinite(configuration.InitialWeight) ||
+            !std::isfinite(configuration.InitialBias))
         {
             return false;
         }
@@ -166,12 +202,15 @@ namespace MiaIA::Engine
                 std::uint64_t id,
                 const char* name,
                 std::size_t count,
+                Core::ActivationType activation,
+                double bias,
                 std::vector<std::uint64_t>& ids)
             {
                 Core::Layer layer;
                 layer.Id = id;
                 layer.Name = name;
                 layer.Order = id;
+                layer.Activation = activation;
                 layer.Neurons.reserve(count);
                 ids.clear();
                 ids.reserve(count);
@@ -181,7 +220,7 @@ namespace MiaIA::Engine
                     const std::uint64_t neuronId = ++nextNeuronId;
                     layer.Neurons.push_back(Core::Neuron{
                         neuronId,
-                        0.0,
+                        bias,
                         0.0
                     });
                     ids.push_back(neuronId);
@@ -191,7 +230,7 @@ namespace MiaIA::Engine
             };
 
             const auto appendConnections =
-                [&denseNetwork, &nextConnectionId](
+                [&denseNetwork, &nextConnectionId, &configuration](
                     const std::vector<std::uint64_t>& fromLayer,
                     const std::vector<std::uint64_t>& toLayer)
             {
@@ -203,7 +242,7 @@ namespace MiaIA::Engine
                             nextConnectionId++,
                             fromNeuron,
                             toNeuron,
-                            0.1
+                            configuration.InitialWeight
                         });
                     }
                 }
@@ -213,6 +252,8 @@ namespace MiaIA::Engine
                 layerOrder,
                 "Input",
                 inputs,
+                Core::ActivationType::Sigmoid,
+                0.0,
                 currentLayer);
             previousLayer = currentLayer;
 
@@ -224,6 +265,8 @@ namespace MiaIA::Engine
                     ++layerOrder,
                     "Hidden",
                     hiddenWidth,
+                    configuration.HiddenActivation,
+                    configuration.InitialBias,
                     currentLayer);
                 appendConnections(previousLayer, currentLayer);
                 previousLayer = currentLayer;
@@ -233,6 +276,8 @@ namespace MiaIA::Engine
                 ++layerOrder,
                 "Output",
                 outputs,
+                configuration.OutputActivation,
+                configuration.InitialBias,
                 currentLayer);
             appendConnections(previousLayer, currentLayer);
 

@@ -226,6 +226,35 @@ int main()
     assert(inspectSuggestions.size() == 1);
     assert(inspectSuggestions[0].Completion == "inspect neuron");
 
+    const auto configuredCreate = MiaIACommandProcessor::Execute(
+        "create 2 3 1 1 --hidden-activation ReLU "
+        "--output-activation linear --weight -0.25 --bias 0.4");
+    assert(configuredCreate.Output.find("Dense network created") !=
+        std::string::npos);
+    assert(configuredCreate.Output.find("Hidden activation: ReLU") !=
+        std::string::npos);
+    assert(configuredCreate.Output.find("Output activation: Linear") !=
+        std::string::npos);
+
+    const auto configuredNetwork = MiaIAClient::GetSnapshot();
+    assert(configuredNetwork.Layers.size() == 3);
+    assert(configuredNetwork.Layers[1].Activation ==
+        MiaIA::Core::ActivationType::ReLU);
+    assert(configuredNetwork.Layers[2].Activation ==
+        MiaIA::Core::ActivationType::Linear);
+    assert(configuredNetwork.Layers[0].Neurons[0].Bias == 0.0);
+    assert(configuredNetwork.Layers[1].Neurons[0].Bias == 0.4);
+    assert(configuredNetwork.Layers[2].Neurons[0].Bias == 0.4);
+    assert(configuredNetwork.Connections[0].Weight == -0.25);
+
+    assert(MiaIACommandProcessor::Execute(
+        "create 2 3 1 1 --hidden-activation invalid").Output.find(
+            "Usage:") != std::string::npos);
+    assert(MiaIACommandProcessor::Execute("create 2").Output.find(
+        "Usage:") != std::string::npos);
+    assert(MiaIAClient::GetSnapshot().Layers[1].Activation ==
+        MiaIA::Core::ActivationType::ReLU);
+
     const auto testDirectory =
         std::filesystem::temp_directory_path() /
         "miaia_cli_command_tests";
@@ -3884,6 +3913,64 @@ int main()
     assert(denseSnapshot.Layers[2].Neurons.size() == 3);
     assert(denseSnapshot.Layers[3].Neurons.size() == 1);
     assert(denseSnapshot.Connections.size() == 18);
+    assert(denseSnapshot.Layers[1].Activation ==
+        MiaIA::Core::ActivationType::Sigmoid);
+    assert(denseSnapshot.Layers.back().Activation ==
+        MiaIA::Core::ActivationType::Sigmoid);
+    assert(denseSnapshot.Connections[0].Weight == 0.1);
+
+    MiaIA::Core::DenseNetworkConfiguration configuration;
+    configuration.HiddenActivation = MiaIA::Core::ActivationType::ReLU;
+    configuration.OutputActivation = MiaIA::Core::ActivationType::Linear;
+    configuration.InitialWeight = -0.2;
+    configuration.InitialBias = 0.3;
+    assert(MiaIAClient::CreateDenseNetwork(
+        2,
+        2,
+        2,
+        1,
+        configuration));
+
+    const auto configuredSnapshot = MiaIAClient::GetSnapshot();
+    assert(configuredSnapshot.Layers.size() == 4);
+    assert(configuredSnapshot.Layers[0].Activation ==
+        MiaIA::Core::ActivationType::Sigmoid);
+    assert(configuredSnapshot.Layers[1].Activation ==
+        MiaIA::Core::ActivationType::ReLU);
+    assert(configuredSnapshot.Layers[2].Activation ==
+        MiaIA::Core::ActivationType::ReLU);
+    assert(configuredSnapshot.Layers[3].Activation ==
+        MiaIA::Core::ActivationType::Linear);
+    assert(configuredSnapshot.Layers[0].Neurons[0].Bias == 0.0);
+    assert(configuredSnapshot.Layers[1].Neurons[0].Bias == 0.3);
+    assert(configuredSnapshot.Layers[3].Neurons[0].Bias == 0.3);
+    assert(configuredSnapshot.Connections[0].Weight == -0.2);
+
+    MiaIA::Core::DenseNetworkConfiguration invalidConfiguration =
+        configuration;
+    invalidConfiguration.InitialWeight =
+        std::numeric_limits<double>::infinity();
+    assert(!MiaIAClient::CreateDenseNetwork(
+        2,
+        2,
+        1,
+        1,
+        invalidConfiguration));
+    invalidConfiguration = configuration;
+    invalidConfiguration.HiddenActivation =
+        static_cast<MiaIA::Core::ActivationType>(999);
+    assert(!MiaIAClient::CreateDenseNetwork(
+        2,
+        2,
+        1,
+        1,
+        invalidConfiguration));
+
+    const auto afterInvalidConfiguration = MiaIAClient::GetSnapshot();
+    assert(afterInvalidConfiguration.Layers.size() == 4);
+    assert(afterInvalidConfiguration.Layers[1].Activation ==
+        MiaIA::Core::ActivationType::ReLU);
+    assert(afterInvalidConfiguration.Connections[0].Weight == -0.2);
 
     assert(!MiaIAClient::CreateDenseNetwork(0, 3, 2, 1));
     assert(!MiaIAClient::CreateDenseNetwork(2, 0, 2, 1));
@@ -3893,7 +3980,7 @@ int main()
     const auto afterInvalidCreation = MiaIAClient::GetSnapshot();
 
     assert(afterInvalidCreation.Layers.size() == 4);
-    assert(afterInvalidCreation.Connections.size() == 18);
+    assert(afterInvalidCreation.Connections.size() == 10);
 
     assert(MiaIAClient::CreateDenseNetwork(2, 1, 0, 1));
 
