@@ -35,6 +35,7 @@ The current early-alpha foundation includes:
 - direct inference, evaluation, observable backpropagation, and atomic SGD training;
 - controlled foreground and background sessions with navigable history;
 - phase-by-phase training debug with candidate-state inspection and rollback;
+- bounded neuron and connection relationship inspection with exact topology counts;
 - ONNX model interchange and numeric CSV datasets;
 - one shared command processor for the terminal and Unreal clients;
 - interactive 2D and 3D topology views in MiaIA Studio;

@@ -28,6 +28,76 @@ namespace
         return EMiaIAActivationType::Sigmoid;
     }
 
+    FMiaIANeuronSnapshot ToBlueprint(
+        const MiaIA::Core::NeuronSnapshot& source)
+    {
+        FMiaIANeuronSnapshot result;
+        result.Id = static_cast<int64>(source.Id);
+        result.Activation = source.Activation;
+        result.Bias = source.Bias;
+        return result;
+    }
+
+    FMiaIAConnectionSnapshot ToBlueprint(
+        const MiaIA::Core::ConnectionSnapshot& source)
+    {
+        FMiaIAConnectionSnapshot result;
+        result.Id = static_cast<int64>(source.Id);
+        result.FromNeuron = static_cast<int64>(source.FromNeuron);
+        result.ToNeuron = static_cast<int64>(source.ToNeuron);
+        result.Weight = source.Weight;
+        return result;
+    }
+
+    FMiaIANeuronContext ToBlueprint(
+        const MiaIA::Core::NeuronContextSnapshot& source)
+    {
+        FMiaIANeuronContext result;
+        result.Neuron = ToBlueprint(source.Neuron);
+        result.LayerId = static_cast<int64>(source.LayerId);
+        result.LayerName = UTF8_TO_TCHAR(source.LayerName.c_str());
+        result.LayerOrder = static_cast<int64>(source.LayerOrder);
+        result.LayerActivation = ToBlueprint(source.LayerActivation);
+        return result;
+    }
+
+    FMiaIANeuronInspection ToBlueprint(
+        const MiaIA::Core::NeuronInspectionSnapshot& source)
+    {
+        FMiaIANeuronInspection result;
+        result.Context = ToBlueprint(source.Context);
+        result.IncomingConnectionCount = static_cast<int64>(
+            source.IncomingConnectionCount);
+        result.OutgoingConnectionCount = static_cast<int64>(
+            source.OutgoingConnectionCount);
+        result.IncomingConnections.Reserve(
+            static_cast<int32>(source.IncomingConnections.size()));
+        result.OutgoingConnections.Reserve(
+            static_cast<int32>(source.OutgoingConnections.size()));
+
+        for (const auto& connection : source.IncomingConnections)
+        {
+            result.IncomingConnections.Add(ToBlueprint(connection));
+        }
+
+        for (const auto& connection : source.OutgoingConnections)
+        {
+            result.OutgoingConnections.Add(ToBlueprint(connection));
+        }
+
+        return result;
+    }
+
+    FMiaIAConnectionInspection ToBlueprint(
+        const MiaIA::Core::ConnectionInspectionSnapshot& source)
+    {
+        FMiaIAConnectionInspection result;
+        result.Connection = ToBlueprint(source.Connection);
+        result.FromNeuron = ToBlueprint(source.FromNeuron);
+        result.ToNeuron = ToBlueprint(source.ToNeuron);
+        return result;
+    }
+
     FMiaIANetworkSnapshot ToBlueprint(
         const MiaIA::Core::NetworkSnapshot& source)
     {
@@ -536,6 +606,52 @@ FMiaIANetworkSnapshot UMiaIABlueprintLibrary::GetNetworkSnapshot()
 FMiaIANetworkOverview UMiaIABlueprintLibrary::GetNetworkOverview()
 {
     return ToBlueprint(MiaIA::SDK::MiaIAClient::GetNetworkOverview());
+}
+
+bool UMiaIABlueprintLibrary::InspectNeuron(
+    int64 NeuronId,
+    int32 MaximumConnections,
+    FMiaIANeuronInspection& OutInspection)
+{
+    if (NeuronId < 0 || MaximumConnections < 0)
+    {
+        return false;
+    }
+
+    MiaIA::Core::NeuronInspectionSnapshot inspection;
+
+    if (!MiaIA::SDK::MiaIAClient::TryInspectNeuron(
+        static_cast<std::uint64_t>(NeuronId),
+        static_cast<std::size_t>(MaximumConnections),
+        inspection))
+    {
+        return false;
+    }
+
+    OutInspection = ToBlueprint(inspection);
+    return true;
+}
+
+bool UMiaIABlueprintLibrary::InspectConnection(
+    int64 ConnectionId,
+    FMiaIAConnectionInspection& OutInspection)
+{
+    if (ConnectionId < 0)
+    {
+        return false;
+    }
+
+    MiaIA::Core::ConnectionInspectionSnapshot inspection;
+
+    if (!MiaIA::SDK::MiaIAClient::TryInspectConnection(
+        static_cast<std::uint64_t>(ConnectionId),
+        inspection))
+    {
+        return false;
+    }
+
+    OutInspection = ToBlueprint(inspection);
+    return true;
 }
 
 bool UMiaIABlueprintLibrary::ImportCsvDataset(

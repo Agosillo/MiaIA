@@ -1,6 +1,8 @@
 #pragma once
 
 #include "StudioTopology.h"
+#include "../../../Core/Public/ConnectionInspectionSnapshot.h"
+#include "../../../Core/Public/NeuronInspectionSnapshot.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -42,6 +44,10 @@ namespace MiaIA::Studio
         Core::NetworkSnapshot Network;
         StudioTopologyScene Topology;
         StudioSelection Selection;
+        bool HasNeuronInspection{};
+        Core::NeuronInspectionSnapshot NeuronInspection;
+        bool HasConnectionInspection{};
+        Core::ConnectionInspectionSnapshot ConnectionInspection;
     };
 
     class StudioController
@@ -53,6 +59,8 @@ namespace MiaIA::Studio
         void SetWorkingDirectory(std::string workingDirectory);
         void SetViewMode(StudioViewMode viewMode);
         [[nodiscard]] StudioViewMode GetViewMode() const;
+        void SetRelationshipLimit(std::size_t maximumPerDirection);
+        [[nodiscard]] std::size_t GetRelationshipLimit() const;
 
         void Refresh();
         [[nodiscard]] StudioCommandResult ExecuteCommand(
@@ -75,9 +83,11 @@ namespace MiaIA::Studio
             std::uint64_t id) const;
         bool ContainsConnection(std::uint64_t id) const;
         void ValidateSelection();
+        void RefreshSelectionInspection();
 
         std::string WorkingDirectory;
         StudioViewMode ViewMode{ StudioViewMode::TwoDimensional };
+        std::size_t RelationshipLimit{ 10 };
         StudioState CurrentState;
     };
 }

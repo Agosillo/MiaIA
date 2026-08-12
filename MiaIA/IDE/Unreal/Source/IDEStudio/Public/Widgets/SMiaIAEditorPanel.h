@@ -98,6 +98,7 @@ private:
     TSharedRef<SWidget> BuildTopologyLimitsMenu();
     void HandlePendingNeuronLimitChanged(int32 InValue);
     void HandlePendingConnectionLimitChanged(int32 InValue);
+    void HandlePendingInspectorConnectionLimitChanged(int32 InValue);
     FReply HandleApplyTopologyLimits();
     FReply HandleResetTopologyLimits();
     TSharedRef<SWidget> BuildHelpMenu();
@@ -150,6 +151,7 @@ private:
     FText SelectionSecondaryText() const;
     FText SelectionGradientText() const;
     FText SelectionUpdateText() const;
+    FText SelectionRelationshipsText() const;
     FSlateColor PhaseColor(EMiaIATrainingDebugPhase Phase) const;
     FSlateColor BackgroundColor() const;
     FSlateColor PanelColor() const;
@@ -172,6 +174,8 @@ private:
     FMiaIATrainingDebugSnapshot Debug;
     FMiaIATrainingDebugNeuron DebugNeuron;
     FMiaIATrainingDebugConnection DebugConnection;
+    FMiaIANeuronInspection NeuronInspection;
+    FMiaIAConnectionInspection ConnectionInspection;
     TArray<FMiaIATrainingBreakpoint> Breakpoints;
     int64 SelectedNeuronId{-1};
     int64 SelectedConnectionId{-1};
@@ -190,6 +194,8 @@ private:
     int32 DetailedConnectionLimit{};
     int32 PendingDetailedNeuronLimit{};
     int32 PendingDetailedConnectionLimit{};
+    int32 InspectorConnectionLimit{};
+    int32 PendingInspectorConnectionLimit{};
     EMiaIAStudioViewMode ViewMode{
         EMiaIAStudioViewMode::TwoDimensional};
     EMiaIAEditorTheme Theme{EMiaIAEditorTheme::FollowUnreal};
@@ -209,6 +215,8 @@ private:
     FSplitterStyle SplitterStyle;
     bool bHasDebugNeuron{};
     bool bHasDebugConnection{};
+    bool bHasNeuronInspection{};
+    bool bHasConnectionInspection{};
     bool bUpdatingConsoleInput{};
     bool bCompactTopology{};
     bool bStandaloneMode{};

@@ -6,6 +6,8 @@
 #include <vector>
 
 #include "../../Core/Public/NetworkSnapshot.h"
+#include "../../Core/Public/ConnectionInspectionSnapshot.h"
+#include "../../Core/Public/NeuronInspectionSnapshot.h"
 #include "../../Core/Public/DatasetSummary.h"
 #include "../../Core/Public/DatasetEvaluationSnapshot.h"
 #include "../../Core/Public/LossType.h"
@@ -47,6 +49,13 @@ namespace MiaIA::SDK
         static bool SetConnectionWeight(std::uint64_t connectionId, double weight);
         static bool TryGetNeuron(std::uint64_t neuronId, Core::NeuronSnapshot& result);
         static bool TryGetConnection(std::uint64_t connectionId, Core::ConnectionSnapshot& result);
+        static bool TryInspectNeuron(
+            std::uint64_t neuronId,
+            std::size_t maximumConnectionsPerDirection,
+            Core::NeuronInspectionSnapshot& result);
+        static bool TryInspectConnection(
+            std::uint64_t connectionId,
+            Core::ConnectionInspectionSnapshot& result);
         static bool TryGetLayer(std::uint64_t layerId, Core::LayerSnapshot& result);
         static bool RemoveConnection(std::uint64_t connectionId);
         static bool RemoveNeuron(std::uint64_t neuronId);

@@ -146,4 +146,23 @@ namespace MiaIA::Engine
 
         return nullptr;
     }
+
+    const Core::Layer* NetworkTopology::FindLayerForNeuron(
+        std::uint64_t neuronId) const
+    {
+        for (const auto& pair : constLayers)
+        {
+            const Core::Layer* layer = pair.second;
+
+            for (const Core::Neuron& neuron : layer->Neurons)
+            {
+                if (neuron.Id == neuronId)
+                {
+                    return layer;
+                }
+            }
+        }
+
+        return nullptr;
+    }
 }

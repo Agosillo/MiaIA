@@ -39,11 +39,16 @@ namespace
         TEXT("DetailedNeuronLimit");
     constexpr TCHAR DetailedConnectionLimitSettingsKey[] =
         TEXT("DetailedConnectionLimit");
+    constexpr TCHAR InspectorConnectionLimitSettingsKey[] =
+        TEXT("InspectorConnectionLimit");
     constexpr int32 MinimumTopologyLimit = 1;
     constexpr int32 MaximumDetailedNeuronLimit = 100000000;
     constexpr int32 MaximumDetailedConnectionLimit = 1000000000;
     constexpr int32 MaximumNeuronSliderLimit = 100000;
     constexpr int32 MaximumConnectionSliderLimit = 1000000;
+    constexpr int32 DefaultInspectorConnectionLimit = 5;
+    constexpr int32 MaximumInspectorConnectionLimit = 1000;
+    constexpr int32 MaximumInspectorConnectionSliderLimit = 50;
 
     FString DataRefreshModeName(EMiaIADataRefreshMode Mode)
     {
@@ -134,7 +139,10 @@ namespace
         return DefaultValue;
     }
 
-    void SaveTopologyLimits(int32 NeuronLimit, int32 ConnectionLimit)
+    void SaveTopologyLimits(
+        int32 NeuronLimit,
+        int32 ConnectionLimit,
+        int32 InspectorLimit)
     {
         if (!GConfig)
         {
@@ -150,6 +158,11 @@ namespace
             DataRefreshSettingsSection,
             DetailedConnectionLimitSettingsKey,
             ConnectionLimit,
+            GGameUserSettingsIni);
+        GConfig->SetInt(
+            DataRefreshSettingsSection,
+            InspectorConnectionLimitSettingsKey,
+            InspectorLimit,
             GGameUserSettingsIni);
         GConfig->Flush(false, GGameUserSettingsIni);
     }
@@ -344,6 +357,10 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
             MiaIA::Studio::StudioTopologyBuilder::
                 DetailedConnectionLimit),
         MaximumDetailedConnectionLimit);
+    InspectorConnectionLimit = LoadTopologyLimit(
+        InspectorConnectionLimitSettingsKey,
+        DefaultInspectorConnectionLimit,
+        MaximumInspectorConnectionLimit);
     RefreshWidgetStyles();
     ConsoleHistory = TEXT(
         "MiaIA Studio Console\n"
@@ -917,6 +934,22 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
                         [
                             SNew(STextBlock)
                             .Text(this, &SMiaIAEditorPanel::SelectionUpdateText)
+                        ]
+                        + SVerticalBox::Slot()
+                        .FillHeight(1.0f)
+                        .Padding(0.0f, 8.0f, 0.0f, 0.0f)
+                        [
+                            SNew(SScrollBox)
+                            .ScrollBarStyle(&ScrollBarStyle)
+                            + SScrollBox::Slot()
+                            [
+                                SNew(STextBlock)
+                                .Text(
+                                    this,
+                                    &SMiaIAEditorPanel::
+                                        SelectionRelationshipsText)
+                                .AutoWrapText(true)
+                            ]
                         ]
                     ]
                 ]
@@ -1557,6 +1590,19 @@ void SMiaIAEditorPanel::RefreshData()
         UMiaIABlueprintLibrary::GetDebugConnection(
             SelectedConnectionId,
             DebugConnection);
+
+    NeuronInspection = {};
+    ConnectionInspection = {};
+    bHasNeuronInspection = SelectedNeuronIds.Num() == 1 &&
+        SelectedNeuronId >= 0 &&
+        UMiaIABlueprintLibrary::InspectNeuron(
+            SelectedNeuronId,
+            InspectorConnectionLimit,
+            NeuronInspection);
+    bHasConnectionInspection = SelectedConnectionId >= 0 &&
+        UMiaIABlueprintLibrary::InspectConnection(
+            SelectedConnectionId,
+            ConnectionInspection);
 
     SelectedLayerName.Reset();
 
@@ -2421,6 +2467,7 @@ TSharedRef<SWidget> SMiaIAEditorPanel::BuildTopologyLimitsMenu()
 {
     PendingDetailedNeuronLimit = DetailedNeuronLimit;
     PendingDetailedConnectionLimit = DetailedConnectionLimit;
+    PendingInspectorConnectionLimit = InspectorConnectionLimit;
 
     return SNew(SBox)
         .WidthOverride(340.0f)
@@ -2485,6 +2532,34 @@ TSharedRef<SWidget> SMiaIAEditorPanel::BuildTopologyLimitsMenu()
             ]
             + SVerticalBox::Slot()
             .AutoHeight()
+            .Padding(0.0f, 0.0f, 0.0f, 4.0f)
+            [
+                SNew(STextBlock)
+                .Text(LOCTEXT(
+                    "InspectorConnectionLimitLabel",
+                    "Inspector connections per direction"))
+            ]
+            + SVerticalBox::Slot()
+            .AutoHeight()
+            .Padding(0.0f, 0.0f, 0.0f, 10.0f)
+            [
+                SNew(SSpinBox<int32>)
+                .MinValue(MinimumTopologyLimit)
+                .MaxValue(MaximumInspectorConnectionLimit)
+                .MinSliderValue(MinimumTopologyLimit)
+                .MaxSliderValue(MaximumInspectorConnectionSliderLimit)
+                .Delta(1)
+                .Value(PendingInspectorConnectionLimit)
+                .OnValueChanged(
+                    this,
+                    &SMiaIAEditorPanel::
+                        HandlePendingInspectorConnectionLimitChanged)
+                .ToolTipText(LOCTEXT(
+                    "InspectorConnectionLimitTooltip",
+                    "Maximum incoming and outgoing connections shown for one selected neuron."))
+            ]
+            + SVerticalBox::Slot()
+            .AutoHeight()
             [
                 SNew(STextBlock)
                 .AutoWrapText(true)
@@ -2541,11 +2616,24 @@ void SMiaIAEditorPanel::HandlePendingConnectionLimitChanged(int32 InValue)
         MaximumDetailedConnectionLimit);
 }
 
+void SMiaIAEditorPanel::HandlePendingInspectorConnectionLimitChanged(
+    int32 InValue)
+{
+    PendingInspectorConnectionLimit = FMath::Clamp(
+        InValue,
+        MinimumTopologyLimit,
+        MaximumInspectorConnectionLimit);
+}
+
 FReply SMiaIAEditorPanel::HandleApplyTopologyLimits()
 {
     DetailedNeuronLimit = PendingDetailedNeuronLimit;
     DetailedConnectionLimit = PendingDetailedConnectionLimit;
-    SaveTopologyLimits(DetailedNeuronLimit, DetailedConnectionLimit);
+    InspectorConnectionLimit = PendingInspectorConnectionLimit;
+    SaveTopologyLimits(
+        DetailedNeuronLimit,
+        DetailedConnectionLimit,
+        InspectorConnectionLimit);
     FSlateApplication::Get().DismissAllMenus();
     RefreshData();
     return FReply::Handled();
@@ -2559,7 +2647,12 @@ FReply SMiaIAEditorPanel::HandleResetTopologyLimits()
         MiaIA::Studio::StudioTopologyBuilder::DetailedConnectionLimit);
     PendingDetailedNeuronLimit = DetailedNeuronLimit;
     PendingDetailedConnectionLimit = DetailedConnectionLimit;
-    SaveTopologyLimits(DetailedNeuronLimit, DetailedConnectionLimit);
+    InspectorConnectionLimit = DefaultInspectorConnectionLimit;
+    PendingInspectorConnectionLimit = InspectorConnectionLimit;
+    SaveTopologyLimits(
+        DetailedNeuronLimit,
+        DetailedConnectionLimit,
+        InspectorConnectionLimit);
     FSlateApplication::Get().DismissAllMenus();
     RefreshData();
     return FReply::Handled();
@@ -3643,6 +3736,105 @@ FText SMiaIAEditorPanel::SelectionUpdateText() const
             FText::AsNumber(DebugNeuron.Delta),
             FText::AsNumber(DebugNeuron.UpdatedBias))
         : LOCTEXT("BiasUpdateUnavailable", "Bias update: unavailable");
+}
+
+FText SMiaIAEditorPanel::SelectionRelationshipsText() const
+{
+    if (SelectedNeuronIds.Num() > 1)
+    {
+        return LOCTEXT(
+            "GroupRelationshipsHint",
+            "Select one neuron to inspect its connections.");
+    }
+
+    if (SelectedConnectionId >= 0)
+    {
+        if (!bHasConnectionInspection)
+        {
+            return LOCTEXT(
+                "ConnectionRelationshipsUnavailable",
+                "Endpoint details are unavailable.");
+        }
+
+        const FMiaIANeuronContext& from =
+            ConnectionInspection.FromNeuron;
+        const FMiaIANeuronContext& to = ConnectionInspection.ToNeuron;
+        return FText::FromString(FString::Printf(
+            TEXT(
+                "Endpoints\n"
+                "From #%lld | Layer %lld: %s | %s\n"
+                "Activation: %g | Bias: %g\n\n"
+                "To #%lld | Layer %lld: %s | %s\n"
+                "Activation: %g | Bias: %g"),
+            from.Neuron.Id,
+            from.LayerOrder,
+            *from.LayerName,
+            *ActivationName(from.LayerActivation),
+            from.Neuron.Activation,
+            from.Neuron.Bias,
+            to.Neuron.Id,
+            to.LayerOrder,
+            *to.LayerName,
+            *ActivationName(to.LayerActivation),
+            to.Neuron.Activation,
+            to.Neuron.Bias));
+    }
+
+    if (SelectedNeuronId < 0)
+    {
+        return FText::GetEmpty();
+    }
+
+    if (!bHasNeuronInspection)
+    {
+        return LOCTEXT(
+            "NeuronRelationshipsUnavailable",
+            "Connection details are unavailable.");
+    }
+
+    FString details;
+    auto appendConnections = [&details](
+        const TCHAR* heading,
+        const TArray<FMiaIAConnectionSnapshot>& connections,
+        int64 totalCount)
+    {
+        details += FString::Printf(
+            TEXT("%s (%d shown of %lld)\n"),
+            heading,
+            connections.Num(),
+            totalCount);
+
+        for (const FMiaIAConnectionSnapshot& connection : connections)
+        {
+            details += FString::Printf(
+                TEXT("#%lld: #%lld -> #%lld | Weight: %g\n"),
+                connection.Id,
+                connection.FromNeuron,
+                connection.ToNeuron,
+                connection.Weight);
+        }
+
+        const int64 hiddenCount = totalCount - connections.Num();
+        if (hiddenCount > 0)
+        {
+            details += FString::Printf(
+                TEXT("... %lld more\n"),
+                hiddenCount);
+        }
+    };
+
+    appendConnections(
+        TEXT("Incoming"),
+        NeuronInspection.IncomingConnections,
+        NeuronInspection.IncomingConnectionCount);
+    details += TEXT("\n");
+    appendConnections(
+        TEXT("Outgoing"),
+        NeuronInspection.OutgoingConnections,
+        NeuronInspection.OutgoingConnectionCount);
+    details.RemoveFromEnd(TEXT("\n"));
+
+    return FText::FromString(details);
 }
 
 FSlateColor SMiaIAEditorPanel::PhaseColor(

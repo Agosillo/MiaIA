@@ -138,11 +138,26 @@ int main()
         assert(controller.State().Topology.Links.size() == 6);
         assert(controller.State().Topology.ViewMode ==
             StudioViewMode::ThreeDimensional);
+        controller.SetRelationshipLimit(1);
+        assert(controller.GetRelationshipLimit() == 1);
         assert(controller.SelectNeuron(1001));
         assert(controller.State().Selection.Kind ==
             StudioSelectionKind::Neuron);
+        assert(controller.State().HasNeuronInspection);
+        assert(controller.State().NeuronInspection.Context.Neuron.Id ==
+            1001);
+        assert(controller.State().NeuronInspection.OutgoingConnectionCount ==
+            2);
+        assert(controller.State().NeuronInspection.OutgoingConnections.size() ==
+            1);
         assert(!controller.SelectNeuron(999999));
         assert(controller.SelectConnection(1));
+        assert(controller.State().HasConnectionInspection);
+        assert(controller.State().ConnectionInspection.Connection.Id == 1);
+        assert(controller.State().ConnectionInspection.FromNeuron.Neuron.Id ==
+            1001);
+        assert(controller.State().ConnectionInspection.ToNeuron.Neuron.Id ==
+            1003);
 
         const auto suggestions = controller.GetSuggestions("pred");
         assert(suggestions.size() == 1);
@@ -179,6 +194,37 @@ int main()
     const auto abbreviated = MiaIACommandProcessor::Execute("sum");
     assert(abbreviated.Output.find("Network Summary") !=
         std::string::npos);
+
+    const auto neuronInspection = MiaIACommandProcessor::Execute(
+        "inspect neuron 1003 1");
+    assert(neuronInspection.Output.find("Neuron Inspection") !=
+        std::string::npos);
+    assert(neuronInspection.Output.find(
+        "Incoming connections: 1 shown of 2") != std::string::npos);
+
+    const auto connectionInspection = MiaIACommandProcessor::Execute(
+        "inspect connection 1");
+    assert(connectionInspection.Output.find("Connection Inspection") !=
+        std::string::npos);
+    assert(connectionInspection.Output.find("From Endpoint") !=
+        std::string::npos);
+    assert(connectionInspection.Output.find("To Endpoint") !=
+        std::string::npos);
+
+    assert(MiaIACommandProcessor::Execute(
+        "inspect neuron 1003 0").Output.find("Usage:") !=
+        std::string::npos);
+    assert(MiaIACommandProcessor::Execute(
+        "inspect neuron 1003 -1").Output.find("Usage:") !=
+        std::string::npos);
+    assert(MiaIACommandProcessor::Execute(
+        "inspect connection 999999").Output.find("failed") !=
+        std::string::npos);
+
+    const auto inspectSuggestions =
+        MiaIACommandProcessor::GetSuggestions("inspect n");
+    assert(inspectSuggestions.size() == 1);
+    assert(inspectSuggestions[0].Completion == "inspect neuron");
 
     const auto testDirectory =
         std::filesystem::temp_directory_path() /
@@ -267,6 +313,74 @@ int main()
     std::filesystem::remove(datasetPath);
     std::filesystem::remove(testDirectory);
 
+    });
+
+    runner.Run("Network element inspection", [&]()
+    {
+    MiaIAClient::ClearNetwork();
+
+    assert(MiaIAClient::AddLayer(10, "Input", 0));
+    assert(MiaIAClient::AddLayer(20, "Hidden", 1));
+    assert(MiaIAClient::AddLayer(30, "Output", 2));
+    assert(MiaIAClient::SetLayerActivation(
+        20,
+        MiaIA::Core::ActivationType::Tanh));
+
+    assert(MiaIAClient::AddNeuron(10, 1001, 0.1, 0.2));
+    assert(MiaIAClient::AddNeuron(10, 1002, 0.3, 0.4));
+    assert(MiaIAClient::AddNeuron(20, 2001, 0.5, 0.6));
+    assert(MiaIAClient::AddNeuron(30, 3001, 0.7, 0.8));
+
+    assert(MiaIAClient::AddConnection(1, 1001, 2001, 0.25));
+    assert(MiaIAClient::AddConnection(2, 1002, 2001, -0.5));
+    assert(MiaIAClient::AddConnection(3, 2001, 3001, 0.75));
+
+    MiaIA::Core::NeuronInspectionSnapshot neuronInspection;
+    assert(MiaIAClient::TryInspectNeuron(2001, 1, neuronInspection));
+    assert(neuronInspection.Context.Neuron.Id == 2001);
+    assert(neuronInspection.Context.LayerId == 20);
+    assert(neuronInspection.Context.LayerName == "Hidden");
+    assert(neuronInspection.Context.LayerOrder == 1);
+    assert(neuronInspection.Context.LayerActivation ==
+        MiaIA::Core::ActivationType::Tanh);
+    assert(neuronInspection.IncomingConnectionCount == 2);
+    assert(neuronInspection.OutgoingConnectionCount == 1);
+    assert(neuronInspection.IncomingConnections.size() == 1);
+    assert(neuronInspection.IncomingConnections[0].Id == 1);
+    assert(neuronInspection.OutgoingConnections.size() == 1);
+    assert(neuronInspection.OutgoingConnections[0].Id == 3);
+
+    MiaIA::Core::NeuronInspectionSnapshot countOnlyInspection;
+    assert(MiaIAClient::TryInspectNeuron(2001, 0, countOnlyInspection));
+    assert(countOnlyInspection.IncomingConnectionCount == 2);
+    assert(countOnlyInspection.OutgoingConnectionCount == 1);
+    assert(countOnlyInspection.IncomingConnections.empty());
+    assert(countOnlyInspection.OutgoingConnections.empty());
+
+    MiaIA::Core::NeuronInspectionSnapshot preservedNeuronInspection;
+    preservedNeuronInspection.Context.Neuron.Id = 777;
+    assert(!MiaIAClient::TryInspectNeuron(
+        999999,
+        5,
+        preservedNeuronInspection));
+    assert(preservedNeuronInspection.Context.Neuron.Id == 777);
+
+    MiaIA::Core::ConnectionInspectionSnapshot connectionInspection;
+    assert(MiaIAClient::TryInspectConnection(3, connectionInspection));
+    assert(connectionInspection.Connection.Id == 3);
+    assert(connectionInspection.FromNeuron.Neuron.Id == 2001);
+    assert(connectionInspection.FromNeuron.LayerName == "Hidden");
+    assert(connectionInspection.ToNeuron.Neuron.Id == 3001);
+    assert(connectionInspection.ToNeuron.LayerName == "Output");
+
+    MiaIA::Core::ConnectionInspectionSnapshot preservedConnectionInspection;
+    preservedConnectionInspection.Connection.Id = 888;
+    assert(!MiaIAClient::TryInspectConnection(
+        999999,
+        preservedConnectionInspection));
+    assert(preservedConnectionInspection.Connection.Id == 888);
+
+    MiaIAClient::ClearNetwork();
     });
 
     runner.Run("MiaIA project archive", [&]()

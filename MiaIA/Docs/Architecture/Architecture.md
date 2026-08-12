@@ -33,7 +33,7 @@ Core contains the stable representation of data:
 - `Network`, `Layer`, `Neuron`, and `Connection`;
 - `Dataset` and `Sample`;
 - activation primitives;
-- public snapshots for network inspection, datasets, evaluations, and gradients.
+- public snapshots for networks, focused element relationships, datasets, evaluations, and gradients.
 
 Core structures describe state. They do not import files, run training commands, or manage a user interface.
 
@@ -52,7 +52,7 @@ Engine owns operations and mathematical behavior. Its current responsibilities a
 | `Validation` | Verify that a network can be executed safely |
 | `Execution` | Perform forward propagation |
 | `Runtime` | Create networks and expose runtime operations |
-| `Inspection` | Build read-only network snapshots |
+| `Inspection` | Build complete, overview, and focused relationship snapshots |
 | `Interchange` | Import and export the supported ONNX subset |
 | `Data` | Import, inspect, and apply CSV dataset samples |
 | `Evaluation` | Calculate predictions, errors, loss, and loss derivatives |
@@ -64,7 +64,7 @@ This separation allows a mathematical subsystem to evolve without requiring clie
 
 ### SDK
 
-`MiaIAClient` is the public facade used by clients. It exposes network creation and editing, snapshots, ONNX interchange, versioned `.mai` project persistence, datasets, forward execution, sample and full-dataset evaluation, gradient evaluation, atomic sample training, and an ordered dataset epoch.
+`MiaIAClient` is the public facade used by clients. It exposes network creation and editing, complete and focused inspection snapshots, ONNX interchange, versioned `.mai` project persistence, datasets, forward execution, sample and full-dataset evaluation, gradient evaluation, atomic sample training, and an ordered dataset epoch.
 
 The current SDK owns one process-local network and one process-local dataset through its internal client state. This is sufficient for the present console and integration tests. Multiple sessions, explicit contexts, concurrency, and persisted workspace state are future concerns and should not be assumed to exist today.
 
@@ -78,7 +78,7 @@ The module also owns the structured command catalog used for contextual discover
 
 ### StudioCore
 
-`StudioCore` is the renderer-neutral application layer for graphical clients. It is a C++20 static library and does not depend on Unreal, Slate, Qt, or a graphics API. Its controller composes the shared CLI and SDK into refresh, command, suggestion, view-mode, and selection operations.
+`StudioCore` is the renderer-neutral application layer for graphical clients. It is a C++20 static library and does not depend on Unreal, Slate, Qt, or a graphics API. Its controller composes the shared CLI and SDK into refresh, command, suggestion, view-mode, selection, and selected-element inspection operations. A configurable per-direction relationship limit keeps selection responsive while exact connection totals remain available.
 
 The topology builder converts full or overview network snapshots into normalized logical scenes. Detailed 2D scenes arrange layers on X and neurons on Y. Detailed 3D scenes arrange layers on Z and distribute each layer on an X/Y grid. Compact scenes retain aggregate layer counts without copying every neuron and connection. Frontends remain responsible for pixels, meshes, camera behavior, input events, and toolkit-specific styling.
 
@@ -109,6 +109,8 @@ Dense creation is a transactional batch operation. The factory calculates neuron
 For `I` inputs, hidden width `H`, `L` hidden layers, and `O` outputs, the neuron count is `I + L*H + O`. With at least one hidden layer, the connection count is `I*H + (L-1)*H*H + H*O`; without hidden layers it is `I*O`.
 
 `NetworkSnapshot` contains every neuron and connection. `NetworkOverviewSnapshot` is the lightweight inspection boundary for clients that first need layer metadata and aggregate counts before deciding whether a complete graph copy is appropriate.
+
+`NeuronInspectionSnapshot` adds the neuron's layer context and exact incoming and outgoing connection counts. Each direction retains only the caller-requested number of connection records, allowing bounded drill-down without pretending that omitted relationships do not exist. `ConnectionInspectionSnapshot` combines one connection with contextual snapshots of both endpoint neurons. `NetworkInspector` builds these immutable values through `NetworkTopology`; invalid IDs leave the caller's result unchanged. The SDK serializes the same operations with all other process-local state access, the CLI exposes them through `inspect neuron` and `inspect connection`, and graphical clients consume the contracts without depending on Engine storage.
 
 Supported activation functions are Sigmoid, ReLU, Tanh, and Linear.
 

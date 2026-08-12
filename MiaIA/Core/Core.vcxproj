@@ -152,11 +152,14 @@
     <ClInclude Include="Model\TrainingDebugSession.h" />
     <ClInclude Include="pch.h" />
     <ClInclude Include="Public\ConnectionSnapshot.h" />
+    <ClInclude Include="Public\ConnectionInspectionSnapshot.h" />
     <ClInclude Include="Public\ConnectionGradientSnapshot.h" />
     <ClInclude Include="Public\ConnectionUpdateSnapshot.h" />
     <ClInclude Include="Public\DatasetSummary.h" />
     <ClInclude Include="Public\LossType.h" />
     <ClInclude Include="Public\NetworkSnapshot.h" />
+    <ClInclude Include="Public\NeuronContextSnapshot.h" />
+    <ClInclude Include="Public\NeuronInspectionSnapshot.h" />
     <ClInclude Include="Public\NeuronGradientSnapshot.h" />
     <ClInclude Include="Public\NeuronUpdateSnapshot.h" />
     <ClInclude Include="Public\OptimizerType.h" />

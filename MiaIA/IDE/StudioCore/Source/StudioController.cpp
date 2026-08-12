@@ -48,6 +48,18 @@ MiaIA::Studio::StudioController::GetViewMode() const
     return ViewMode;
 }
 
+void MiaIA::Studio::StudioController::SetRelationshipLimit(
+    std::size_t maximumPerDirection)
+{
+    RelationshipLimit = maximumPerDirection;
+    RefreshSelectionInspection();
+}
+
+std::size_t MiaIA::Studio::StudioController::GetRelationshipLimit() const
+{
+    return RelationshipLimit;
+}
+
 void MiaIA::Studio::StudioController::Refresh()
 {
     CurrentState.Overview = SDK::MiaIAClient::GetNetworkOverview();
@@ -69,6 +81,7 @@ void MiaIA::Studio::StudioController::Refresh()
     }
 
     ValidateSelection();
+    RefreshSelectionInspection();
 }
 
 MiaIA::Studio::StudioCommandResult
@@ -124,6 +137,7 @@ bool MiaIA::Studio::StudioController::SelectLayer(std::uint64_t layerId)
     }
 
     CurrentState.Selection = { StudioSelectionKind::Layer, layerId };
+    RefreshSelectionInspection();
     return true;
 }
 
@@ -135,6 +149,7 @@ bool MiaIA::Studio::StudioController::SelectNeuron(std::uint64_t neuronId)
     }
 
     CurrentState.Selection = { StudioSelectionKind::Neuron, neuronId };
+    RefreshSelectionInspection();
     return true;
 }
 
@@ -150,12 +165,17 @@ bool MiaIA::Studio::StudioController::SelectConnection(
         StudioSelectionKind::Connection,
         connectionId
     };
+    RefreshSelectionInspection();
     return true;
 }
 
 void MiaIA::Studio::StudioController::ClearSelection()
 {
     CurrentState.Selection = {};
+    CurrentState.HasNeuronInspection = false;
+    CurrentState.NeuronInspection = {};
+    CurrentState.HasConnectionInspection = false;
+    CurrentState.ConnectionInspection = {};
 }
 
 const MiaIA::Studio::StudioState&
@@ -225,5 +245,30 @@ void MiaIA::Studio::StudioController::ValidateSelection()
     if (!valid)
     {
         ClearSelection();
+    }
+}
+
+void MiaIA::Studio::StudioController::RefreshSelectionInspection()
+{
+    CurrentState.HasNeuronInspection = false;
+    CurrentState.NeuronInspection = {};
+    CurrentState.HasConnectionInspection = false;
+    CurrentState.ConnectionInspection = {};
+
+    if (CurrentState.Selection.Kind == StudioSelectionKind::Neuron)
+    {
+        CurrentState.HasNeuronInspection =
+            SDK::MiaIAClient::TryInspectNeuron(
+                CurrentState.Selection.Id,
+                RelationshipLimit,
+                CurrentState.NeuronInspection);
+    }
+    else if (CurrentState.Selection.Kind ==
+        StudioSelectionKind::Connection)
+    {
+        CurrentState.HasConnectionInspection =
+            SDK::MiaIAClient::TryInspectConnection(
+                CurrentState.Selection.Id,
+                CurrentState.ConnectionInspection);
     }
 }

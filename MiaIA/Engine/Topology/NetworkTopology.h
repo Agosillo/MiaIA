@@ -43,6 +43,9 @@ namespace MiaIA::Engine
         Core::Layer* FindLayerForNeuron(
             std::uint64_t neuronId);
 
+        const Core::Layer* FindLayerForNeuron(
+            std::uint64_t neuronId) const;
+
 
     private:
 

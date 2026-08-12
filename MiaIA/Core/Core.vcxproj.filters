@@ -39,6 +39,15 @@
     <ClInclude Include="Public\ConnectionSnapshot.h">
       <Filter>File di intestazione</Filter>
     </ClInclude>
+    <ClInclude Include="Public\ConnectionInspectionSnapshot.h">
+      <Filter>File di intestazione</Filter>
+    </ClInclude>
+    <ClInclude Include="Public\NeuronContextSnapshot.h">
+      <Filter>File di intestazione</Filter>
+    </ClInclude>
+    <ClInclude Include="Public\NeuronInspectionSnapshot.h">
+      <Filter>File di intestazione</Filter>
+    </ClInclude>
     <ClInclude Include="Model\Connection.h">
       <Filter>File di intestazione</Filter>
     </ClInclude>

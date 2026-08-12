@@ -2,7 +2,40 @@
 #include "../Topology/NetworkTopology.h"
 #include "../../Core/Execution/SnapshotBuilder.h"
 
+#include <algorithm>
 #include <utility>
+
+namespace
+{
+    bool TryBuildNeuronContext(
+        const MiaIA::Engine::NetworkTopology& topology,
+        std::uint64_t neuronId,
+        MiaIA::Core::NeuronContextSnapshot& result)
+    {
+        const MiaIA::Core::Neuron* neuron =
+            topology.FindNeuron(neuronId);
+        const MiaIA::Core::Layer* layer =
+            topology.FindLayerForNeuron(neuronId);
+
+        if (neuron == nullptr || layer == nullptr)
+        {
+            return false;
+        }
+
+        result = MiaIA::Core::NeuronContextSnapshot{
+            {
+                neuron->Id,
+                neuron->Activation,
+                neuron->Bias
+            },
+            layer->Id,
+            layer->Name,
+            layer->Order,
+            layer->Activation
+        };
+        return true;
+    }
+}
 
 namespace MiaIA::Engine
 {
@@ -80,6 +113,109 @@ namespace MiaIA::Engine
             connection->Weight
         };
 
+        return true;
+    }
+
+    bool NetworkInspector::TryInspectNeuron(
+        const Core::Network& network,
+        std::uint64_t neuronId,
+        std::size_t maximumConnectionsPerDirection,
+        Core::NeuronInspectionSnapshot& result)
+    {
+        const NetworkTopology topology(network);
+        Core::NeuronInspectionSnapshot snapshot;
+
+        if (!TryBuildNeuronContext(
+            topology,
+            neuronId,
+            snapshot.Context))
+        {
+            return false;
+        }
+
+        snapshot.IncomingConnections.reserve(
+            std::min(
+                maximumConnectionsPerDirection,
+                network.Connections.size()));
+        snapshot.OutgoingConnections.reserve(
+            std::min(
+                maximumConnectionsPerDirection,
+                network.Connections.size()));
+
+        for (const Core::Connection& connection : network.Connections)
+        {
+            if (connection.ToNeuron == neuronId)
+            {
+                ++snapshot.IncomingConnectionCount;
+
+                if (snapshot.IncomingConnections.size() <
+                    maximumConnectionsPerDirection)
+                {
+                    snapshot.IncomingConnections.push_back({
+                        connection.Id,
+                        connection.FromNeuron,
+                        connection.ToNeuron,
+                        connection.Weight
+                    });
+                }
+            }
+
+            if (connection.FromNeuron == neuronId)
+            {
+                ++snapshot.OutgoingConnectionCount;
+
+                if (snapshot.OutgoingConnections.size() <
+                    maximumConnectionsPerDirection)
+                {
+                    snapshot.OutgoingConnections.push_back({
+                        connection.Id,
+                        connection.FromNeuron,
+                        connection.ToNeuron,
+                        connection.Weight
+                    });
+                }
+            }
+        }
+
+        result = std::move(snapshot);
+        return true;
+    }
+
+    bool NetworkInspector::TryInspectConnection(
+        const Core::Network& network,
+        std::uint64_t connectionId,
+        Core::ConnectionInspectionSnapshot& result)
+    {
+        const NetworkTopology topology(network);
+        const Core::Connection* connection =
+            topology.FindConnection(connectionId);
+
+        if (connection == nullptr)
+        {
+            return false;
+        }
+
+        Core::ConnectionInspectionSnapshot snapshot;
+        snapshot.Connection = {
+            connection->Id,
+            connection->FromNeuron,
+            connection->ToNeuron,
+            connection->Weight
+        };
+
+        if (!TryBuildNeuronContext(
+                topology,
+                connection->FromNeuron,
+                snapshot.FromNeuron) ||
+            !TryBuildNeuronContext(
+                topology,
+                connection->ToNeuron,
+                snapshot.ToNeuron))
+        {
+            return false;
+        }
+
+        result = std::move(snapshot);
         return true;
     }
 

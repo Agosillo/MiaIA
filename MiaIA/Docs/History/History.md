@@ -142,8 +142,14 @@ Controlled-session history gained a renderer-neutral comparison operation above 
 
 `TrainingSessionInspector` validates both history indexes, `MiaIAClient` serializes access through the existing client-state lock, and the shared CLI exposes bounded ranked output through `train session compare`. Comparisons remain read-only while foreground or background training continues. Full hidden-neuron activation comparison remains deliberately deferred because retaining complete network state for every step requires an explicit memory policy.
 
+### Focused network relationship inspection
+
+Ordinary network inspection gained element-level contracts independent of the training debugger. A neuron query now returns its layer context, current activation and bias, exact incoming and outgoing connection counts, and a caller-bounded subset of each relationship direction. A connection query returns its weight and contextual snapshots of both endpoint neurons. Invalid identifiers preserve the caller's previous result.
+
+`NetworkInspector` and `NetworkTopology` own the read-only Engine operation, `MiaIAClient` exposes it through the serialized SDK facade, and the shared CLI provides `inspect neuron` and `inspect connection`. StudioCore retains the selected element's inspection state, while the Unreal Blueprint adapter and shared 2D/3D Inspector present the same information with a persistent configurable relationship limit. Complete topology snapshots are no longer required merely to explain one selected element.
+
 ## Current position
 
-MiaIA can now represent, execute, interchange, persist a `.mai` v1 project, inspect, evaluate, differentiate, debug one training step phase by phase, train through controlled foreground or background sessions, and navigate or compare the complete history of successful steps. It cannot yet persist visualization layouts or training history inside that project, retain complete hidden-neuron activations for every step, or deliver the planned complete graphical debugging experience.
+MiaIA can now represent, execute, interchange, persist a `.mai` v1 project, inspect individual network relationships, evaluate, differentiate, debug one training step phase by phase, train through controlled foreground or background sessions, and navigate or compare the complete history of successful steps. It cannot yet persist visualization layouts or training history inside that project, retain complete hidden-neuron activations for every step, or deliver the planned complete graphical debugging experience.
 
 Those next steps are tracked in the [Roadmap](../Roadmap/Roadmap.md).

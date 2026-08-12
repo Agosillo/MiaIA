@@ -5,6 +5,7 @@
 #include <string>
 #include <chrono>
 #include <cctype>
+#include <cstdint>
 #include <vector>
 #include <sstream>
 #include <filesystem>
@@ -163,6 +164,8 @@ const std::vector<CommandCatalogEntry>& CommandCatalog()
         { "train session cancel", "train session cancel", "Cancel future session execution.", true },
         { "summary", "summary", "Show the current network structure.", true },
         { "inspect", "inspect", "Inspect current network values.", true },
+        { "inspect neuron", "inspect neuron <neuron-id> [maximum-connections]", "Inspect one neuron and its relationships.", true },
+        { "inspect connection", "inspect connection <connection-id>", "Inspect one connection and both endpoint neurons.", true },
         { "forward", "forward", "Run forward propagation with assigned inputs.", true },
         { "benchmark", "benchmark", "Benchmark repeated forward execution.", true },
         { "exit", "exit", "Exit the standalone terminal host.", true }
@@ -343,6 +346,12 @@ void PrintHelp()
 
         << "  inspect\n"
         << "      Show layers, neurons and connections\n\n"
+
+        << "  inspect neuron <neuron-id> [maximum-connections]\n"
+        << "      Show one neuron and bounded incoming/outgoing relationships\n\n"
+
+        << "  inspect connection <connection-id>\n"
+        << "      Show one connection and both endpoint neurons\n\n"
 
         << "  forward\n"
         << "      Execute forward propagation\n\n"
@@ -2856,6 +2865,180 @@ void InspectNetwork()
     }
 }
 
+const char* ActivationTypeName(MiaIA::Core::ActivationType activation)
+{
+    switch (activation)
+    {
+    case MiaIA::Core::ActivationType::Sigmoid:
+        return "Sigmoid";
+    case MiaIA::Core::ActivationType::ReLU:
+        return "ReLU";
+    case MiaIA::Core::ActivationType::Tanh:
+        return "Tanh";
+    case MiaIA::Core::ActivationType::Linear:
+        return "Linear";
+    }
+
+    return "Unknown";
+}
+
+void PrintNeuronContext(
+    const MiaIA::Core::NeuronContextSnapshot& context)
+{
+    std::cout
+        << "Neuron " << context.Neuron.Id
+        << "\n  Layer: [" << context.LayerOrder << "] "
+        << context.LayerName
+        << " (" << ActivationTypeName(context.LayerActivation) << ")"
+        << "\n  Activation: " << context.Neuron.Activation
+        << "\n  Bias: " << context.Neuron.Bias
+        << "\n";
+}
+
+void PrintRelatedConnections(
+    const char* title,
+    const std::vector<MiaIA::Core::ConnectionSnapshot>& connections,
+    std::size_t totalCount)
+{
+    std::cout
+        << "\n" << title << ": "
+        << connections.size() << " shown of " << totalCount << "\n";
+
+    for (const auto& connection : connections)
+    {
+        std::cout
+            << "  Connection " << connection.Id
+            << ": " << connection.FromNeuron
+            << " -> " << connection.ToNeuron
+            << " Weight " << connection.Weight << "\n";
+    }
+
+    if (connections.size() < totalCount)
+    {
+        std::cout
+            << "  ... " << totalCount - connections.size()
+            << " more\n";
+    }
+}
+
+void InspectElement(const std::string& command)
+{
+    using MiaIA::SDK::MiaIAClient;
+
+    std::stringstream stream(command);
+    std::string inspectToken;
+    std::string elementType;
+    stream >> inspectToken >> elementType;
+
+    if (elementType == "neuron")
+    {
+        std::uint64_t neuronId{};
+        std::size_t maximumConnections{ 10 };
+
+        if (!(stream >> neuronId))
+        {
+            std::cout
+                << "Usage: inspect neuron <neuron-id> "
+                   "[maximum-connections]\n";
+            return;
+        }
+
+        stream >> std::ws;
+
+        if (!stream.eof())
+        {
+            std::int64_t requestedMaximum{};
+
+            if (!(stream >> requestedMaximum) || requestedMaximum <= 0)
+            {
+                std::cout
+                    << "Usage: inspect neuron <neuron-id> "
+                       "[maximum-connections]\n";
+                return;
+            }
+
+            maximumConnections = static_cast<std::size_t>(
+                requestedMaximum);
+
+            stream >> std::ws;
+
+            if (!stream.eof())
+            {
+                std::cout
+                    << "Usage: inspect neuron <neuron-id> "
+                       "[maximum-connections]\n";
+                return;
+            }
+        }
+
+        MiaIA::Core::NeuronInspectionSnapshot inspection;
+
+        if (!MiaIAClient::TryInspectNeuron(
+            neuronId,
+            maximumConnections,
+            inspection))
+        {
+            std::cout << "Neuron inspection failed. Check the neuron ID.\n";
+            return;
+        }
+
+        std::cout << "\nNeuron Inspection\n\n";
+        PrintNeuronContext(inspection.Context);
+        PrintRelatedConnections(
+            "Incoming connections",
+            inspection.IncomingConnections,
+            inspection.IncomingConnectionCount);
+        PrintRelatedConnections(
+            "Outgoing connections",
+            inspection.OutgoingConnections,
+            inspection.OutgoingConnectionCount);
+        std::cout << "\n";
+        return;
+    }
+
+    if (elementType == "connection")
+    {
+        std::uint64_t connectionId{};
+        std::string extra;
+
+        if (!(stream >> connectionId) || stream >> extra)
+        {
+            std::cout
+                << "Usage: inspect connection <connection-id>\n";
+            return;
+        }
+
+        MiaIA::Core::ConnectionInspectionSnapshot inspection;
+
+        if (!MiaIAClient::TryInspectConnection(
+            connectionId,
+            inspection))
+        {
+            std::cout
+                << "Connection inspection failed. "
+                   "Check the connection ID.\n";
+            return;
+        }
+
+        std::cout
+            << "\nConnection Inspection\n\n"
+            << "Connection " << inspection.Connection.Id
+            << ": " << inspection.Connection.FromNeuron
+            << " -> " << inspection.Connection.ToNeuron
+            << "\nWeight: " << inspection.Connection.Weight
+            << "\n\nFrom Endpoint\n";
+        PrintNeuronContext(inspection.FromNeuron);
+        std::cout << "\nTo Endpoint\n";
+        PrintNeuronContext(inspection.ToNeuron);
+        std::cout << "\n";
+        return;
+    }
+
+    std::cout
+        << "Usage: inspect [neuron <neuron-id> [maximum-connections]"
+           "|connection <connection-id>]\n";
+}
+
 void RunForward()
 {
     using MiaIA::SDK::MiaIAClient;
@@ -3203,6 +3386,10 @@ MiaIA::CLI::MiaIACommandProcessor::Execute(
     else if (command == "inspect")
     {
         InspectNetwork();
+    }
+    else if (command.rfind("inspect ", 0) == 0)
+    {
+        InspectElement(command);
     }
     else if (command == "forward")
     {

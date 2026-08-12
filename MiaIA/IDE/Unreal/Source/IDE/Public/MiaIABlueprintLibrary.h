@@ -47,6 +47,17 @@ public:
     UFUNCTION(BlueprintPure, Category = "MiaIA|Network")
     static FMiaIANetworkOverview GetNetworkOverview();
 
+    UFUNCTION(BlueprintCallable, Category = "MiaIA|Network|Inspection")
+    static bool InspectNeuron(
+        int64 NeuronId,
+        int32 MaximumConnections,
+        FMiaIANeuronInspection& OutInspection);
+
+    UFUNCTION(BlueprintCallable, Category = "MiaIA|Network|Inspection")
+    static bool InspectConnection(
+        int64 ConnectionId,
+        FMiaIAConnectionInspection& OutInspection);
+
     UFUNCTION(BlueprintCallable, Category = "MiaIA|Dataset")
     static bool ImportCsvDataset(
         const FString& Path,

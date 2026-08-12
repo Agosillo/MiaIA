@@ -211,6 +211,40 @@ Prints every layer, neuron ID, neuron bias, current activation, connection ID, e
 
 Activations are runtime state. Before a forward pass they contain their initial or manually assigned values; after a forward pass they describe the most recent execution.
 
+### `inspect neuron`
+
+```text
+inspect neuron <neuron-id> [maximum-connections]
+```
+
+Inspects one neuron without printing the complete network. The result includes its ID, layer order and name, layer activation function, current activation, bias, and its incoming and outgoing connections.
+
+`maximum-connections` limits each direction independently and defaults to `10`. The command always reports the exact incoming and outgoing totals, even when only a bounded subset is printed. This makes the command suitable for highly connected neurons without hiding their true degree.
+
+Example:
+
+```text
+inspect neuron 1003 5
+```
+
+The operation is read-only. An unknown neuron ID or a non-positive limit is rejected without changing the network.
+
+### `inspect connection`
+
+```text
+inspect connection <connection-id>
+```
+
+Inspects one connection and both endpoint neurons. In addition to the connection ID, endpoints, and weight, the result identifies the layer, activation function, current activation, and bias of the source and target neurons.
+
+Example:
+
+```text
+inspect connection 1
+```
+
+This focused relationship view is the textual counterpart of selecting an element in MiaIA Studio. It uses the same SDK inspection contract and never mutates the model.
+
 ### `forward`
 
 ```text

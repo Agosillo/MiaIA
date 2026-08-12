@@ -149,6 +149,63 @@ struct IDE_API FMiaIANetworkOverview
 };
 
 USTRUCT(BlueprintType)
+struct IDE_API FMiaIANeuronContext
+{
+    GENERATED_BODY()
+
+    UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
+    FMiaIANeuronSnapshot Neuron;
+
+    UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
+    int64 LayerId{};
+
+    UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
+    FString LayerName;
+
+    UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
+    int64 LayerOrder{};
+
+    UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
+    EMiaIAActivationType LayerActivation{EMiaIAActivationType::Sigmoid};
+};
+
+USTRUCT(BlueprintType)
+struct IDE_API FMiaIANeuronInspection
+{
+    GENERATED_BODY()
+
+    UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
+    FMiaIANeuronContext Context;
+
+    UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
+    int64 IncomingConnectionCount{};
+
+    UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
+    int64 OutgoingConnectionCount{};
+
+    UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
+    TArray<FMiaIAConnectionSnapshot> IncomingConnections;
+
+    UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
+    TArray<FMiaIAConnectionSnapshot> OutgoingConnections;
+};
+
+USTRUCT(BlueprintType)
+struct IDE_API FMiaIAConnectionInspection
+{
+    GENERATED_BODY()
+
+    UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
+    FMiaIAConnectionSnapshot Connection;
+
+    UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
+    FMiaIANeuronContext FromNeuron;
+
+    UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
+    FMiaIANeuronContext ToNeuron;
+};
+
+USTRUCT(BlueprintType)
 struct IDE_API FMiaIADebugNeuronTelemetry
 {
     GENERATED_BODY()

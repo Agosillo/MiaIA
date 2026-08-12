@@ -35,6 +35,7 @@ Core / Engine
 - one refresh boundary over `MiaIAClient`;
 - two-dimensional and three-dimensional view selection;
 - layer, neuron, connection, and multi-neuron selection;
+- focused neuron and connection relationship state with a configurable per-direction limit;
 - automatic invalidation of a selection that no longer exists;
 - detailed snapshots for manageable networks;
 - lightweight compact scenes for large networks.
@@ -42,6 +43,8 @@ Core / Engine
 `StudioTopologyBuilder` converts SDK snapshots into renderer-neutral scenes. A scene contains logical nodes, links, element identities, layer information, values, and normalized three-dimensional positions.
 
 Detailed mode defaults to networks with at most 2,000 neurons and 5,000 connections. Above either limit, compact mode creates one aggregate node per layer and does not require the complete graph snapshot. `StudioTopologyBuilder` accepts explicit limits while retaining those defaults, allowing each host to expose a persistent user preference without embedding renderer policy in the Engine.
+
+For a single selected neuron, StudioCore retains its layer context, exact incoming and outgoing connection counts, and a bounded subset of each direction. A selected connection retains contextual snapshots of both endpoint neurons. The relationship limit changes the amount displayed, not the reported totals, and allows a frontend to avoid filling the Inspector with thousands of rows.
 
 ## Layout conventions
 
@@ -66,7 +69,7 @@ The reusable Slate panel, topology view, and theme implementation live in the ru
 
 The shared toolbar uses two stable functional rows rather than overflowing one horizontal strip. The first row begins with a `Project` menu for New, Open, Save, Save as, Import ONNX, Export ONNX, and Info. `.mai` operations preserve project context, while ONNX operations exchange only the supported model portion. Layout, visualization, performance preferences, help, and host actions follow on the same row. Training and phase-debug actions share the second row with their live session and phase status. Path-based operations use a themed in-panel prompt so the editor and packaged application retain identical behavior without an editor-only file-dialog dependency.
 
-The `MiaIAStudio` game target is the development entry point for the independent host. `IDE/Unreal/Build/Package-Windows.ps1` builds, cooks, stages, and archives that target for Win64. Its shared panel now exposes a `2D`/`3D` selector backed by `StudioCore`. Both views share single and multiple neuron selection, additive `Ctrl` selection, rectangular marquee selection, group dragging, and Inspector state. The 3D mode hosts a real runtime Unreal viewport with an initial 2D-equivalent front camera, one aggregated mesh of shaded neuron spheres and weighted connection cylinders, stable FXAA, the same gamma and semantic color composition as the Slate canvas, projected neuron labels, a perspective-correct circular selection outline, orbit, pan, extended zoom, and adaptive fit. A shared expanded-workspace mode temporarily gives the topology all space outside the retained right-side Inspector while preserving the same widget and state, so the editor tab and packaged application present the same visualization behavior.
+The `MiaIAStudio` game target is the development entry point for the independent host. `IDE/Unreal/Build/Package-Windows.ps1` builds, cooks, stages, and archives that target for Win64. Its shared panel now exposes a `2D`/`3D` selector backed by `StudioCore`. Both views share single and multiple neuron selection, additive `Ctrl` selection, rectangular marquee selection, group dragging, and Inspector state. A single neuron selection displays bounded incoming and outgoing connection lists with exact totals; a connection selection displays both endpoint neurons. The per-direction display limit is stored beside the detailed-topology limits and applies immediately. The 3D mode hosts a real runtime Unreal viewport with an initial 2D-equivalent front camera, one aggregated mesh of shaded neuron spheres and weighted connection cylinders, stable FXAA, the same gamma and semantic color composition as the Slate canvas, projected neuron labels, a perspective-correct circular selection outline, orbit, pan, extended zoom, and adaptive fit. A shared expanded-workspace mode temporarily gives the topology all space outside the retained right-side Inspector while preserving the same widget and state, so the editor tab and packaged application present the same visualization behavior.
 
 The toolbar `Help` menu provides an embedded interaction reference and an `About MiaIA Studio` dialog. Both use the same themed in-panel Slate overlay in the editor and packaged application instead of relying on host-specific operating-system message boxes. The About text reads the project version from Unreal configuration and identifies the shared Engine, SDK, and CLI service boundary instead of presenting the Unreal frontend as the complete MiaIA architecture.
 

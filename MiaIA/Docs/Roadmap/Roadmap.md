@@ -54,6 +54,8 @@ The roadmap is organized by dependency rather than by a fixed release date. Math
 - verified Win64 BuildCookRun archive with provisional application branding.
 - interactive 3D topology with aggregated sphere-and-cylinder geometry, projected identifiers, selection, camera navigation, and manual layout editing;
 - adaptive tessellation and compact scene policies that avoid one Unreal Actor per graph element.
+- bounded selected-neuron relationship inspection with exact incoming and outgoing totals;
+- selected-connection inspection with contextual source and target neuron snapshots across SDK, CLI, StudioCore, Blueprint, 2D, and 3D clients.
 - engine-owned training breakpoints for debug phases, neuron activations and gradients, and connection updates;
 - safe automatic worker pause with structured trigger telemetry;
 - shared CLI, SDK, Blueprint, and MiaIA Studio breakpoint authoring.
@@ -104,7 +106,7 @@ Retained session steps can now be compared through one renderer-neutral Engine o
 
 The debugging experience should next evolve toward:
 
-- expand selected-neuron and selected-connection inspection with incoming and outgoing relationships;
+- add paged relationship traversal and filtering for very highly connected elements;
 - extend retained history with an explicit bounded policy for hidden-neuron activations;
 - identify inactive or consistently saturated neurons;
 - trace signal and gradient flow through the network;
