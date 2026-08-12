@@ -21,6 +21,28 @@ namespace MiaIA::Studio
         Compact
     };
 
+    enum class StudioLayoutMode
+    {
+        Expanded,
+        Packed
+    };
+
+    enum class StudioLayoutOrientation
+    {
+        Horizontal,
+        Vertical
+    };
+
+    struct StudioLayoutPreferences
+    {
+        StudioLayoutMode Mode{ StudioLayoutMode::Expanded };
+        StudioLayoutOrientation Orientation{
+            StudioLayoutOrientation::Horizontal };
+        double NeuronScale{ 1.0 };
+        double NeuronGap{};
+        double LayerGap{};
+    };
+
     enum class StudioNodeKind
     {
         Neuron,
@@ -102,14 +124,27 @@ namespace MiaIA::Studio
             std::size_t neuronIndex,
             std::size_t neuronCount);
 
+        // Returns a deterministic, centered layout measured in neuron
+        // diameters. Renderers can apply their own uniform node scale while
+        // preserving the same non-overlapping topology in 2D and 3D.
+        [[nodiscard]]
+        static StudioPosition DetailedLayoutPosition(
+            std::size_t layerIndex,
+            std::size_t layerCount,
+            std::size_t neuronIndex,
+            std::size_t neuronCount,
+            const StudioLayoutPreferences& preferences = {});
+
         [[nodiscard]]
         static StudioTopologyScene BuildDetailed(
             const Core::NetworkSnapshot& network,
-            StudioViewMode viewMode);
+            StudioViewMode viewMode,
+            const StudioLayoutPreferences& preferences = {});
 
         [[nodiscard]]
         static StudioTopologyScene BuildCompact(
             const Core::NetworkOverviewSnapshot& overview,
-            StudioViewMode viewMode);
+            StudioViewMode viewMode,
+            const StudioLayoutPreferences& preferences = {});
     };
 }

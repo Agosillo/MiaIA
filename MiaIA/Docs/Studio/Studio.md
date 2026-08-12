@@ -34,13 +34,13 @@ Core / Engine
 - contextual command suggestions;
 - one refresh boundary over `MiaIAClient`;
 - two-dimensional and three-dimensional view selection;
-- layer, neuron, connection, and multi-neuron selection;
+- layer, neuron, connection, and multi-neuron selection, with arrow-key traversal between neurons and layers;
 - focused neuron and connection relationship state with a configurable per-direction limit;
 - automatic invalidation of a selection that no longer exists;
 - detailed snapshots for manageable networks;
 - lightweight compact scenes for large networks.
 
-`StudioTopologyBuilder` converts SDK snapshots into renderer-neutral scenes. A scene contains logical nodes, links, element identities, layer information, values, and normalized three-dimensional positions.
+`StudioTopologyBuilder` converts SDK snapshots into renderer-neutral scenes. A scene contains logical nodes, links, element identities, layer information, values, and renderer-independent layout coordinates.
 
 Detailed mode defaults to networks with at most 2,000 neurons and 5,000 connections. Above either limit, compact mode creates one aggregate node per layer and does not require the complete graph snapshot. `StudioTopologyBuilder` accepts explicit limits while retaining those defaults, allowing each host to expose a persistent user preference without embedding renderer policy in the Engine.
 
@@ -61,13 +61,13 @@ The initial three-dimensional layout deliberately preserves the same reading:
 - every automatic node starts on one shared plane;
 - orbiting, camera-relative dragging, and manual group movement reveal and introduce depth without changing the model.
 
-All automatic positions remain normalized so each renderer can choose its own world scale. Compact scenes place one node per layer and use aggregate links to describe layer progression rather than pretending to display individual model connections.
+Detailed automatic positions are measured in neuron diameters. `Expanded` spacing keeps the topology readable, while `Packed` spacing can place symmetric neurons and layers directly adjacent without intersecting them. `Horizontal` flow places layers from left to right and neurons from top to bottom; `Vertical` flow places layers from top to bottom and neurons from left to right. Uniform node size determines the minimum safe spacing; additional neuron and layer gaps, camera zoom, and connection visibility remain separate controls. This lets 2D and 3D choose different pixel or world scales while preserving the same symmetry, orientation, and non-overlap rule. Compact scenes apply the same flow direction, place one node per layer, and use aggregate links to describe layer progression rather than pretending to display individual model connections.
 
 ## Unreal delivery path
 
 The reusable Slate panel, topology view, and theme implementation live in the runtime-capable `IDEStudio` module. `IDEEditor` contains only editor integration such as dock-tab registration and installation of the Blueprint demonstration. The native `UMiaIAStudioGameInstance` places the same panel over the game viewport, so editor and standalone hosts do not maintain separate IDE implementations.
 
-The shared toolbar uses two stable functional rows rather than overflowing one horizontal strip. The first row begins with a `Project` menu for New, Open, Save, Save as, Import ONNX, Export ONNX, and Info. `.mai` operations preserve project context, while ONNX operations exchange only the supported model portion. Layout, visualization, performance preferences, help, and host actions follow on the same row. Training and phase-debug actions share the second row with their live session and phase status. Path-based operations use a themed in-panel prompt so the editor and packaged application retain identical behavior without an editor-only file-dialog dependency.
+The shared toolbar uses two stable functional rows rather than overflowing one horizontal strip. The first row begins with a `Project` menu for New, Open, Save, Save as, Import ONNX, Export ONNX, and Info. `.mai` operations preserve project context, while ONNX operations exchange only the supported model portion. The `Layout` menu shares persistent Expanded/Packed placement, Horizontal/Vertical flow, uniform neuron scale, spacing, connection visibility, and All/Selected connection display between 2D and 3D. Visualization, performance preferences, help, and host actions follow on the same row. Training and phase-debug actions share the second row with their live session and phase status. Path-based operations use a themed in-panel prompt so the editor and packaged application retain identical behavior without an editor-only file-dialog dependency.
 
 The `MiaIAStudio` game target is the development entry point for the independent host. `IDE/Unreal/Build/Package-Windows.ps1` builds, cooks, stages, and archives that target for Win64. Its shared panel now exposes a `2D`/`3D` selector backed by `StudioCore`. Both views share single and multiple neuron selection, additive `Ctrl` selection, rectangular marquee selection, group dragging, and Inspector state. A single neuron selection displays bounded incoming and outgoing connection lists with exact totals; a connection selection displays both endpoint neurons. The per-direction display limit is stored beside the detailed-topology limits and applies immediately. The 3D mode hosts a real runtime Unreal viewport with an initial 2D-equivalent front camera, one aggregated mesh of shaded neuron spheres and weighted connection cylinders, stable FXAA, the same gamma and semantic color composition as the Slate canvas, projected neuron labels, a perspective-correct circular selection outline, orbit, pan, extended zoom, and adaptive fit. A shared expanded-workspace mode temporarily gives the topology all space outside the retained right-side Inspector while preserving the same widget and state, so the editor tab and packaged application present the same visualization behavior.
 

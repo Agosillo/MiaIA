@@ -4,6 +4,7 @@
 #include "Containers/Set.h"
 #include "MiaIABlueprintTypes.h"
 #include "Styling/MiaIAEditorTheme.h"
+#include "Widgets/MiaIAVisualizationSettings.h"
 #include "Widgets/SLeafWidget.h"
 
 DECLARE_DELEGATE_TwoParams(
@@ -11,6 +12,18 @@ DECLARE_DELEGATE_TwoParams(
     const TSet<int64>&,
     int64)
 DECLARE_DELEGATE_OneParam(FOnMiaIAConnectionSelected, int64)
+
+enum class EMiaIANeuronNavigationDirection : uint8
+{
+    PreviousNeuron,
+    NextNeuron,
+    PreviousLayer,
+    NextLayer
+};
+
+DECLARE_DELEGATE_OneParam(
+    FOnMiaIANeuronNavigationRequested,
+    EMiaIANeuronNavigationDirection)
 
 class IDESTUDIO_API SMiaIANetworkView final : public SLeafWidget
 {
@@ -22,6 +35,9 @@ public:
             FOnMiaIANeuronSelectionChanged,
             OnNeuronSelectionChanged)
         SLATE_EVENT(FOnMiaIAConnectionSelected, OnConnectionSelected)
+        SLATE_EVENT(
+            FOnMiaIANeuronNavigationRequested,
+            OnNeuronNavigationRequested)
     SLATE_END_ARGS()
 
     SMiaIANetworkView();
@@ -37,9 +53,13 @@ public:
         int64 InPrimaryNeuronId);
     void SetSelectedConnection(int64 InConnectionId);
     void SetTheme(EMiaIAEditorTheme InTheme);
+    void SetVisualizationSettings(
+        const FMiaIAVisualizationSettings& InSettings);
     void FitView();
     void ResetLayout();
+    void RevealNeuron(int64 NeuronId);
 
+    virtual bool SupportsKeyboardFocus() const override { return true; }
     virtual FVector2D ComputeDesiredSize(float) const override;
     virtual int32 OnPaint(
         const FPaintArgs& Args,
@@ -61,6 +81,9 @@ public:
     virtual FReply OnMouseWheel(
         const FGeometry& MyGeometry,
         const FPointerEvent& MouseEvent) override;
+    virtual FReply OnKeyDown(
+        const FGeometry& MyGeometry,
+        const FKeyEvent& KeyEvent) override;
     virtual void OnMouseCaptureLost(
         const FCaptureLostEvent& CaptureLostEvent) override;
 
@@ -78,6 +101,13 @@ private:
     FVector2D AutomaticPosition(
         int32 LayerIndex,
         int32 NeuronIndex) const;
+    float DisplayNeuronDiameter() const;
+    float DisplaySelectionDiameter() const;
+    float LayoutUnitSize() const;
+    bool ShouldDrawConnection(
+        const FMiaIAConnectionSnapshot& Connection) const;
+    bool CanApplyDragTranslation(
+        const FVector2D& Translation) const;
     FVector2D LayoutPosition(
         const FVector2D& NormalizedPosition,
         const FVector2D& Size) const;
@@ -107,6 +137,7 @@ private:
     int64 DraggedNeuronId{-1};
     TSet<int64> SelectedNeuronIds;
     EMiaIAEditorTheme Theme{EMiaIAEditorTheme::FollowUnreal};
+    FMiaIAVisualizationSettings VisualizationSettings;
     FString LayoutKey;
     TMap<int64, FVector2D> ManualNeuronPositions;
     FVector2D ViewOffset{FVector2D::ZeroVector};
@@ -124,6 +155,7 @@ private:
     mutable TMap<int64, FVector2D> NeuronPositions;
     FOnMiaIANeuronSelectionChanged OnNeuronSelectionChanged;
     FOnMiaIAConnectionSelected OnConnectionSelected;
+    FOnMiaIANeuronNavigationRequested OnNeuronNavigationRequested;
     FSlateRoundedBoxBrush NeuronBrush;
     FSlateRoundedBoxBrush SelectionBrush;
 };

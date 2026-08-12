@@ -4,6 +4,7 @@
 #include "MiaIABlueprintTypes.h"
 #include "Styling/MiaIAEditorTheme.h"
 #include "Widgets/SMiaIANetworkView.h"
+#include "Widgets/MiaIAVisualizationSettings.h"
 #include "Widgets/SViewport.h"
 
 class FPreviewScene;
@@ -20,6 +21,9 @@ public:
             FOnMiaIANeuronSelectionChanged,
             OnNeuronSelectionChanged)
         SLATE_EVENT(FOnMiaIAConnectionSelected, OnConnectionSelected)
+        SLATE_EVENT(
+            FOnMiaIANeuronNavigationRequested,
+            OnNeuronNavigationRequested)
     SLATE_END_ARGS()
 
     virtual ~SMiaIA3DNetworkView() override;
@@ -35,9 +39,13 @@ public:
         int64 InPrimaryNeuronId);
     void SetSelectedConnection(int64 InConnectionId);
     void SetTheme(EMiaIAEditorTheme InTheme);
+    void SetVisualizationSettings(
+        const FMiaIAVisualizationSettings& InSettings);
     void FitView();
     void ResetView();
+    void RevealNeuron(int64 NeuronId);
 
+    virtual bool SupportsKeyboardFocus() const override { return true; }
     virtual void Tick(
         const FGeometry& AllottedGeometry,
         const double InCurrentTime,
@@ -62,6 +70,9 @@ public:
     virtual FReply OnMouseWheel(
         const FGeometry& MyGeometry,
         const FPointerEvent& MouseEvent) override;
+    virtual FReply OnKeyDown(
+        const FGeometry& MyGeometry,
+        const FKeyEvent& KeyEvent) override;
     virtual void OnMouseCaptureLost(
         const FCaptureLostEvent& CaptureLostEvent) override;
 
@@ -87,10 +98,6 @@ private:
         const FVector& WorldPosition,
         FVector2D& OutPosition) const;
     float ProjectedSphereRadius(const FVector& WorldPosition) const;
-    bool ProjectedSphereBounds(
-        const FVector& WorldPosition,
-        FVector2D& OutCenter,
-        FVector2D& OutRadius) const;
     bool DeprojectFromViewport(
         const FVector2D& ViewportPosition,
         FVector& OutOrigin,
@@ -105,6 +112,11 @@ private:
     void UpdateNodeDrag(const FVector2D& ViewportPosition);
     void CompleteMarqueeSelection(const FGeometry& Geometry);
     void NotifyNeuronSelectionChanged();
+    float SphereRadius() const;
+    float LayoutUnitSize() const;
+    bool ShouldDrawConnection(
+        const FMiaIAConnectionSnapshot& Connection) const;
+    bool CanApplyDragTranslation(const FVector& Translation) const;
     FLinearColor ActivationColor(double Activation) const;
     FLinearColor SignedNeuronColor(double Value, double Maximum) const;
     FLinearColor SignedConnectionColor(
@@ -131,7 +143,9 @@ private:
     TSharedPtr<FSceneViewport> SceneViewport;
     FOnMiaIANeuronSelectionChanged OnNeuronSelectionChanged;
     FOnMiaIAConnectionSelected OnConnectionSelected;
+    FOnMiaIANeuronNavigationRequested OnNeuronNavigationRequested;
     EMiaIAEditorTheme Theme{EMiaIAEditorTheme::FollowUnreal};
+    FMiaIAVisualizationSettings VisualizationSettings;
     FVector LookAt{FVector::ZeroVector};
     FVector DragPlaneOrigin{FVector::ZeroVector};
     FVector DragPlaneNormal{FVector::ForwardVector};

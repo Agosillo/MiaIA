@@ -151,7 +151,7 @@ Quick help and About also expose the public MiaIA source location and MPL 2.0 st
 
 Use the `View` selector in the toolbar to switch between `2D` and `3D`. Both modes read the same snapshot, selection, Inspector, phase telemetry, semantic colors, and detailed-versus-compact policy. Switching the renderer does not create another network or alter any model value.
 
-The 3D renderer runs inside a real Unreal runtime preview scene and is therefore available in both the editor panel and the packaged application. `StudioCore` supplies normalized two- and three-dimensional positions. Unreal combines them so the initial front camera preserves the familiar 2D reading of layers from left to right and neurons from top to bottom, while layer and neuron depth becomes visible as soon as the camera orbits. Unreal applies only world scale, camera behavior, colors, and drawing.
+The 3D renderer runs inside a real Unreal runtime preview scene and is therefore available in both the editor panel and the packaged application. `StudioCore` supplies centered layout coordinates measured in neuron diameters. Unreal converts the same coordinates into pixels or world units, so the initial front camera preserves the familiar 2D reading of layers from left to right and neurons from top to bottom. Camera-relative manual movement can then introduce depth. Unreal applies only uniform world scale, camera behavior, colors, and drawing.
 
 Detailed 3D rendering keeps every neuron and connection individually identifiable. It does not create one Unreal Actor per element. One aggregated runtime viewport renderer builds shaded neuron spheres and weighted connection cylinders into a single dynamic mesh submission, while MiaIA retains IDs separately for hit testing and Inspector queries. Sphere and cylinder tessellation decrease automatically as the visible graph grows. Stable FXAA smooths geometry edges without the temporal trails produced by history-based antialiasing. Bloom and tonemapping remain disabled, and the embedded viewport uses neutral display gamma, so the shared semantic palette and background follow the same color composition as the 2D Slate canvas instead of becoming emissive, desaturated, or artificially bright. This rendering optimization is distinct from compact mode, which intentionally displays one aggregate sphere per layer for very large networks.
 
@@ -160,6 +160,12 @@ Detailed 3D rendering keeps every neuron and connection individually identifiabl
 - `Refresh` immediately reloads all visible snapshots. The panel also refreshes runtime values automatically.
 - `Fit view` fits the active renderer: it adjusts 2D zoom and pan or derives a centered front-facing 3D camera from the current topology bounds, viewport size, and aspect ratio while preserving manual neuron positions.
 - `Reset layout` discards manual positions and restores the automatic layout and default framing in both 2D and detailed 3D modes.
+- `Layout: Expanded` opens the topology for reading; `Layout: Packed` places symmetric neurons and layers as closely as the configured gaps allow. A zero gap makes equal-size nodes tangent, never intersecting.
+- `Flow direction: Horizontal` places layers from left to right; `Vertical` rotates the shared automatic plane so layers run from top to bottom. Both detailed and compact 2D/3D views follow the same preference.
+- `Neuron size` uniformly scales every detailed 2D circle and 3D sphere independently from camera zoom. Automatic spacing accounts for the chosen size so nodes remain tangent or separated instead of intersecting. `Neuron gap` and `Layer gap` add space without changing model topology.
+- `Connection visibility` independently changes connection opacity and thickness from hidden at 0% through the normal 100% presentation to an emphasized 200% presentation. It never changes neuron geometry.
+- Connection display can show `All` links or only links incident to the current `Selected` neurons or connection.
+- Layout and visualization changes preserve the current camera and canvas framing. Use `Fit view` explicitly when the new arrangement should fill the available workspace.
 - `Expand view` collapses Model explorer and the lower tool area so the live topology occupies the available panel while Inspector remains visible on the right. The same button becomes `Restore panels`; expanding or restoring preserves the current renderer, selection, and topology state and automatically refits the new canvas size.
 - `Continue` resumes an active paused training session when no phase inspection owns the current step.
 - `Pause` requests a safe pause for a running training session.
@@ -175,15 +181,16 @@ Buttons are enabled only when their operation is valid for the current session a
 The 2D topology view supports navigation and layout editing:
 
 - use the mouse wheel to zoom around the pointer;
-- drag with the middle mouse button to pan the view;
+- drag with the middle or right mouse button to pan the view;
 - click a neuron or connection with the left mouse button to select it;
 - use `Ctrl + left click` to add or remove neurons from the selection;
 - drag on empty space to select every enclosed neuron, or hold `Ctrl` to add the rectangle to the current selection;
 - drag any selected neuron to move the complete selected group while preserving its relative layout;
+- after clicking the topology, use the arrow keys in their visible direction. With Horizontal flow, `Up`/`Down` move within a layer and `Left`/`Right` move between layers; Vertical flow rotates that mapping. The destination in an adjacent layer preserves the nearest relative position, and the view follows only when the selected neuron leaves the visible canvas;
 - select `Fit view` to recover the complete topology after zooming, panning, or moving neurons;
 - select `Reset layout` to remove every manual position and restore the original automatic arrangement.
 
-Manual positions use normalized layout coordinates rather than Slate pixel coordinates. They remain stable while the panel is open and can later be reused by another renderer, including a 3D view. They are intentionally not written to ONNX or project configuration. Persistent visualization layouts belong to future MiaIA-specific model metadata.
+Manual positions use logical layout coordinates rather than Slate pixel coordinates. Group movement is rejected when it would make any detailed neuron intersect an unselected neuron. Changing flow direction clears manual positions before applying the rotated automatic layout; zoom and pan remain unchanged until `Fit view` is selected. Positions otherwise remain stable while the panel is open and are intentionally not written to ONNX or project configuration. Persistent model-specific visualization layouts belong to future MiaIA project metadata; the general layout preferences are stored in local Studio user settings.
 
 The 3D topology view uses these controls:
 
@@ -193,10 +200,11 @@ The 3D topology view uses these controls:
 - click a neuron marker or connection with the left mouse button to select it and update the shared Inspector;
 - use `Ctrl + left click` or an optional `Ctrl` selection rectangle to build a multiple-neuron selection;
 - drag any selected neuron marker to move the complete selected group on the camera-facing plane while preserving relative positions;
+- after clicking the topology, use the arrow keys in their visible direction. Horizontal flow uses `Up`/`Down` within a layer and `Left`/`Right` between layers, while Vertical flow rotates that mapping. An off-screen destination recenters the camera target while visible selections leave the current camera unchanged;
 - select `Fit view` to restore the complete front-facing camera framing without discarding manual positions;
 - select `Reset layout` to discard manual positions and restore the automatic arrangement and default framing.
 
-The 3D renderer uses solid shaded sphere geometry in a real Unreal scene. It starts with the same front-facing, coplanar topology reading as 2D; orbiting exposes perspective, while camera-relative manual dragging can introduce depth. Detailed views project neuron identifiers back into the Slate overlay, preserving the readable `#id` labels from 2D, and show every selected neuron with an antialiased yellow circular outline without replacing the sphere's activation or debug color. The outline is derived from sampled projection bounds around the real sphere and retains a minimum screen-space radius, so it stays aligned at extreme close zoom and recognizable after zooming far away. Labels are omitted above 500 visible neurons to keep larger scenes legible. Multiple selection and the primary Inspector item persist when switching between 2D and 3D. Dragging changes only the visualization layout held by the open Studio panel: it does not alter topology, weights, activation values, or Engine mathematics.
+The 3D renderer uses solid uniformly scaled sphere geometry in a real Unreal scene. It starts with the same front-facing, coplanar topology reading as 2D; orbiting exposes perspective, while camera-relative manual dragging can introduce depth. The scene viewport is explicitly resized to the Slate canvas aspect ratio so spheres do not become oval when the panel or standalone window changes shape. Detailed views project neuron identifiers back into the Slate overlay and show every selected neuron with an antialiased circular yellow outline without replacing the sphere's activation or debug color. The outline uses one screen-space radius and retains a minimum size, so it remains circular at extreme zoom. Labels are omitted above 500 visible neurons and in Packed mode to keep dense scenes legible. Multiple selection and the primary Inspector item persist when switching between 2D and 3D. Dragging changes only the visualization layout held by the open Studio panel: it does not alter topology, weights, activation values, or Engine mathematics.
 
 In compact mode, 2D zoom and pan and 3D camera navigation remain available. `Fit view` and `Reset layout` restore the aggregate layer graph. Individual layer nodes are summaries rather than real neurons and are not draggable in this increment; aggregate-layout editing will be reconsidered with the future layout design.
 

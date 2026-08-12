@@ -41,6 +41,15 @@ namespace
         TEXT("DetailedConnectionLimit");
     constexpr TCHAR InspectorConnectionLimitSettingsKey[] =
         TEXT("InspectorConnectionLimit");
+    constexpr TCHAR LayoutModeSettingsKey[] = TEXT("LayoutMode");
+    constexpr TCHAR LayoutOrientationSettingsKey[] =
+        TEXT("LayoutOrientation");
+    constexpr TCHAR ConnectionDisplaySettingsKey[] =
+        TEXT("ConnectionDisplay");
+    constexpr TCHAR NeuronScaleSettingsKey[] = TEXT("NeuronScale");
+    constexpr TCHAR ConnectionScaleSettingsKey[] = TEXT("ConnectionScale");
+    constexpr TCHAR NeuronGapSettingsKey[] = TEXT("NeuronGap");
+    constexpr TCHAR LayerGapSettingsKey[] = TEXT("LayerGap");
     constexpr int32 MinimumTopologyLimit = 1;
     constexpr int32 MaximumDetailedNeuronLimit = 100000000;
     constexpr int32 MaximumDetailedConnectionLimit = 1000000000;
@@ -163,6 +172,155 @@ namespace
             DataRefreshSettingsSection,
             InspectorConnectionLimitSettingsKey,
             InspectorLimit,
+            GGameUserSettingsIni);
+        GConfig->Flush(false, GGameUserSettingsIni);
+    }
+
+    FMiaIAVisualizationSettings LoadVisualizationSettings()
+    {
+        FMiaIAVisualizationSettings settings;
+
+        if (!GConfig)
+        {
+            return settings;
+        }
+
+        FString savedValue;
+
+        if (GConfig->GetString(
+            DataRefreshSettingsSection,
+            LayoutModeSettingsKey,
+            savedValue,
+            GGameUserSettingsIni) &&
+            savedValue.Equals(TEXT("Packed"), ESearchCase::IgnoreCase))
+        {
+            settings.Layout.Mode =
+                MiaIA::Studio::StudioLayoutMode::Packed;
+        }
+
+        if (GConfig->GetString(
+            DataRefreshSettingsSection,
+            LayoutOrientationSettingsKey,
+            savedValue,
+            GGameUserSettingsIni) &&
+            savedValue.Equals(TEXT("Vertical"), ESearchCase::IgnoreCase))
+        {
+            settings.Layout.Orientation =
+                MiaIA::Studio::StudioLayoutOrientation::Vertical;
+        }
+
+        if (GConfig->GetString(
+            DataRefreshSettingsSection,
+            ConnectionDisplaySettingsKey,
+            savedValue,
+            GGameUserSettingsIni))
+        {
+            if (savedValue.Equals(
+                TEXT("Selected"),
+                ESearchCase::IgnoreCase))
+            {
+                settings.ConnectionDisplay =
+                    EMiaIAConnectionDisplayMode::Selected;
+            }
+        }
+
+        GConfig->GetFloat(
+            DataRefreshSettingsSection,
+            NeuronScaleSettingsKey,
+            settings.NeuronScale,
+            GGameUserSettingsIni);
+        GConfig->GetFloat(
+            DataRefreshSettingsSection,
+            ConnectionScaleSettingsKey,
+            settings.ConnectionScale,
+            GGameUserSettingsIni);
+        GConfig->GetDouble(
+            DataRefreshSettingsSection,
+            NeuronGapSettingsKey,
+            settings.Layout.NeuronGap,
+            GGameUserSettingsIni);
+        GConfig->GetDouble(
+            DataRefreshSettingsSection,
+            LayerGapSettingsKey,
+            settings.Layout.LayerGap,
+            GGameUserSettingsIni);
+        settings.NeuronScale = FMath::Clamp(
+            settings.NeuronScale,
+            0.25f,
+            3.0f);
+        settings.ConnectionScale = FMath::Clamp(
+            settings.ConnectionScale,
+            0.0f,
+            2.0f);
+        settings.Layout.NeuronGap = FMath::Clamp(
+            settings.Layout.NeuronGap,
+            0.0,
+            5.0);
+        settings.Layout.LayerGap = FMath::Clamp(
+            settings.Layout.LayerGap,
+            0.0,
+            10.0);
+        return settings;
+    }
+
+    void SaveVisualizationSettings(
+        const FMiaIAVisualizationSettings& Settings)
+    {
+        if (!GConfig)
+        {
+            return;
+        }
+
+        const TCHAR* layoutMode = Settings.Layout.Mode ==
+            MiaIA::Studio::StudioLayoutMode::Packed
+            ? TEXT("Packed")
+            : TEXT("Expanded");
+        const TCHAR* layoutOrientation = Settings.Layout.Orientation ==
+            MiaIA::Studio::StudioLayoutOrientation::Vertical
+            ? TEXT("Vertical")
+            : TEXT("Horizontal");
+        const TCHAR* connectionDisplay = TEXT("All");
+
+        if (Settings.ConnectionDisplay ==
+            EMiaIAConnectionDisplayMode::Selected)
+        {
+            connectionDisplay = TEXT("Selected");
+        }
+
+        GConfig->SetString(
+            DataRefreshSettingsSection,
+            LayoutModeSettingsKey,
+            layoutMode,
+            GGameUserSettingsIni);
+        GConfig->SetString(
+            DataRefreshSettingsSection,
+            LayoutOrientationSettingsKey,
+            layoutOrientation,
+            GGameUserSettingsIni);
+        GConfig->SetString(
+            DataRefreshSettingsSection,
+            ConnectionDisplaySettingsKey,
+            connectionDisplay,
+            GGameUserSettingsIni);
+        GConfig->SetFloat(
+            DataRefreshSettingsSection,
+            NeuronScaleSettingsKey,
+            Settings.NeuronScale,
+            GGameUserSettingsIni);
+        GConfig->SetFloat(
+            DataRefreshSettingsSection,
+            ConnectionScaleSettingsKey,
+            Settings.ConnectionScale,
+            GGameUserSettingsIni);
+        GConfig->SetDouble(
+            DataRefreshSettingsSection,
+            NeuronGapSettingsKey,
+            Settings.Layout.NeuronGap,
+            GGameUserSettingsIni);
+        GConfig->SetDouble(
+            DataRefreshSettingsSection,
+            LayerGapSettingsKey,
+            Settings.Layout.LayerGap,
             GGameUserSettingsIni);
         GConfig->Flush(false, GGameUserSettingsIni);
     }
@@ -346,6 +504,7 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
     bStandaloneMode = InArgs._StandaloneMode;
     Theme = FMiaIAEditorTheme::Load();
     DataRefreshMode = LoadDataRefreshMode();
+    VisualizationSettings = LoadVisualizationSettings();
     DetailedNeuronLimit = LoadTopologyLimit(
         DetailedNeuronLimitSettingsKey,
         static_cast<int32>(
@@ -425,8 +584,19 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
                 .VAlign(VAlign_Center)
                 .Padding(2.0f, 0.0f, 8.0f, 0.0f)
                 [
-                    SNew(STextBlock)
-                    .Text(LOCTEXT("LayoutToolbarGroup", "Layout"))
+                    SNew(SComboButton)
+                    .ComboButtonStyle(&ComboButtonStyle)
+                    .ToolTipText(LOCTEXT(
+                        "LayoutMenuTooltip",
+                        "Choose expanded or packed placement, neuron size, spacing, and connection detail."))
+                    .ButtonContent()
+                    [
+                        SNew(STextBlock)
+                        .Text(this, &SMiaIAEditorPanel::LayoutModeText)
+                    ]
+                    .OnGetMenuContent(
+                        this,
+                        &SMiaIAEditorPanel::BuildLayoutMenu)
                 ]
                 + SHorizontalBox::Slot()
                 .AutoWidth()
@@ -784,6 +954,9 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
                                 .OnConnectionSelected(
                                     this,
                                     &SMiaIAEditorPanel::SelectConnection)
+                                .OnNeuronNavigationRequested(
+                                    this,
+                                    &SMiaIAEditorPanel::NavigateNeuron)
                             ]
                             + SWidgetSwitcher::Slot()
                             [
@@ -796,6 +969,9 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
                                 .OnConnectionSelected(
                                     this,
                                     &SMiaIAEditorPanel::SelectConnection)
+                                .OnNeuronNavigationRequested(
+                                    this,
+                                    &SMiaIAEditorPanel::NavigateNeuron)
                             ]
                         ]
                         + SVerticalBox::Slot()
@@ -1489,6 +1665,8 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
     TopologySwitcher->SetActiveWidgetIndex(0);
     NetworkView->SetTheme(Theme);
     Network3DView->SetTheme(Theme);
+    NetworkView->SetVisualizationSettings(VisualizationSettings);
+    Network3DView->SetVisualizationSettings(VisualizationSettings);
     RebuildConsoleSuggestions(FString());
     RefreshData();
     RegisterActiveTimer(
@@ -1926,6 +2104,122 @@ void SMiaIAEditorPanel::SelectNeurons(
     RefreshData();
 }
 
+void SMiaIAEditorPanel::NavigateNeuron(
+    EMiaIANeuronNavigationDirection Direction)
+{
+    if (bCompactTopology || Network.Layers.IsEmpty())
+    {
+        return;
+    }
+
+    int32 currentLayerIndex = INDEX_NONE;
+    int32 currentNeuronIndex = INDEX_NONE;
+
+    for (int32 layerIndex = 0;
+        layerIndex < Network.Layers.Num() && currentLayerIndex == INDEX_NONE;
+        ++layerIndex)
+    {
+        const FMiaIALayerSnapshot& layer = Network.Layers[layerIndex];
+
+        for (int32 neuronIndex = 0;
+            neuronIndex < layer.Neurons.Num();
+            ++neuronIndex)
+        {
+            if (layer.Neurons[neuronIndex].Id == SelectedNeuronId)
+            {
+                currentLayerIndex = layerIndex;
+                currentNeuronIndex = neuronIndex;
+                break;
+            }
+        }
+    }
+
+    if (currentLayerIndex == INDEX_NONE)
+    {
+        for (int32 layerIndex = 0;
+            layerIndex < Network.Layers.Num();
+            ++layerIndex)
+        {
+            if (!Network.Layers[layerIndex].Neurons.IsEmpty())
+            {
+                currentLayerIndex = layerIndex;
+                currentNeuronIndex = 0;
+                break;
+            }
+        }
+    }
+
+    if (currentLayerIndex == INDEX_NONE)
+    {
+        return;
+    }
+
+    int32 targetLayerIndex = currentLayerIndex;
+    int32 targetNeuronIndex = currentNeuronIndex;
+    const FMiaIALayerSnapshot& currentLayer =
+        Network.Layers[currentLayerIndex];
+
+    if (Direction == EMiaIANeuronNavigationDirection::PreviousNeuron)
+    {
+        targetNeuronIndex = FMath::Max(0, currentNeuronIndex - 1);
+    }
+    else if (Direction == EMiaIANeuronNavigationDirection::NextNeuron)
+    {
+        targetNeuronIndex = FMath::Min(
+            currentLayer.Neurons.Num() - 1,
+            currentNeuronIndex + 1);
+    }
+    else
+    {
+        const int32 layerStep =
+            Direction == EMiaIANeuronNavigationDirection::PreviousLayer
+            ? -1
+            : 1;
+        targetLayerIndex += layerStep;
+
+        while (Network.Layers.IsValidIndex(targetLayerIndex) &&
+            Network.Layers[targetLayerIndex].Neurons.IsEmpty())
+        {
+            targetLayerIndex += layerStep;
+        }
+
+        if (!Network.Layers.IsValidIndex(targetLayerIndex))
+        {
+            return;
+        }
+
+        const FMiaIALayerSnapshot& targetLayer =
+            Network.Layers[targetLayerIndex];
+        const double normalizedPosition = currentLayer.Neurons.Num() > 1
+            ? static_cast<double>(currentNeuronIndex) /
+                static_cast<double>(currentLayer.Neurons.Num() - 1)
+            : 0.5;
+        targetNeuronIndex = FMath::Clamp(
+            FMath::RoundToInt(
+                normalizedPosition *
+                static_cast<double>(targetLayer.Neurons.Num() - 1)),
+            0,
+            targetLayer.Neurons.Num() - 1);
+    }
+
+    const int64 targetNeuronId = Network.Layers[targetLayerIndex]
+        .Neurons[targetNeuronIndex]
+        .Id;
+    TSet<int64> selection;
+    selection.Add(targetNeuronId);
+    SelectNeurons(selection, targetNeuronId);
+
+    if (NetworkView.IsValid())
+    {
+        NetworkView->RevealNeuron(targetNeuronId);
+    }
+
+    if (Network3DView.IsValid())
+    {
+        Network3DView->RevealNeuron(targetNeuronId);
+    }
+}
+
 void SMiaIAEditorPanel::SelectConnection(int64 ConnectionId)
 {
     SelectedConnectionId = ConnectionId;
@@ -1988,6 +2282,348 @@ EActiveTimerReturnType SMiaIAEditorPanel::HandleDeferredWorkspaceFit(
 FReply SMiaIAEditorPanel::HandleRefresh()
 {
     RefreshData();
+    return FReply::Handled();
+}
+
+TSharedRef<SWidget> SMiaIAEditorPanel::BuildLayoutMenu()
+{
+    return SNew(SBox)
+        .WidthOverride(300.0f)
+        .Padding(10.0f)
+        [
+            SNew(SVerticalBox)
+            + SVerticalBox::Slot()
+            .AutoHeight()
+            .Padding(0.0f, 0.0f, 0.0f, 4.0f)
+            [
+                SNew(STextBlock)
+                .Font(FAppStyle::GetFontStyle(TEXT("NormalFontBold")))
+                .Text(LOCTEXT("LayoutPlacementHeading", "Placement"))
+            ]
+            + SVerticalBox::Slot()
+            .AutoHeight()
+            [
+                SNew(SHorizontalBox)
+                + SHorizontalBox::Slot()
+                .FillWidth(1.0f)
+                .Padding(0.0f, 0.0f, 2.0f, 0.0f)
+                [
+                    SNew(SButton)
+                    .ButtonStyle(&ButtonStyle)
+                    .Text(LOCTEXT("ExpandedLayout", "Expanded"))
+                    .ToolTipText(LOCTEXT(
+                        "ExpandedLayoutTooltip",
+                        "Keep layers open and readable while preserving a non-overlapping minimum distance."))
+                    .OnClicked(
+                        this,
+                        &SMiaIAEditorPanel::SelectLayoutMode,
+                        MiaIA::Studio::StudioLayoutMode::Expanded)
+                ]
+                + SHorizontalBox::Slot()
+                .FillWidth(1.0f)
+                .Padding(2.0f, 0.0f, 0.0f, 0.0f)
+                [
+                    SNew(SButton)
+                    .ButtonStyle(&ButtonStyle)
+                    .Text(LOCTEXT("PackedLayout", "Packed"))
+                    .ToolTipText(LOCTEXT(
+                        "PackedLayoutTooltip",
+                        "Pack symmetric layers and neurons as closely as the configured gaps allow."))
+                    .OnClicked(
+                        this,
+                        &SMiaIAEditorPanel::SelectLayoutMode,
+                        MiaIA::Studio::StudioLayoutMode::Packed)
+                ]
+            ]
+            + SVerticalBox::Slot()
+            .AutoHeight()
+            .Padding(0.0f, 10.0f, 0.0f, 4.0f)
+            [
+                SNew(STextBlock)
+                .Font(FAppStyle::GetFontStyle(TEXT("NormalFontBold")))
+                .Text(LOCTEXT("LayoutOrientationHeading", "Flow direction"))
+            ]
+            + SVerticalBox::Slot()
+            .AutoHeight()
+            [
+                SNew(SHorizontalBox)
+                + SHorizontalBox::Slot()
+                .FillWidth(1.0f)
+                .Padding(0.0f, 0.0f, 2.0f, 0.0f)
+                [
+                    SNew(SButton)
+                    .ButtonStyle(&ButtonStyle)
+                    .Text(LOCTEXT("HorizontalLayout", "Horizontal"))
+                    .ToolTipText(LOCTEXT(
+                        "HorizontalLayoutTooltip",
+                        "Arrange layers from left to right and neurons from top to bottom."))
+                    .OnClicked(
+                        this,
+                        &SMiaIAEditorPanel::SelectLayoutOrientation,
+                        MiaIA::Studio::StudioLayoutOrientation::Horizontal)
+                ]
+                + SHorizontalBox::Slot()
+                .FillWidth(1.0f)
+                .Padding(2.0f, 0.0f, 0.0f, 0.0f)
+                [
+                    SNew(SButton)
+                    .ButtonStyle(&ButtonStyle)
+                    .Text(LOCTEXT("VerticalLayout", "Vertical"))
+                    .ToolTipText(LOCTEXT(
+                        "VerticalLayoutTooltip",
+                        "Arrange layers from top to bottom and neurons from left to right."))
+                    .OnClicked(
+                        this,
+                        &SMiaIAEditorPanel::SelectLayoutOrientation,
+                        MiaIA::Studio::StudioLayoutOrientation::Vertical)
+                ]
+            ]
+            + SVerticalBox::Slot()
+            .AutoHeight()
+            .Padding(0.0f, 10.0f, 0.0f, 3.0f)
+            [
+                SNew(STextBlock)
+                .Text(LOCTEXT("NeuronSizeLabel", "Neuron size (%)"))
+            ]
+            + SVerticalBox::Slot()
+            .AutoHeight()
+            [
+                SNew(SSpinBox<float>)
+                .MinValue(25.0f)
+                .MaxValue(300.0f)
+                .MinSliderValue(25.0f)
+                .MaxSliderValue(200.0f)
+                .Delta(5.0f)
+                .Value_Lambda([this]()
+                {
+                    return VisualizationSettings.NeuronScale * 100.0f;
+                })
+                .OnValueChanged(
+                    this,
+                    &SMiaIAEditorPanel::HandleNeuronScaleChanged)
+            ]
+            + SVerticalBox::Slot()
+            .AutoHeight()
+            .Padding(0.0f, 8.0f, 0.0f, 3.0f)
+            [
+                SNew(STextBlock)
+                .Text(LOCTEXT(
+                    "NeuronGapLabel",
+                    "Minimum neuron gap (% of diameter)"))
+            ]
+            + SVerticalBox::Slot()
+            .AutoHeight()
+            [
+                SNew(SSpinBox<float>)
+                .MinValue(0.0f)
+                .MaxValue(500.0f)
+                .MinSliderValue(0.0f)
+                .MaxSliderValue(200.0f)
+                .Delta(5.0f)
+                .Value_Lambda([this]()
+                {
+                    return static_cast<float>(
+                        VisualizationSettings.Layout.NeuronGap * 100.0);
+                })
+                .OnValueChanged(
+                    this,
+                    &SMiaIAEditorPanel::HandleNeuronGapChanged)
+            ]
+            + SVerticalBox::Slot()
+            .AutoHeight()
+            .Padding(0.0f, 8.0f, 0.0f, 3.0f)
+            [
+                SNew(STextBlock)
+                .Text(LOCTEXT(
+                    "LayerGapLabel",
+                    "Minimum layer gap (% of diameter)"))
+            ]
+            + SVerticalBox::Slot()
+            .AutoHeight()
+            [
+                SNew(SSpinBox<float>)
+                .MinValue(0.0f)
+                .MaxValue(1000.0f)
+                .MinSliderValue(0.0f)
+                .MaxSliderValue(500.0f)
+                .Delta(10.0f)
+                .Value_Lambda([this]()
+                {
+                    return static_cast<float>(
+                        VisualizationSettings.Layout.LayerGap * 100.0);
+                })
+                .OnValueChanged(
+                    this,
+                    &SMiaIAEditorPanel::HandleLayerGapChanged)
+            ]
+            + SVerticalBox::Slot()
+            .AutoHeight()
+            .Padding(0.0f, 12.0f, 0.0f, 4.0f)
+            [
+                SNew(STextBlock)
+                .Font(FAppStyle::GetFontStyle(TEXT("NormalFontBold")))
+                .Text(LOCTEXT(
+                    "ConnectionDisplayHeading",
+                    "Connections"))
+            ]
+            + SVerticalBox::Slot()
+            .AutoHeight()
+            .Padding(0.0f, 0.0f, 0.0f, 3.0f)
+            [
+                SNew(STextBlock)
+                .Text(LOCTEXT(
+                    "ConnectionScaleLabel",
+                    "Connection visibility (%)"))
+            ]
+            + SVerticalBox::Slot()
+            .AutoHeight()
+            .Padding(0.0f, 0.0f, 0.0f, 8.0f)
+            [
+                SNew(SSpinBox<float>)
+                .MinValue(0.0f)
+                .MaxValue(200.0f)
+                .MinSliderValue(0.0f)
+                .MaxSliderValue(200.0f)
+                .Delta(5.0f)
+                .Value_Lambda([this]()
+                {
+                    return VisualizationSettings.ConnectionScale * 100.0f;
+                })
+                .OnValueChanged(
+                    this,
+                    &SMiaIAEditorPanel::HandleConnectionScaleChanged)
+                .ToolTipText(LOCTEXT(
+                    "ConnectionScaleTooltip",
+                    "Fade and thin every visible connection independently from neuron size. Set zero to hide them."))
+            ]
+            + SVerticalBox::Slot()
+            .AutoHeight()
+            [
+                SNew(SHorizontalBox)
+                + SHorizontalBox::Slot()
+                .FillWidth(1.0f)
+                [
+                    SNew(SButton)
+                    .ButtonStyle(&ButtonStyle)
+                    .Text(LOCTEXT("AllConnections", "All"))
+                    .OnClicked(
+                        this,
+                        &SMiaIAEditorPanel::SelectConnectionDisplayMode,
+                        EMiaIAConnectionDisplayMode::All)
+                ]
+                + SHorizontalBox::Slot()
+                .FillWidth(1.0f)
+                .Padding(4.0f, 0.0f, 0.0f, 0.0f)
+                [
+                    SNew(SButton)
+                    .ButtonStyle(&ButtonStyle)
+                    .Text(LOCTEXT("SelectedConnections", "Selected"))
+                    .OnClicked(
+                        this,
+                        &SMiaIAEditorPanel::SelectConnectionDisplayMode,
+                        EMiaIAConnectionDisplayMode::Selected)
+                ]
+            ]
+            + SVerticalBox::Slot()
+            .AutoHeight()
+            .Padding(0.0f, 12.0f, 0.0f, 0.0f)
+            [
+                SNew(SButton)
+                .ButtonStyle(&ButtonStyle)
+                .Text(LOCTEXT(
+                    "ResetVisualizationSettings",
+                    "Reset visualization defaults"))
+                .OnClicked(
+                    this,
+                    &SMiaIAEditorPanel::HandleResetVisualizationSettings)
+            ]
+        ];
+}
+
+FReply SMiaIAEditorPanel::SelectLayoutMode(
+    MiaIA::Studio::StudioLayoutMode InMode)
+{
+    VisualizationSettings.Layout.Mode = InMode;
+    SaveVisualizationSettings(VisualizationSettings);
+    NetworkView->SetVisualizationSettings(VisualizationSettings);
+    Network3DView->SetVisualizationSettings(VisualizationSettings);
+    FSlateApplication::Get().DismissAllMenus();
+    return FReply::Handled();
+}
+
+FReply SMiaIAEditorPanel::SelectLayoutOrientation(
+    MiaIA::Studio::StudioLayoutOrientation InOrientation)
+{
+    VisualizationSettings.Layout.Orientation = InOrientation;
+    SaveVisualizationSettings(VisualizationSettings);
+    NetworkView->SetVisualizationSettings(VisualizationSettings);
+    Network3DView->SetVisualizationSettings(VisualizationSettings);
+    FSlateApplication::Get().DismissAllMenus();
+    return FReply::Handled();
+}
+
+FReply SMiaIAEditorPanel::SelectConnectionDisplayMode(
+    EMiaIAConnectionDisplayMode InMode)
+{
+    VisualizationSettings.ConnectionDisplay = InMode;
+    SaveVisualizationSettings(VisualizationSettings);
+    NetworkView->SetVisualizationSettings(VisualizationSettings);
+    Network3DView->SetVisualizationSettings(VisualizationSettings);
+    FSlateApplication::Get().DismissAllMenus();
+    return FReply::Handled();
+}
+
+void SMiaIAEditorPanel::HandleNeuronScaleChanged(float InValue)
+{
+    VisualizationSettings.NeuronScale = FMath::Clamp(
+        InValue / 100.0f,
+        0.25f,
+        3.0f);
+    SaveVisualizationSettings(VisualizationSettings);
+    NetworkView->SetVisualizationSettings(VisualizationSettings);
+    Network3DView->SetVisualizationSettings(VisualizationSettings);
+}
+
+void SMiaIAEditorPanel::HandleConnectionScaleChanged(float InValue)
+{
+    VisualizationSettings.ConnectionScale = FMath::Clamp(
+        InValue / 100.0f,
+        0.0f,
+        2.0f);
+    SaveVisualizationSettings(VisualizationSettings);
+    NetworkView->SetVisualizationSettings(VisualizationSettings);
+    Network3DView->SetVisualizationSettings(VisualizationSettings);
+}
+
+void SMiaIAEditorPanel::HandleNeuronGapChanged(float InValue)
+{
+    VisualizationSettings.Layout.NeuronGap = FMath::Clamp(
+        static_cast<double>(InValue / 100.0f),
+        0.0,
+        5.0);
+    SaveVisualizationSettings(VisualizationSettings);
+    NetworkView->SetVisualizationSettings(VisualizationSettings);
+    Network3DView->SetVisualizationSettings(VisualizationSettings);
+}
+
+void SMiaIAEditorPanel::HandleLayerGapChanged(float InValue)
+{
+    VisualizationSettings.Layout.LayerGap = FMath::Clamp(
+        static_cast<double>(InValue / 100.0f),
+        0.0,
+        10.0);
+    SaveVisualizationSettings(VisualizationSettings);
+    NetworkView->SetVisualizationSettings(VisualizationSettings);
+    Network3DView->SetVisualizationSettings(VisualizationSettings);
+}
+
+FReply SMiaIAEditorPanel::HandleResetVisualizationSettings()
+{
+    VisualizationSettings = {};
+    SaveVisualizationSettings(VisualizationSettings);
+    NetworkView->SetVisualizationSettings(VisualizationSettings);
+    Network3DView->SetVisualizationSettings(VisualizationSettings);
+    FSlateApplication::Get().DismissAllMenus();
     return FReply::Handled();
 }
 
@@ -3094,7 +3730,9 @@ FReply SMiaIAEditorPanel::HandleQuickHelp()
             "Drag empty space: select neurons with a rectangle.\n"
             "Ctrl + rectangle: add neurons to the current selection.\n"
             "Drag a selected neuron: move the complete selected group.\n"
-            "Mouse wheel: zoom. Middle drag: pan. Right drag in 3D: orbit.\n\n"
+            "Click the topology, then use the arrow keys in the visible direction; their layer/neuron meaning follows Horizontal or Vertical flow.\n"
+            "Mouse wheel: zoom. Middle drag: pan. Right drag pans in 2D and orbits in 3D.\n"
+            "Use Layout for Expanded or Packed placement, Horizontal or Vertical flow, uniform neuron size, minimum gaps, and All or Selected connections. Packed with zero gaps makes symmetric nodes adjacent without overlap.\n\n"
             "INSPECTION AND DEBUG\n"
             "The Inspector follows the current element or group. Use Start debug and Step phase to inspect forward, backward, update, verify, and commit states.\n\n"
 
@@ -3867,6 +4505,14 @@ FText SMiaIAEditorPanel::ViewModeText() const
     return ViewMode == EMiaIAStudioViewMode::TwoDimensional
         ? LOCTEXT("CurrentTwoDimensionalView", "2D")
         : LOCTEXT("CurrentThreeDimensionalView", "3D");
+}
+
+FText SMiaIAEditorPanel::LayoutModeText() const
+{
+    return VisualizationSettings.Layout.Mode ==
+        MiaIA::Studio::StudioLayoutMode::Packed
+        ? LOCTEXT("PackedLayoutModeText", "Layout: Packed")
+        : LOCTEXT("ExpandedLayoutModeText", "Layout: Expanded");
 }
 
 FText SMiaIAEditorPanel::ThemeText() const

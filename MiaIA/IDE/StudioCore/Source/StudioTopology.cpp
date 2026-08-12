@@ -94,10 +94,41 @@ MiaIA::Studio::StudioTopologyBuilder::DetailedPosition3D(
     };
 }
 
+MiaIA::Studio::StudioPosition
+MiaIA::Studio::StudioTopologyBuilder::DetailedLayoutPosition(
+    std::size_t layerIndex,
+    std::size_t layerCount,
+    std::size_t neuronIndex,
+    std::size_t neuronCount,
+    const StudioLayoutPreferences& preferences)
+{
+    const double neuronGap = std::max(0.0, preferences.NeuronGap);
+    const double layerGap = std::max(0.0, preferences.LayerGap);
+    const double neuronScale = std::max(0.01, preferences.NeuronScale);
+    const double neuronStep = preferences.Mode == StudioLayoutMode::Packed
+        ? neuronScale * (1.0 + neuronGap)
+        : std::max(2.25, neuronScale * (1.0 + neuronGap));
+    const double layerStep = preferences.Mode == StudioLayoutMode::Packed
+        ? neuronScale * (1.0 + layerGap)
+        : std::max(5.0, neuronScale * (1.0 + layerGap));
+    const double centeredLayer = static_cast<double>(layerIndex) -
+        (static_cast<double>(layerCount) - 1.0) * 0.5;
+    const double centeredNeuron = static_cast<double>(neuronIndex) -
+        (static_cast<double>(neuronCount) - 1.0) * 0.5;
+
+    const double layerPosition = centeredLayer * layerStep;
+    const double neuronPosition = centeredNeuron * neuronStep;
+
+    return preferences.Orientation == StudioLayoutOrientation::Vertical
+        ? StudioPosition{ neuronPosition, layerPosition, 0.0 }
+        : StudioPosition{ layerPosition, neuronPosition, 0.0 };
+}
+
 MiaIA::Studio::StudioTopologyScene
 MiaIA::Studio::StudioTopologyBuilder::BuildDetailed(
     const Core::NetworkSnapshot& network,
-    StudioViewMode viewMode)
+    StudioViewMode viewMode,
+    const StudioLayoutPreferences& preferences)
 {
     StudioTopologyScene scene;
     scene.ViewMode = viewMode;
@@ -129,17 +160,12 @@ MiaIA::Studio::StudioTopologyBuilder::BuildDetailed(
             node.LayerName = layer.Name;
             node.NeuronCount = 1;
             node.Kind = StudioNodeKind::Neuron;
-            node.Position = viewMode == StudioViewMode::TwoDimensional
-                ? DetailedPosition2D(
-                    layerIndex,
-                    network.Layers.size(),
-                    neuronIndex,
-                    layer.Neurons.size())
-                : DetailedPosition3D(
-                    layerIndex,
-                    network.Layers.size(),
-                    neuronIndex,
-                    layer.Neurons.size());
+            node.Position = DetailedLayoutPosition(
+                layerIndex,
+                network.Layers.size(),
+                neuronIndex,
+                layer.Neurons.size(),
+                preferences);
             node.Activation = neuron.Activation;
             node.Bias = neuron.Bias;
             scene.Nodes.push_back(std::move(node));
@@ -170,7 +196,8 @@ MiaIA::Studio::StudioTopologyBuilder::BuildDetailed(
 MiaIA::Studio::StudioTopologyScene
 MiaIA::Studio::StudioTopologyBuilder::BuildCompact(
     const Core::NetworkOverviewSnapshot& overview,
-    StudioViewMode viewMode)
+    StudioViewMode viewMode,
+    const StudioLayoutPreferences& preferences)
 {
     StudioTopologyScene scene;
     scene.ViewMode = viewMode;
@@ -201,9 +228,20 @@ MiaIA::Studio::StudioTopologyBuilder::BuildCompact(
         node.LayerName = layer.Name;
         node.NeuronCount = layer.NeuronCount;
         node.Kind = StudioNodeKind::Layer;
-        node.Position = viewMode == StudioViewMode::TwoDimensional
-            ? StudioPosition{ progress, 0.5, 0.0 }
-            : StudioPosition{ 0.5, 0.5, progress };
+        if (viewMode == StudioViewMode::TwoDimensional)
+        {
+            node.Position = preferences.Orientation ==
+                StudioLayoutOrientation::Vertical
+                ? StudioPosition{ 0.5, progress, 0.0 }
+                : StudioPosition{ progress, 0.5, 0.0 };
+        }
+        else
+        {
+            node.Position = preferences.Orientation ==
+                StudioLayoutOrientation::Vertical
+                ? StudioPosition{ 0.5, progress, 0.0 }
+                : StudioPosition{ progress, 0.5, 0.0 };
+        }
         scene.Nodes.push_back(std::move(node));
 
         if (layerIndex > 0)

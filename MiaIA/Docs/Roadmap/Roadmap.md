@@ -50,11 +50,12 @@ The roadmap is organized by dependency rather than by a fixed release date. Math
 - one reusable CLI command processor shared by the terminal and Unreal editor hosts;
 - first dockable Unreal topology, explorer, focused inspector, phase controls, and interactive command console;
 - shared contextual command catalog plus Unreal suggestion filtering, Tab completion, and session-local command history.
-- renderer-neutral StudioCore with shared detailed/compact policies, selection state, command execution, and normalized 2D/3D topology scenes;
+- renderer-neutral StudioCore with shared detailed/compact policies, selection state, command execution, and logical 2D/3D topology scenes;
 - initial Unreal consumption of StudioCore scalability and two-dimensional layout rules;
 - runtime-capable Unreal Studio UI shared by the editor panel and the `MiaIAStudio` game target;
 - verified Win64 BuildCookRun archive with provisional application branding.
-- interactive 3D topology with aggregated sphere-and-cylinder geometry, projected identifiers, selection, camera navigation, and manual layout editing;
+- interactive 3D topology with aggregated sphere-and-cylinder geometry, projected identifiers, mouse and arrow-key selection navigation, camera navigation, and manual layout editing;
+- shared Expanded/Packed non-overlapping layout, Horizontal/Vertical flow, uniform node sizing, configurable gaps, and All/Selected connection display across 2D and 3D;
 - adaptive tessellation and compact scene policies that avoid one Unreal Actor per graph element.
 - bounded selected-neuron relationship inspection with exact incoming and outgoing totals;
 - selected-connection inspection with contextual source and target neuron snapshots across SDK, CLI, StudioCore, Blueprint, 2D, and 3D clients.

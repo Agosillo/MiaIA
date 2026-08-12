@@ -67,10 +67,10 @@ int main()
             StudioTopologyDetail::Detailed);
         assert(twoDimensional.Nodes.size() == 3);
         assert(twoDimensional.Links.size() == 2);
-        assert(twoDimensional.Nodes[0].Position.X == 0.0);
-        assert(twoDimensional.Nodes[0].Position.Y == 0.0);
-        assert(twoDimensional.Nodes[1].Position.Y == 1.0);
-        assert(twoDimensional.Nodes[2].Position.X == 1.0);
+        assert(twoDimensional.Nodes[0].Position.X == -2.5);
+        assert(twoDimensional.Nodes[0].Position.Y == -1.125);
+        assert(twoDimensional.Nodes[1].Position.Y == 1.125);
+        assert(twoDimensional.Nodes[2].Position.X == 2.5);
         assert(twoDimensional.Nodes[2].Position.Z == 0.0);
 
         const auto threeDimensional =
@@ -80,9 +80,9 @@ int main()
         assert(threeDimensional.ViewMode ==
             StudioViewMode::ThreeDimensional);
         assert(threeDimensional.Nodes[0].Position.Z == 0.0);
-        assert(threeDimensional.Nodes[2].Position.Z == 1.0);
-        assert(threeDimensional.Nodes[0].Position.X == 0.0);
-        assert(threeDimensional.Nodes[1].Position.X == 1.0);
+        assert(threeDimensional.Nodes[2].Position.Z == 0.0);
+        assert(threeDimensional.Nodes[0].Position.X == -2.5);
+        assert(threeDimensional.Nodes[1].Position.Y == 1.125);
 
         MiaIA::Core::NetworkOverviewSnapshot overview;
         overview.NeuronCount =
@@ -115,9 +115,96 @@ int main()
         assert(compact.Links.size() == 2);
         assert(compact.Nodes[0].Kind == StudioNodeKind::Layer);
         assert(compact.Nodes[0].NeuronCount == 1000);
-        assert(compact.Nodes[0].Position.Z == 0.0);
-        assert(compact.Nodes[2].Position.Z == 1.0);
+        assert(compact.Nodes[0].Position.X == 0.0);
+        assert(compact.Nodes[2].Position.X == 1.0);
+        assert(compact.Nodes[2].Position.Z == 0.0);
         assert(compact.Links[0].Aggregate);
+
+        StudioLayoutPreferences verticalPreferences;
+        verticalPreferences.Orientation =
+            StudioLayoutOrientation::Vertical;
+        const auto verticalCompact =
+            StudioTopologyBuilder::BuildCompact(
+                overview,
+                StudioViewMode::ThreeDimensional,
+                verticalPreferences);
+        assert(verticalCompact.Nodes[0].Position.Y == 0.0);
+        assert(verticalCompact.Nodes[2].Position.Y == 1.0);
+
+        const StudioLayoutPreferences expandedPreferences;
+        const auto expandedFirst =
+            StudioTopologyBuilder::DetailedLayoutPosition(
+                0,
+                3,
+                0,
+                3,
+                expandedPreferences);
+        const auto expandedSecond =
+            StudioTopologyBuilder::DetailedLayoutPosition(
+                0,
+                3,
+                1,
+                3,
+                expandedPreferences);
+        assert(std::abs(expandedSecond.Y - expandedFirst.Y) >= 1.0);
+
+        const auto verticalLayerPosition =
+            StudioTopologyBuilder::DetailedLayoutPosition(
+                2,
+                3,
+                1,
+                3,
+                verticalPreferences);
+        assert(verticalLayerPosition.X == 0.0);
+        assert(verticalLayerPosition.Y == 5.0);
+
+        StudioLayoutPreferences packedPreferences;
+        packedPreferences.Mode = StudioLayoutMode::Packed;
+        packedPreferences.NeuronGap = 0.0;
+        packedPreferences.LayerGap = 0.0;
+        const auto packedCenter =
+            StudioTopologyBuilder::DetailedLayoutPosition(
+                1,
+                3,
+                1,
+                3,
+                packedPreferences);
+        const auto packedNext =
+            StudioTopologyBuilder::DetailedLayoutPosition(
+                2,
+                3,
+                2,
+                3,
+                packedPreferences);
+        assert(packedCenter.X == 0.0);
+        assert(packedCenter.Y == 0.0);
+        assert(packedNext.X == 1.0);
+        assert(packedNext.Y == 1.0);
+
+        packedPreferences.NeuronScale = 2.0;
+        const auto scaledPackedNext =
+            StudioTopologyBuilder::DetailedLayoutPosition(
+                2,
+                3,
+                2,
+                3,
+                packedPreferences);
+        assert(scaledPackedNext.X == 2.0);
+        assert(scaledPackedNext.Y == 2.0);
+
+        StudioLayoutPreferences spacedPackedPreferences =
+            packedPreferences;
+        spacedPackedPreferences.NeuronGap = 0.5;
+        spacedPackedPreferences.LayerGap = 1.0;
+        const auto spacedPackedNext =
+            StudioTopologyBuilder::DetailedLayoutPosition(
+                2,
+                3,
+                2,
+                3,
+                spacedPackedPreferences);
+        assert(spacedPackedNext.X == 4.0);
+        assert(spacedPackedNext.Y == 3.0);
     });
 
     runner.Run("Studio application controller", [&]()

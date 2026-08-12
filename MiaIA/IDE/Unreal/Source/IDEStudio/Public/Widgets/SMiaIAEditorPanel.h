@@ -4,6 +4,7 @@
 #include "MiaIABlueprintTypes.h"
 #include "Styling/MiaIAEditorTheme.h"
 #include "Widgets/SCompoundWidget.h"
+#include "Widgets/MiaIAVisualizationSettings.h"
 
 class SMiaIANetworkView;
 class SMiaIA3DNetworkView;
@@ -12,6 +13,7 @@ class SMultiLineEditableText;
 class SScrollBar;
 class SVerticalBox;
 class SWidgetSwitcher;
+enum class EMiaIANeuronNavigationDirection : uint8;
 
 enum class EMiaIAStudioViewMode : uint8
 {
@@ -57,6 +59,7 @@ private:
     void SelectNeurons(
         const TSet<int64>& NeuronIds,
         int64 PrimaryNeuronId);
+    void NavigateNeuron(EMiaIANeuronNavigationDirection Direction);
     void SelectConnection(int64 ConnectionId);
     const FMiaIANeuronSnapshot* FindNeuron(int64 NeuronId) const;
     const FMiaIAConnectionSnapshot* FindConnection(
@@ -71,6 +74,17 @@ private:
     FReply HandleRefresh();
     FReply HandleFitView();
     FReply HandleResetLayout();
+    TSharedRef<SWidget> BuildLayoutMenu();
+    FReply SelectLayoutMode(MiaIA::Studio::StudioLayoutMode InMode);
+    FReply SelectLayoutOrientation(
+        MiaIA::Studio::StudioLayoutOrientation InOrientation);
+    FReply SelectConnectionDisplayMode(
+        EMiaIAConnectionDisplayMode InMode);
+    void HandleNeuronScaleChanged(float InValue);
+    void HandleConnectionScaleChanged(float InValue);
+    void HandleNeuronGapChanged(float InValue);
+    void HandleLayerGapChanged(float InValue);
+    FReply HandleResetVisualizationSettings();
     FReply HandleToggleTopologyWorkspace();
     FReply HandleResume();
     FReply HandlePause();
@@ -157,6 +171,7 @@ private:
     FSlateColor PanelColor() const;
     FSlateColor TextColor() const;
     FText ViewModeText() const;
+    FText LayoutModeText() const;
     FText ThemeText() const;
     FText DataRefreshText() const;
     FText TopologyLimitsText() const;
@@ -201,6 +216,7 @@ private:
     EMiaIAEditorTheme Theme{EMiaIAEditorTheme::FollowUnreal};
     EMiaIADataRefreshMode DataRefreshMode{
         EMiaIADataRefreshMode::Adaptive};
+    FMiaIAVisualizationSettings VisualizationSettings;
     EMiaIAProjectPathAction ProjectPathAction{
         EMiaIAProjectPathAction::None};
     EMiaIATrainingBreakpointKind BreakpointKind{
