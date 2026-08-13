@@ -175,6 +175,33 @@ bool FMiaIAInstanceService::SetForwardTraceFrameDuration(
         controller->SetForwardTraceFrameDuration(DurationSeconds);
 }
 
+void FMiaIAInstanceService::RefreshTrainingTimeline(
+    FMiaIAInstanceHandle Instance)
+{
+    if (MiaIA::Studio::StudioController* controller = Resolve(Instance))
+    {
+        controller->RefreshTrainingTimeline();
+    }
+}
+
+bool FMiaIAInstanceService::SelectTrainingTimelineStep(
+    FMiaIAInstanceHandle Instance,
+    uint64 StepIndex)
+{
+    MiaIA::Studio::StudioController* controller = Resolve(Instance);
+    return controller && controller->SelectTrainingTimelineStep(
+        static_cast<std::size_t>(StepIndex));
+}
+
+void FMiaIAInstanceService::ClearTrainingTimelineSelection(
+    FMiaIAInstanceHandle Instance)
+{
+    if (MiaIA::Studio::StudioController* controller = Resolve(Instance))
+    {
+        controller->ClearTrainingTimelineSelection();
+    }
+}
+
 MiaIA::Studio::StudioForwardTraceState
 FMiaIAInstanceService::ForwardTraceState(FMiaIAInstanceHandle Instance)
 {
@@ -182,4 +209,14 @@ FMiaIAInstanceService::ForwardTraceState(FMiaIAInstanceHandle Instance)
     return controller
         ? controller->State().ForwardTrace
         : MiaIA::Studio::StudioForwardTraceState{};
+}
+
+MiaIA::Studio::StudioTrainingTimelineState
+FMiaIAInstanceService::TrainingTimelineState(
+    FMiaIAInstanceHandle Instance)
+{
+    MiaIA::Studio::StudioController* controller = Resolve(Instance);
+    return controller
+        ? controller->State().TrainingTimeline
+        : MiaIA::Studio::StudioTrainingTimelineState{};
 }

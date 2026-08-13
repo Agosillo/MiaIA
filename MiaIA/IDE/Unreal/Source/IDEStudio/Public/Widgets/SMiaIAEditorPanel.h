@@ -58,6 +58,7 @@ private:
     void RebuildRelationshipExplorer();
     void RebuildBreakpoints();
     void RebuildForwardTrace();
+    void RebuildTrainingTimeline();
     void ApplyForwardTraceOverlay();
     bool ExpandExplorerForNeuron(int64 NeuronId);
     bool ExpandExplorerForNeurons(const TSet<int64>& NeuronIds);
@@ -65,6 +66,7 @@ private:
     FReply HandleToggleExplorerConnections();
     FReply HandleExpandAllExplorer();
     FReply HandleCollapseAllExplorer();
+    FReply HandleFocusExplorerNeuron(int64 NeuronId);
     void SelectNeuron(int64 NeuronId);
     void SelectNeurons(
         const TSet<int64>& NeuronIds,
@@ -170,6 +172,8 @@ private:
     FReply SelectForwardTraceSpeed(double SpeedMultiplier);
     FReply HandlePreviousForwardTracePage();
     FReply HandleNextForwardTracePage();
+    FReply HandleSelectTrainingTimelineStep(uint64 StepIndex);
+    FReply HandleClearTrainingTimelineView();
     void ShowDialog(const FText& Title, const FText& Content);
     void ShowProjectPathDialog(EMiaIAProjectPathAction Action);
     EVisibility DialogVisibility() const;
@@ -184,6 +188,7 @@ private:
         const FGeometry& Geometry,
         const FKeyEvent& KeyEvent);
     FReply HandleConsoleSend();
+    FReply HandleClearConsoleOutput();
     FReply ApplyConsoleSuggestion(FString Completion);
     void RebuildConsoleSuggestions(const FString& Input);
     void SetConsoleInputText(const FString& Text);
@@ -217,6 +222,8 @@ private:
     FText ForwardTraceSelectionText() const;
     FText ForwardTracePlayPauseText() const;
     FText ForwardTraceSpeedText() const;
+    FText TrainingTimelineSummaryText() const;
+    FText TrainingTimelineDetailText() const;
     FText SelectedConnectionEndpointText(bool bToNeuron) const;
     FText RelationshipSortText() const;
     EVisibility RelationshipExplorerVisibility() const;
@@ -224,6 +231,9 @@ private:
     EVisibility InputNeuronBiasNoticeVisibility() const;
     EVisibility ConnectionWeightEditorVisibility() const;
     FSlateColor PhaseColor(EMiaIATrainingDebugPhase Phase) const;
+    FSlateColor PhaseCursorColor() const;
+    EVisibility PhaseCursorVisibility(
+        EMiaIATrainingDebugPhase Phase) const;
     FSlateColor BackgroundColor() const;
     FSlateColor PanelColor() const;
     FSlateColor TextColor() const;
@@ -260,6 +270,7 @@ private:
     FString TopologyKey;
     FString BreakpointKey;
     FString RelationshipKey;
+    FString TrainingTimelineKey;
     TSet<int64> ExpandedExplorerLayerIds;
     FString ConsoleHistory;
     TArray<FString> ConsoleCommandHistory;
@@ -278,6 +289,7 @@ private:
     double RelationshipMinimumAbsoluteWeight{};
     int64 PendingNeuronBiasId{-1};
     int64 PendingConnectionWeightId{-1};
+    uint64 TrainingTimelineHiddenStepCount{};
     double PendingNeuronBias{};
     double PendingConnectionWeight{};
     EMiaIAStudioViewMode ViewMode{
@@ -320,12 +332,14 @@ private:
     bool bRelationshipSortDescending{};
     double PeriodicRefreshElapsedSeconds{};
     FMiaIAInstanceHandle MiaIAInstance;
+    MiaIA::Studio::StudioTrainingTimelineState TrainingTimeline;
 
     TSharedPtr<SVerticalBox> ExplorerContent;
     TSharedPtr<SVerticalBox> RelationshipContent;
     TSharedPtr<SVerticalBox> ConsoleSuggestionsContent;
     TSharedPtr<SVerticalBox> BreakpointContent;
     TSharedPtr<SVerticalBox> ForwardTraceContent;
+    TSharedPtr<SVerticalBox> TrainingTimelineContent;
     TSharedPtr<SMiaIANetworkView> NetworkView;
     TSharedPtr<SMiaIA3DNetworkView> Network3DView;
     TSharedPtr<SWidgetSwitcher> TopologySwitcher;

@@ -3309,6 +3309,23 @@ int main()
     assert(inspectedStep.ConnectionUpdates.size() == 1);
     assert(inspectedStep.NeuronUpdates.size() == 1);
 
+    MiaIA::Studio::StudioController timelineController;
+    assert(timelineController.State().TrainingTimeline.History.size() == 3);
+    assert(timelineController.State().TrainingTimeline.Session.Steps.empty());
+    assert(!timelineController.State().TrainingTimeline.HasSelectedStep);
+    assert(timelineController.SelectTrainingTimelineStep(1));
+    assert(timelineController.State().TrainingTimeline.HasSelectedStep);
+    assert(timelineController.State().TrainingTimeline.SelectedStepIndex == 1);
+    assert(timelineController.State().TrainingTimeline.SelectedStep.SampleIndex ==
+        1);
+    assert(!timelineController.SelectTrainingTimelineStep(3));
+    assert(timelineController.State().TrainingTimeline.SelectedStepIndex == 1);
+    timelineController.RefreshTrainingTimeline();
+    assert(timelineController.State().TrainingTimeline.HasSelectedStep);
+    assert(timelineController.State().TrainingTimeline.SelectedStepIndex == 1);
+    timelineController.ClearTrainingTimelineSelection();
+    assert(!timelineController.State().TrainingTimeline.HasSelectedStep);
+
     MiaIA::Core::TrainingStepSnapshot rejectedStep;
     rejectedStep.SampleIndex = 999;
     rejectedStep.LearningRate = 42.0;

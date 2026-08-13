@@ -83,6 +83,7 @@ void MiaIA::Studio::StudioController::Refresh()
 
     ValidateSelection();
     RefreshSelectionInspection();
+    RefreshTrainingTimeline();
 }
 
 MiaIA::Studio::StudioCommandResult
@@ -430,6 +431,80 @@ bool MiaIA::Studio::StudioController::SetForwardTraceFrameDuration(
         durationSeconds;
     CurrentState.ForwardTrace.PlaybackFrameElapsedSeconds = 0.0;
     return true;
+}
+
+void MiaIA::Studio::StudioController::RefreshTrainingTimeline()
+{
+    StudioTrainingTimelineState& state = CurrentState.TrainingTimeline;
+    const bool hadSelectedStep = state.HasSelectedStep;
+    const std::size_t selectedStepIndex = state.SelectedStepIndex;
+    Core::TrainingHistoryEntrySnapshot selectedEntry;
+    const bool hadSelectedEntry = hadSelectedStep &&
+        selectedStepIndex < state.History.size();
+
+    if (hadSelectedEntry)
+    {
+        selectedEntry = state.History[selectedStepIndex];
+    }
+
+    state.Session = SDK::MiaIAClient::GetTrainingSession();
+    state.Session.Steps = {};
+    state.Debug = SDK::MiaIAClient::GetTrainingDebug();
+    state.History = SDK::MiaIAClient::GetTrainingSessionHistory();
+    state.HasSelectedStep = false;
+    state.SelectedStepIndex = 0;
+    state.SelectedStep = {};
+
+    if (hadSelectedEntry && selectedStepIndex < state.History.size())
+    {
+        const Core::TrainingHistoryEntrySnapshot& refreshedEntry =
+            state.History[selectedStepIndex];
+        const bool sameEntry =
+            refreshedEntry.StepIndex == selectedEntry.StepIndex &&
+            refreshedEntry.EpochIndex == selectedEntry.EpochIndex &&
+            refreshedEntry.SampleIndex == selectedEntry.SampleIndex &&
+            refreshedEntry.LossBefore == selectedEntry.LossBefore &&
+            refreshedEntry.LossAfter == selectedEntry.LossAfter &&
+            refreshedEntry.WeightUpdateCount ==
+                selectedEntry.WeightUpdateCount &&
+            refreshedEntry.BiasUpdateCount == selectedEntry.BiasUpdateCount;
+
+        if (sameEntry)
+        {
+            SelectTrainingTimelineStep(selectedStepIndex);
+        }
+    }
+}
+
+bool MiaIA::Studio::StudioController::SelectTrainingTimelineStep(
+    std::size_t stepIndex)
+{
+    StudioTrainingTimelineState& state = CurrentState.TrainingTimeline;
+
+    if (stepIndex >= state.History.size() ||
+        state.History[stepIndex].StepIndex != stepIndex)
+    {
+        return false;
+    }
+
+    Core::TrainingStepSnapshot step;
+
+    if (!SDK::MiaIAClient::TryGetTrainingSessionStep(stepIndex, step))
+    {
+        return false;
+    }
+
+    state.HasSelectedStep = true;
+    state.SelectedStepIndex = stepIndex;
+    state.SelectedStep = std::move(step);
+    return true;
+}
+
+void MiaIA::Studio::StudioController::ClearTrainingTimelineSelection()
+{
+    CurrentState.TrainingTimeline.HasSelectedStep = false;
+    CurrentState.TrainingTimeline.SelectedStepIndex = 0;
+    CurrentState.TrainingTimeline.SelectedStep = {};
 }
 
 const MiaIA::Studio::StudioState&

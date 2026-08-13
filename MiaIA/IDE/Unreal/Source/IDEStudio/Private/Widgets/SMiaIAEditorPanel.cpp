@@ -63,6 +63,7 @@ namespace
     constexpr int32 DefaultInspectorConnectionLimit = 5;
     constexpr int32 MaximumInspectorConnectionLimit = 1000;
     constexpr int32 MaximumInspectorConnectionSliderLimit = 50;
+    constexpr std::size_t MaximumTrainingTimelineRows = 200;
     constexpr double DefaultForwardTraceFrameDurationSeconds = 0.65;
 
     FString DataRefreshModeName(EMiaIADataRefreshMode Mode)
@@ -419,6 +420,101 @@ namespace
         }
 
         return LOCTEXT("DebugUnknown", "Unknown");
+    }
+
+    FText NativeSessionStatusName(
+        MiaIA::Core::TrainingSessionStatus Status)
+    {
+        switch (Status)
+        {
+        case MiaIA::Core::TrainingSessionStatus::Idle:
+            return LOCTEXT("NativeSessionIdle", "Idle");
+        case MiaIA::Core::TrainingSessionStatus::Active:
+            return LOCTEXT("NativeSessionActive", "Active");
+        case MiaIA::Core::TrainingSessionStatus::Running:
+            return LOCTEXT("NativeSessionRunning", "Running");
+        case MiaIA::Core::TrainingSessionStatus::Completed:
+            return LOCTEXT("NativeSessionCompleted", "Completed");
+        case MiaIA::Core::TrainingSessionStatus::Cancelled:
+            return LOCTEXT("NativeSessionCancelled", "Cancelled");
+        }
+
+        return LOCTEXT("NativeSessionUnknown", "Unknown");
+    }
+
+    FText NativeDebugPhaseName(MiaIA::Core::TrainingDebugPhase Phase)
+    {
+        return DebugPhaseName(
+            static_cast<EMiaIATrainingDebugPhase>(Phase));
+    }
+
+    FText NativeLossName(MiaIA::Core::LossType Loss)
+    {
+        switch (Loss)
+        {
+        case MiaIA::Core::LossType::MeanSquaredError:
+            return LOCTEXT("TimelineLossMse", "Mean squared error");
+        }
+
+        return LOCTEXT("TimelineLossUnknown", "Unknown loss");
+    }
+
+    FText NativeOptimizerName(MiaIA::Core::OptimizerType Optimizer)
+    {
+        switch (Optimizer)
+        {
+        case MiaIA::Core::OptimizerType::StochasticGradientDescent:
+            return LOCTEXT("TimelineOptimizerSgd", "SGD");
+        }
+
+        return LOCTEXT("TimelineOptimizerUnknown", "Unknown optimizer");
+    }
+
+    FString NumericValuesText(const std::vector<double>& Values)
+    {
+        FString result(TEXT("["));
+
+        for (std::size_t index = 0; index < Values.size(); ++index)
+        {
+            if (index > 0)
+            {
+                result += TEXT(", ");
+            }
+
+            result += FString::Printf(TEXT("%.6g"), Values[index]);
+        }
+
+        result += TEXT("]");
+        return result;
+    }
+
+    FString BuildTrainingTimelineKey(
+        const MiaIA::Studio::StudioTrainingTimelineState& Timeline)
+    {
+        FString key = FString::Printf(
+            TEXT("%d:%d:%llu:%llu:%llu:%llu:%.17g:%d:%llu"),
+            static_cast<int32>(Timeline.Session.Status),
+            static_cast<int32>(Timeline.Debug.Phase),
+            static_cast<uint64>(Timeline.Session.CurrentEpoch),
+            static_cast<uint64>(Timeline.Session.CompletedSteps),
+            static_cast<uint64>(Timeline.Session.TotalSteps),
+            static_cast<uint64>(Timeline.History.size()),
+            Timeline.Session.LearningRate,
+            Timeline.HasSelectedStep ? 1 : 0,
+            static_cast<uint64>(Timeline.SelectedStepIndex));
+
+        if (!Timeline.History.empty())
+        {
+            const MiaIA::Core::TrainingHistoryEntrySnapshot& last =
+                Timeline.History.back();
+            key += FString::Printf(
+                TEXT(":%llu:%.17g:%.17g"),
+                static_cast<uint64>(last.StepIndex),
+                last.LossBefore,
+                last.LossAfter);
+        }
+
+        return key;
     }
 
     FString ActivationName(EMiaIAActivationType Activation)
@@ -1628,67 +1724,267 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
                         SAssignNew(BottomSwitcher, SWidgetSwitcher)
                         + SWidgetSwitcher::Slot()
                         [
-                            SNew(SUniformGridPanel)
-                            .SlotPadding(FMargin(4.0f))
-                            + SUniformGridPanel::Slot(0, 0)
+                            SNew(SVerticalBox)
+                            + SVerticalBox::Slot()
+                            .AutoHeight()
+                            .Padding(4.0f, 2.0f, 4.0f, 5.0f)
                             [
                                 SNew(STextBlock)
-                                .Text(LOCTEXT("Before", "1  Before"))
-                                .ColorAndOpacity_Lambda([this]()
-                                {
-                                    return PhaseColor(
-                                        EMiaIATrainingDebugPhase::BeforeForward);
-                                })
+                                .Text(this, &SMiaIAEditorPanel::TrainingTimelineSummaryText)
+                                .Font(FAppStyle::GetFontStyle(
+                                    TEXT("SmallFontBold")))
+                                .AutoWrapText(true)
                             ]
-                            + SUniformGridPanel::Slot(1, 0)
+                            + SVerticalBox::Slot()
+                            .AutoHeight()
+                            .Padding(2.0f, 0.0f, 2.0f, 6.0f)
                             [
-                                SNew(STextBlock)
-                                .Text(LOCTEXT("Forward", "2  Forward"))
-                                .ColorAndOpacity_Lambda([this]()
-                                {
-                                    return PhaseColor(
-                                        EMiaIATrainingDebugPhase::ForwardComplete);
-                                })
+                                SNew(SUniformGridPanel)
+                                .SlotPadding(FMargin(4.0f))
+                                + SUniformGridPanel::Slot(0, 0)
+                                .HAlign(HAlign_Center)
+                                [
+                                    SNew(STextBlock)
+                                    .Text(LOCTEXT("Before", "1  Before"))
+                                    .ColorAndOpacity_Lambda([this]()
+                                    {
+                                        return PhaseColor(
+                                            EMiaIATrainingDebugPhase::BeforeForward);
+                                    })
+                                ]
+                                + SUniformGridPanel::Slot(1, 0)
+                                .HAlign(HAlign_Center)
+                                [
+                                    SNew(STextBlock)
+                                    .Text(LOCTEXT("Forward", "2  Forward"))
+                                    .ColorAndOpacity_Lambda([this]()
+                                    {
+                                        return PhaseColor(
+                                            EMiaIATrainingDebugPhase::ForwardComplete);
+                                    })
+                                ]
+                                + SUniformGridPanel::Slot(2, 0)
+                                .HAlign(HAlign_Center)
+                                [
+                                    SNew(STextBlock)
+                                    .Text(LOCTEXT("Backward", "3  Backward"))
+                                    .ColorAndOpacity_Lambda([this]()
+                                    {
+                                        return PhaseColor(
+                                            EMiaIATrainingDebugPhase::BackwardComplete);
+                                    })
+                                ]
+                                + SUniformGridPanel::Slot(3, 0)
+                                .HAlign(HAlign_Center)
+                                [
+                                    SNew(STextBlock)
+                                    .Text(LOCTEXT("Update", "4  Update"))
+                                    .ColorAndOpacity_Lambda([this]()
+                                    {
+                                        return PhaseColor(
+                                            EMiaIATrainingDebugPhase::UpdateComplete);
+                                    })
+                                ]
+                                + SUniformGridPanel::Slot(4, 0)
+                                .HAlign(HAlign_Center)
+                                [
+                                    SNew(STextBlock)
+                                    .Text(LOCTEXT("Verify", "5  Verify"))
+                                    .ColorAndOpacity_Lambda([this]()
+                                    {
+                                        return PhaseColor(
+                                            EMiaIATrainingDebugPhase::Verified);
+                                    })
+                                ]
+                                + SUniformGridPanel::Slot(5, 0)
+                                .HAlign(HAlign_Center)
+                                [
+                                    SNew(STextBlock)
+                                    .Text(LOCTEXT("Commit", "6  Commit"))
+                                    .ColorAndOpacity_Lambda([this]()
+                                    {
+                                        return PhaseColor(
+                                            EMiaIATrainingDebugPhase::Committed);
+                                    })
+                                ]
                             ]
-                            + SUniformGridPanel::Slot(2, 0)
+                            + SVerticalBox::Slot()
+                            .AutoHeight()
+                            .Padding(2.0f, 0.0f, 2.0f, 5.0f)
                             [
-                                SNew(STextBlock)
-                                .Text(LOCTEXT("Backward", "3  Backward"))
-                                .ColorAndOpacity_Lambda([this]()
-                                {
-                                    return PhaseColor(
-                                        EMiaIATrainingDebugPhase::BackwardComplete);
-                                })
+                                SNew(SUniformGridPanel)
+                                .SlotPadding(FMargin(4.0f, 0.0f))
+                                + SUniformGridPanel::Slot(0, 0)
+                                .HAlign(HAlign_Center)
+                                [
+                                    SNew(STextBlock)
+                                    .Text(FText::FromString(TEXT("\u25B2")))
+                                    .Justification(ETextJustify::Center)
+                                    .ColorAndOpacity(
+                                        this,
+                                        &SMiaIAEditorPanel::PhaseCursorColor)
+                                    .Visibility(
+                                        this,
+                                        &SMiaIAEditorPanel::PhaseCursorVisibility,
+                                        EMiaIATrainingDebugPhase::BeforeForward)
+                                ]
+                                + SUniformGridPanel::Slot(1, 0)
+                                .HAlign(HAlign_Center)
+                                [
+                                    SNew(STextBlock)
+                                    .Text(FText::FromString(TEXT("\u25B2")))
+                                    .Justification(ETextJustify::Center)
+                                    .ColorAndOpacity(
+                                        this,
+                                        &SMiaIAEditorPanel::PhaseCursorColor)
+                                    .Visibility(
+                                        this,
+                                        &SMiaIAEditorPanel::PhaseCursorVisibility,
+                                        EMiaIATrainingDebugPhase::ForwardComplete)
+                                ]
+                                + SUniformGridPanel::Slot(2, 0)
+                                .HAlign(HAlign_Center)
+                                [
+                                    SNew(STextBlock)
+                                    .Text(FText::FromString(TEXT("\u25B2")))
+                                    .Justification(ETextJustify::Center)
+                                    .ColorAndOpacity(
+                                        this,
+                                        &SMiaIAEditorPanel::PhaseCursorColor)
+                                    .Visibility(
+                                        this,
+                                        &SMiaIAEditorPanel::PhaseCursorVisibility,
+                                        EMiaIATrainingDebugPhase::BackwardComplete)
+                                ]
+                                + SUniformGridPanel::Slot(3, 0)
+                                .HAlign(HAlign_Center)
+                                [
+                                    SNew(STextBlock)
+                                    .Text(FText::FromString(TEXT("\u25B2")))
+                                    .Justification(ETextJustify::Center)
+                                    .ColorAndOpacity(
+                                        this,
+                                        &SMiaIAEditorPanel::PhaseCursorColor)
+                                    .Visibility(
+                                        this,
+                                        &SMiaIAEditorPanel::PhaseCursorVisibility,
+                                        EMiaIATrainingDebugPhase::UpdateComplete)
+                                ]
+                                + SUniformGridPanel::Slot(4, 0)
+                                .HAlign(HAlign_Center)
+                                [
+                                    SNew(STextBlock)
+                                    .Text(FText::FromString(TEXT("\u25B2")))
+                                    .Justification(ETextJustify::Center)
+                                    .ColorAndOpacity(
+                                        this,
+                                        &SMiaIAEditorPanel::PhaseCursorColor)
+                                    .Visibility(
+                                        this,
+                                        &SMiaIAEditorPanel::PhaseCursorVisibility,
+                                        EMiaIATrainingDebugPhase::Verified)
+                                ]
+                                + SUniformGridPanel::Slot(5, 0)
+                                .HAlign(HAlign_Center)
+                                [
+                                    SNew(STextBlock)
+                                    .Text(FText::FromString(TEXT("\u25B2")))
+                                    .Justification(ETextJustify::Center)
+                                    .ColorAndOpacity(
+                                        this,
+                                        &SMiaIAEditorPanel::PhaseCursorColor)
+                                    .Visibility(
+                                        this,
+                                        &SMiaIAEditorPanel::PhaseCursorVisibility,
+                                        EMiaIATrainingDebugPhase::Committed)
+                                ]
                             ]
-                            + SUniformGridPanel::Slot(3, 0)
+                            + SVerticalBox::Slot()
+                            .FillHeight(1.0f)
                             [
-                                SNew(STextBlock)
-                                .Text(LOCTEXT("Update", "4  Update"))
-                                .ColorAndOpacity_Lambda([this]()
-                                {
-                                    return PhaseColor(
-                                        EMiaIATrainingDebugPhase::UpdateComplete);
-                                })
-                            ]
-                            + SUniformGridPanel::Slot(4, 0)
-                            [
-                                SNew(STextBlock)
-                                .Text(LOCTEXT("Verify", "5  Verify"))
-                                .ColorAndOpacity_Lambda([this]()
-                                {
-                                    return PhaseColor(
-                                        EMiaIATrainingDebugPhase::Verified);
-                                })
-                            ]
-                            + SUniformGridPanel::Slot(5, 0)
-                            [
-                                SNew(STextBlock)
-                                .Text(LOCTEXT("Commit", "6  Commit"))
-                                .ColorAndOpacity_Lambda([this]()
-                                {
-                                    return PhaseColor(
-                                        EMiaIATrainingDebugPhase::Committed);
-                                })
+                                SNew(SSplitter)
+                                .Style(&SplitterStyle)
+                                .Orientation(Orient_Horizontal)
+                                + SSplitter::Slot()
+                                .Value(0.46f)
+                                [
+                                    SNew(SBorder)
+                                    .BorderImage(panelBorder)
+                                    .BorderBackgroundColor(
+                                        this,
+                                        &SMiaIAEditorPanel::PanelColor)
+                                    .Padding(4.0f)
+                                    [
+                                        SNew(SVerticalBox)
+                                        + SVerticalBox::Slot()
+                                        .AutoHeight()
+                                        .Padding(2.0f, 1.0f, 2.0f, 3.0f)
+                                        [
+                                            SNew(SHorizontalBox)
+                                            + SHorizontalBox::Slot()
+                                            .FillWidth(1.0f)
+                                            .VAlign(VAlign_Center)
+                                            [
+                                                SNew(STextBlock)
+                                                .Text(LOCTEXT(
+                                                    "TimelineHistoryTitle",
+                                                    "Committed steps"))
+                                                .Font(FAppStyle::GetFontStyle(
+                                                    TEXT("SmallFontBold")))
+                                            ]
+                                            + SHorizontalBox::Slot()
+                                            .AutoWidth()
+                                            [
+                                                SNew(SButton)
+                                                .ButtonStyle(
+                                                    &ExplorerButtonStyle)
+                                                .ContentPadding(
+                                                    FMargin(5.0f, 1.0f))
+                                                .Text(LOCTEXT(
+                                                    "ClearTrainingTimelineView",
+                                                    "Clear view"))
+                                                .ToolTipText(LOCTEXT(
+                                                    "ClearTrainingTimelineViewTooltip",
+                                                    "Hide the currently displayed committed steps without changing native training history or session state."))
+                                                .OnClicked(
+                                                    this,
+                                                    &SMiaIAEditorPanel::HandleClearTrainingTimelineView)
+                                            ]
+                                        ]
+                                        + SVerticalBox::Slot()
+                                        .FillHeight(1.0f)
+                                        [
+                                            SNew(SScrollBox)
+                                            .ScrollBarStyle(&ScrollBarStyle)
+                                            + SScrollBox::Slot()
+                                            [
+                                                SAssignNew(
+                                                    TrainingTimelineContent,
+                                                    SVerticalBox)
+                                            ]
+                                        ]
+                                    ]
+                                ]
+                                + SSplitter::Slot()
+                                .Value(0.54f)
+                                [
+                                    SNew(SBorder)
+                                    .BorderImage(panelBorder)
+                                    .BorderBackgroundColor(
+                                        this,
+                                        &SMiaIAEditorPanel::PanelColor)
+                                    .Padding(7.0f)
+                                    [
+                                        SNew(SScrollBox)
+                                        .ScrollBarStyle(&ScrollBarStyle)
+                                        + SScrollBox::Slot()
+                                        [
+                                            SNew(STextBlock)
+                                            .Text(this, &SMiaIAEditorPanel::TrainingTimelineDetailText)
+                                            .AutoWrapText(true)
+                                        ]
+                                    ]
+                                ]
                             ]
                         ]
                         + SWidgetSwitcher::Slot()
@@ -1795,6 +2091,22 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
                                         .OnClicked(
                                             this,
                                             &SMiaIAEditorPanel::HandleConsoleSend)
+                                    ]
+                                    + SHorizontalBox::Slot()
+                                    .AutoWidth()
+                                    .Padding(6.0f, 0.0f, 0.0f, 0.0f)
+                                    [
+                                        SNew(SButton)
+                                        .ButtonStyle(&ButtonStyle)
+                                        .Text(LOCTEXT(
+                                            "ConsoleClearOutput",
+                                            "Clear output"))
+                                        .ToolTipText(LOCTEXT(
+                                            "ConsoleClearOutputTooltip",
+                                            "Clear only the displayed command output. Command history and MiaIA state are preserved."))
+                                        .OnClicked(
+                                            this,
+                                            &SMiaIAEditorPanel::HandleClearConsoleOutput)
                                     ]
                                 ]
                             ]
@@ -2305,6 +2617,19 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
 void SMiaIAEditorPanel::RefreshData()
 {
     PeriodicRefreshElapsedSeconds = 0.0;
+    FMiaIAInstanceService::RefreshTrainingTimeline(MiaIAInstance);
+    TrainingTimeline =
+        FMiaIAInstanceService::TrainingTimelineState(MiaIAInstance);
+    if (TrainingTimeline.History.size() <
+        TrainingTimelineHiddenStepCount)
+    {
+        TrainingTimelineHiddenStepCount = 0;
+    }
+    const FString newTrainingTimelineKey =
+        BuildTrainingTimelineKey(TrainingTimeline);
+    const bool trainingTimelineChanged =
+        newTrainingTimelineKey != TrainingTimelineKey;
+    TrainingTimelineKey = newTrainingTimelineKey;
     const bool previouslyHadNetwork = !NetworkOverview.Layers.IsEmpty();
     const FString previousOverviewKey = BuildOverviewKey(NetworkOverview);
     NetworkOverview = UMiaIABlueprintLibrary::GetNetworkOverview();
@@ -2651,6 +2976,11 @@ void SMiaIAEditorPanel::RefreshData()
     {
         RebuildForwardTrace();
     }
+
+    if (trainingTimelineChanged)
+    {
+        RebuildTrainingTimeline();
+    }
 }
 
 void SMiaIAEditorPanel::ApplyForwardTraceOverlay()
@@ -2838,6 +3168,116 @@ void SMiaIAEditorPanel::RebuildForwardTrace()
                     contribution.SourceActivation,
                     contribution.Weight,
                     contribution.Contribution)))
+            ]
+        ];
+    }
+}
+
+void SMiaIAEditorPanel::RebuildTrainingTimeline()
+{
+    if (!TrainingTimelineContent.IsValid())
+    {
+        return;
+    }
+
+    TrainingTimelineContent->ClearChildren();
+
+    if (TrainingTimeline.History.empty())
+    {
+        TrainingTimelineContent->AddSlot()
+        .AutoHeight()
+        .Padding(4.0f)
+        [
+            SNew(STextBlock)
+            .Text(LOCTEXT(
+                "TrainingTimelineEmpty",
+                "No committed training steps yet. Start or advance a training session to populate this history."))
+            .AutoWrapText(true)
+        ];
+        return;
+    }
+
+    const std::size_t hiddenStepCount = FMath::Min(
+        static_cast<std::size_t>(TrainingTimelineHiddenStepCount),
+        TrainingTimeline.History.size());
+    const std::size_t visibleStepCount =
+        TrainingTimeline.History.size() - hiddenStepCount;
+
+    if (visibleStepCount == 0)
+    {
+        TrainingTimelineContent->AddSlot()
+        .AutoHeight()
+        .Padding(4.0f)
+        [
+            SNew(STextBlock)
+            .Text(LOCTEXT(
+                "TrainingTimelineViewCleared",
+                "Timeline view cleared. Newly committed steps will appear here."))
+            .AutoWrapText(true)
+        ];
+        return;
+    }
+
+    if (visibleStepCount > MaximumTrainingTimelineRows)
+    {
+        TrainingTimelineContent->AddSlot()
+        .AutoHeight()
+        .Padding(4.0f, 2.0f, 4.0f, 5.0f)
+        [
+            SNew(STextBlock)
+            .Text(FText::FromString(FString::Printf(
+                TEXT("Showing the newest %llu of %llu committed steps."),
+                static_cast<uint64>(MaximumTrainingTimelineRows),
+                static_cast<uint64>(visibleStepCount))))
+            .ColorAndOpacity(FSlateColor(
+                FMiaIAEditorTheme::Palette(Theme).SubduedText))
+        ];
+    }
+
+    std::size_t displayedRows = 0;
+    for (auto iterator = TrainingTimeline.History.rbegin();
+        iterator != TrainingTimeline.History.rend() &&
+            displayedRows < MaximumTrainingTimelineRows;
+        ++iterator)
+    {
+        const MiaIA::Core::TrainingHistoryEntrySnapshot entry = *iterator;
+
+        if (entry.StepIndex < hiddenStepCount)
+        {
+            continue;
+        }
+
+        ++displayedRows;
+        const bool selected = TrainingTimeline.HasSelectedStep &&
+            TrainingTimeline.SelectedStepIndex == entry.StepIndex;
+        const FMiaIAEditorPalette palette =
+            FMiaIAEditorTheme::Palette(Theme);
+
+        TrainingTimelineContent->AddSlot()
+        .AutoHeight()
+        .Padding(2.0f, 1.0f)
+        [
+            SNew(SButton)
+            .ButtonStyle(&ExplorerButtonStyle)
+            .OnClicked(
+                this,
+                &SMiaIAEditorPanel::HandleSelectTrainingTimelineStep,
+                static_cast<uint64>(entry.StepIndex))
+            [
+                SNew(STextBlock)
+                .Text(FText::FromString(FString::Printf(
+                    TEXT("Step %llu  |  Epoch %llu  |  Sample %llu\nLoss %.6g -> %.6g  |  %llu weight + %llu bias updates"),
+                    static_cast<uint64>(entry.StepIndex + 1),
+                    static_cast<uint64>(entry.EpochIndex + 1),
+                    static_cast<uint64>(entry.SampleIndex),
+                    entry.LossBefore,
+                    entry.LossAfter,
+                    static_cast<uint64>(entry.WeightUpdateCount),
+                    static_cast<uint64>(entry.BiasUpdateCount))))
+                .ColorAndOpacity(selected
+                    ? FSlateColor(palette.Selection)
+                    : FSlateColor(palette.Text))
+                .AutoWrapText(true)
             ]
         ];
     }
@@ -3304,19 +3744,42 @@ void SMiaIAEditorPanel::RebuildExplorer()
                 .AutoHeight()
                 .Padding(16.0f, 1.0f, 2.0f, 1.0f)
                 [
-                    SNew(SButton)
-                    .ButtonStyle(&ExplorerButtonStyle)
-                    .ContentPadding(FMargin(4.0f, 2.0f))
-                    .OnClicked_Lambda([this, neuronId]()
-                    {
-                        SelectNeuron(neuronId);
-                        return FReply::Handled();
-                    })
+                    SNew(SHorizontalBox)
+                    + SHorizontalBox::Slot()
+                    .FillWidth(1.0f)
                     [
-                        SNew(STextBlock)
-                        .Text(FText::Format(
-                            LOCTEXT("NeuronTreeEntry", "- Neuron #{0}"),
-                            FText::AsNumber(neuronId)))
+                        SNew(SButton)
+                        .ButtonStyle(&ExplorerButtonStyle)
+                        .ContentPadding(FMargin(4.0f, 2.0f))
+                        .OnClicked_Lambda([this, neuronId]()
+                        {
+                            SelectNeuron(neuronId);
+                            return FReply::Handled();
+                        })
+                        [
+                            SNew(STextBlock)
+                            .Text(FText::Format(
+                                LOCTEXT(
+                                    "NeuronTreeEntry",
+                                    "- Neuron #{0}"),
+                                FText::AsNumber(neuronId)))
+                        ]
+                    ]
+                    + SHorizontalBox::Slot()
+                    .AutoWidth()
+                    .Padding(3.0f, 0.0f, 0.0f, 0.0f)
+                    [
+                        SNew(SButton)
+                        .ButtonStyle(&ExplorerButtonStyle)
+                        .ContentPadding(FMargin(4.0f, 2.0f))
+                        .Text(LOCTEXT("FocusExplorerNeuron", "Focus"))
+                        .ToolTipText(LOCTEXT(
+                            "FocusExplorerNeuronTooltip",
+                            "Select this neuron and move the active topology view only if needed to reveal it."))
+                        .OnClicked(
+                            this,
+                            &SMiaIAEditorPanel::HandleFocusExplorerNeuron,
+                            neuronId)
                     ]
                 ];
             }
@@ -3475,6 +3938,24 @@ FReply SMiaIAEditorPanel::HandleCollapseAllExplorer()
     bExplorerConnectionsExpanded = false;
     bExplorerExpansionInitialized = true;
     RebuildExplorer();
+    return FReply::Handled();
+}
+
+FReply SMiaIAEditorPanel::HandleFocusExplorerNeuron(int64 NeuronId)
+{
+    SelectNeuron(NeuronId);
+
+    if (ViewMode == EMiaIAStudioViewMode::TwoDimensional &&
+        NetworkView.IsValid())
+    {
+        NetworkView->RevealNeuron(NeuronId);
+    }
+    else if (ViewMode == EMiaIAStudioViewMode::ThreeDimensional &&
+        Network3DView.IsValid())
+    {
+        Network3DView->RevealNeuron(NeuronId);
+    }
+
     return FReply::Handled();
 }
 
@@ -4788,6 +5269,34 @@ FReply SMiaIAEditorPanel::HandleNextForwardTracePage()
     return FReply::Handled();
 }
 
+FReply SMiaIAEditorPanel::HandleSelectTrainingTimelineStep(
+    uint64 StepIndex)
+{
+    if (FMiaIAInstanceService::SelectTrainingTimelineStep(
+        MiaIAInstance,
+        StepIndex))
+    {
+        TrainingTimeline =
+            FMiaIAInstanceService::TrainingTimelineState(MiaIAInstance);
+        TrainingTimelineKey = BuildTrainingTimelineKey(TrainingTimeline);
+        RebuildTrainingTimeline();
+    }
+
+    return FReply::Handled();
+}
+
+FReply SMiaIAEditorPanel::HandleClearTrainingTimelineView()
+{
+    TrainingTimelineHiddenStepCount = static_cast<uint64>(
+        TrainingTimeline.History.size());
+    FMiaIAInstanceService::ClearTrainingTimelineSelection(MiaIAInstance);
+    TrainingTimeline =
+        FMiaIAInstanceService::TrainingTimelineState(MiaIAInstance);
+    TrainingTimelineKey = BuildTrainingTimelineKey(TrainingTimeline);
+    RebuildTrainingTimeline();
+    return FReply::Handled();
+}
+
 TSharedRef<SWidget> SMiaIAEditorPanel::BuildBreakpointKindMenu()
 {
     TSharedRef<SVerticalBox> menu = SNew(SVerticalBox);
@@ -5074,6 +5583,8 @@ FReply SMiaIAEditorPanel::SelectTheme(EMiaIAEditorTheme InTheme)
     {
         Network3DView->SetTheme(Theme);
     }
+
+    RebuildTrainingTimeline();
 
     FSlateApplication::Get().DismissAllMenus();
     Invalidate(EInvalidateWidgetReason::Paint);
@@ -6061,6 +6572,24 @@ FReply SMiaIAEditorPanel::HandleConsoleSend()
     return FReply::Handled();
 }
 
+FReply SMiaIAEditorPanel::HandleClearConsoleOutput()
+{
+    ConsoleHistory = TEXT(
+        "MiaIA Studio Console\n"
+        "Type 'help' to list the shared CLI commands. "
+        "Use Up/Down for history and Tab for completion.\n");
+    UpdateConsoleOutput();
+
+    if (ConsoleInput.IsValid())
+    {
+        FSlateApplication::Get().SetKeyboardFocus(
+            ConsoleInput,
+            EFocusCause::SetDirectly);
+    }
+
+    return FReply::Handled();
+}
+
 FReply SMiaIAEditorPanel::ApplyConsoleSuggestion(FString Completion)
 {
     if (!Completion.EndsWith(TEXT(" ")))
@@ -6436,6 +6965,115 @@ FText SMiaIAEditorPanel::ForwardTraceSpeedText() const
     return FText::FromString(FString::Printf(
         TEXT("Speed %gx"),
         DefaultForwardTraceFrameDurationSeconds / duration));
+}
+
+FText SMiaIAEditorPanel::TrainingTimelineSummaryText() const
+{
+    const MiaIA::Core::TrainingSessionSnapshot& session =
+        TrainingTimeline.Session;
+    const uint64 displayedEpoch = session.EpochCount == 0
+        ? 0
+        : static_cast<uint64>(FMath::Min(
+            session.CurrentEpoch + 1,
+            session.EpochCount));
+    FString summary = FString::Printf(
+        TEXT("Status: %s  |  Epoch %llu/%llu  |  Steps %llu/%llu  |  Next sample %llu/%llu  |  LR %.6g  |  %s  |  %s"),
+        *NativeSessionStatusName(session.Status).ToString(),
+        displayedEpoch,
+        static_cast<uint64>(session.EpochCount),
+        static_cast<uint64>(session.CompletedSteps),
+        static_cast<uint64>(session.TotalSteps),
+        static_cast<uint64>(session.NextSampleIndex),
+        static_cast<uint64>(session.SampleCount),
+        session.LearningRate,
+        *NativeLossName(session.Loss).ToString(),
+        *NativeOptimizerName(session.Optimizer).ToString());
+
+    if (TrainingTimeline.Debug.Phase !=
+        MiaIA::Core::TrainingDebugPhase::Idle)
+    {
+        summary += FString::Printf(
+            TEXT("  |  Debug: %s"),
+            *NativeDebugPhaseName(
+                TrainingTimeline.Debug.Phase).ToString());
+    }
+
+    if (session.HasBreakpointHit)
+    {
+        summary += FString::Printf(
+            TEXT("  |  Breakpoint #%llu at step %llu"),
+            static_cast<uint64>(
+                session.LastBreakpointHit.BreakpointId),
+            static_cast<uint64>(
+                session.LastBreakpointHit.StepIndex + 1));
+    }
+
+    return FText::FromString(summary);
+}
+
+FText SMiaIAEditorPanel::TrainingTimelineDetailText() const
+{
+    if (!TrainingTimeline.History.empty() &&
+        TrainingTimelineHiddenStepCount >=
+            TrainingTimeline.History.size())
+    {
+        return LOCTEXT(
+            "TrainingTimelineClearedDetail",
+            "Timeline view cleared. Session progress and native retained history are unchanged.");
+    }
+
+    if (!TrainingTimeline.HasSelectedStep ||
+        TrainingTimeline.SelectedStepIndex >=
+            TrainingTimeline.History.size())
+    {
+        return TrainingTimeline.History.empty()
+            ? LOCTEXT(
+                "TrainingTimelineNoDetail",
+                "Session details will appear here after the first committed step.")
+            : LOCTEXT(
+                "TrainingTimelineSelectDetail",
+                "Select a committed step to inspect its loss, predictions, targets, errors and parameter updates.");
+    }
+
+    const MiaIA::Core::TrainingHistoryEntrySnapshot& entry =
+        TrainingTimeline.History[TrainingTimeline.SelectedStepIndex];
+    const MiaIA::Core::TrainingStepSnapshot& step =
+        TrainingTimeline.SelectedStep;
+    const double lossDelta = entry.LossAfter - entry.LossBefore;
+    const MiaIA::Core::SampleEvaluationSnapshot& before =
+        step.Before.Evaluation;
+    const MiaIA::Core::SampleEvaluationSnapshot& after = step.After;
+
+    return FText::FromString(FString::Printf(
+        TEXT(
+            "Step %llu\n"
+            "Epoch: %llu  |  Sample: %llu\n"
+            "Learning rate: %.6g  |  Optimizer: %s\n\n"
+            "Loss before: %.9g\n"
+            "Loss after:  %.9g\n"
+            "Loss delta:  %+.9g\n\n"
+            "Targets:            %s\n"
+            "Predictions before: %s\n"
+            "Predictions after:  %s\n"
+            "Errors before:      %s\n"
+            "Errors after:       %s\n\n"
+            "Weight updates: %llu\n"
+            "Bias updates:   %llu"),
+        static_cast<uint64>(entry.StepIndex + 1),
+        static_cast<uint64>(entry.EpochIndex + 1),
+        static_cast<uint64>(entry.SampleIndex),
+        step.LearningRate,
+        *NativeOptimizerName(step.Optimizer).ToString(),
+        entry.LossBefore,
+        entry.LossAfter,
+        lossDelta,
+        *NumericValuesText(before.Targets),
+        *NumericValuesText(before.Predictions),
+        *NumericValuesText(after.Predictions),
+        *NumericValuesText(before.Errors),
+        *NumericValuesText(after.Errors),
+        static_cast<uint64>(step.ConnectionUpdates.size()),
+        static_cast<uint64>(step.NeuronUpdates.size())));
 }
 
 FText SMiaIAEditorPanel::ForwardTraceSelectionText() const
@@ -6927,9 +7565,28 @@ FSlateColor SMiaIAEditorPanel::PhaseColor(
 {
     const FMiaIAEditorPalette palette =
         FMiaIAEditorTheme::Palette(Theme);
-    return static_cast<uint8>(Debug.Phase) >= static_cast<uint8>(Phase)
+    const uint8 currentPhase = static_cast<uint8>(
+        TrainingTimeline.Debug.Phase);
+    const bool selectedCommittedStep =
+        TrainingTimeline.HasSelectedStep;
+    return selectedCommittedStep ||
+        currentPhase >= static_cast<uint8>(Phase)
         ? FSlateColor(palette.Debug)
         : FSlateColor(palette.SubduedText);
+}
+
+FSlateColor SMiaIAEditorPanel::PhaseCursorColor() const
+{
+    return FSlateColor(FMiaIAEditorTheme::Palette(Theme).Selection);
+}
+
+EVisibility SMiaIAEditorPanel::PhaseCursorVisibility(
+    EMiaIATrainingDebugPhase Phase) const
+{
+    return static_cast<uint8>(TrainingTimeline.Debug.Phase) ==
+        static_cast<uint8>(Phase)
+        ? EVisibility::Visible
+        : EVisibility::Hidden;
 }
 
 FSlateColor SMiaIAEditorPanel::BackgroundColor() const

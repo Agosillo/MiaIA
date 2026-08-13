@@ -4,6 +4,10 @@
 #include "../../../Core/Public/ConnectionInspectionSnapshot.h"
 #include "../../../Core/Public/ForwardTraceSnapshot.h"
 #include "../../../Core/Public/NeuronInspectionSnapshot.h"
+#include "../../../Core/Public/TrainingDebugSnapshot.h"
+#include "../../../Core/Public/TrainingHistoryEntrySnapshot.h"
+#include "../../../Core/Public/TrainingSessionSnapshot.h"
+#include "../../../Core/Public/TrainingStepSnapshot.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -77,6 +81,16 @@ namespace MiaIA::Studio
         double PlaybackFrameElapsedSeconds{};
     };
 
+    struct StudioTrainingTimelineState
+    {
+        Core::TrainingSessionSnapshot Session;
+        Core::TrainingDebugSnapshot Debug;
+        std::vector<Core::TrainingHistoryEntrySnapshot> History;
+        bool HasSelectedStep{};
+        std::size_t SelectedStepIndex{};
+        Core::TrainingStepSnapshot SelectedStep;
+    };
+
     struct StudioState
     {
         Core::NetworkOverviewSnapshot Overview;
@@ -88,6 +102,7 @@ namespace MiaIA::Studio
         bool HasConnectionInspection{};
         Core::ConnectionInspectionSnapshot ConnectionInspection;
         StudioForwardTraceState ForwardTrace;
+        StudioTrainingTimelineState TrainingTimeline;
     };
 
     class StudioController
@@ -127,6 +142,9 @@ namespace MiaIA::Studio
         bool StepForwardTraceBackward();
         bool AdvanceForwardTracePlayback(double elapsedSeconds);
         bool SetForwardTraceFrameDuration(double durationSeconds);
+        void RefreshTrainingTimeline();
+        bool SelectTrainingTimelineStep(std::size_t stepIndex);
+        void ClearTrainingTimelineSelection();
 
         [[nodiscard]] const StudioState& State() const;
 

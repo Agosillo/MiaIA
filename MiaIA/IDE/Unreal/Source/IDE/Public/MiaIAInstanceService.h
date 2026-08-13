@@ -41,6 +41,14 @@ public:
     static bool SetForwardTraceFrameDuration(
         FMiaIAInstanceHandle Instance,
         double DurationSeconds);
+    static void RefreshTrainingTimeline(FMiaIAInstanceHandle Instance);
+    static bool SelectTrainingTimelineStep(
+        FMiaIAInstanceHandle Instance,
+        uint64 StepIndex);
+    static void ClearTrainingTimelineSelection(
+        FMiaIAInstanceHandle Instance);
     static MiaIA::Studio::StudioForwardTraceState ForwardTraceState(
+        FMiaIAInstanceHandle Instance);
+    static MiaIA::Studio::StudioTrainingTimelineState TrainingTimelineState(
         FMiaIAInstanceHandle Instance);
 };

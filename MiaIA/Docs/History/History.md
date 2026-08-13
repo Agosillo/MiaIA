@@ -194,6 +194,12 @@ The retained trace now also owns a deterministic renderer-neutral playback timel
 
 The trace integration also introduced the first explicit Unreal instance boundary. An opaque handle identifies the initial `default` instance, while a runtime service in `IDE.dll` owns and invokes its `StudioController`. The Slate module therefore shares the exact process-local SDK state used by Blueprint and the integrated CLI instead of acquiring a second static-library copy. True simultaneous model contexts remain future native SDK work behind this boundary.
 
+### Selectable training timeline
+
+The former static six-label Training Timeline became a live controlled-session inspector. StudioCore retains the current session and debug phase, lightweight committed-step history entries, and at most one selected detailed step. The selected index is validated and restored across refreshes while the same retained history remains available; a replaced or cleared session removes stale detail automatically.
+
+The shared Unreal editor and standalone panel display session progress, learning configuration, phase state, breakpoint context, newest-first history, loss transitions, targets, predictions, errors, and parameter-update counts. Selecting a history row requests the existing Engine-owned `TrainingStepSnapshot` by its stable step index. No loss, prediction, gradient, or update value is recalculated by Slate, and the explicit instance service keeps this state aligned with Blueprint and the integrated Console across Unreal module boundaries.
+
 ## Current position
 
 MiaIA can now create dense networks with explicit initialization choices, reconfigure existing parameters transactionally, represent, execute, interchange, persist a `.mai` v1 project, inspect individual network relationships, evaluate, differentiate, debug one training step phase by phase, train through controlled foreground or background sessions, and navigate or compare the complete history of successful steps. It cannot yet persist visualization layouts or training history inside that project, retain complete hidden-neuron activations for every step, or deliver the planned complete graphical debugging experience.

@@ -149,6 +149,8 @@ Both Engine operations construct a complete local result before publishing it. I
 
 The same controller derives a deterministic playback timeline from the captured layer order. The first frame publishes input activations; every later layer contributes one incoming-signal frame followed by one activation frame. Playback state owns its cursor, Playing/Paused/Completed status, frame duration, elapsed time, stepping, restart, and automatic advancement. Advancing the timeline never executes the network again and never changes the retained trace or public model. Frontends decide how to render the active layer and connection identities, while the existing focused page remains the source of exact signed contribution values.
 
+`StudioController` also owns the renderer-neutral presentation state for the controlled-training timeline. Refreshing copies session configuration and progress, the current phase-debug snapshot, and lightweight `TrainingHistoryEntrySnapshot` values, but deliberately discards the duplicated full step vector from its session summary. A frontend selects a stable history index explicitly; only then does the controller request and retain the corresponding `TrainingStepSnapshot`. This keeps loss, prediction, error, gradient, and update values owned by Engine and SDK snapshots while allowing Unreal or a future native frontend to present the same selectable history.
+
 ### Prediction
 
 ```text
