@@ -158,6 +158,7 @@
     </ClCompile>
     <ClCompile Include="SDK.cpp" />
     <ClCompile Include="Source\MiaIAClient.cpp" />
+    <ClCompile Include="Source\MiaIAClientCheckpoints.cpp" />
     <ClCompile Include="Source\MiaIAClientBreakpoints.cpp" />
     <ClCompile Include="Source\MiaIAClientAsyncTraining.cpp" />
     <ClCompile Include="Source\MiaIAClientDataset.cpp" />

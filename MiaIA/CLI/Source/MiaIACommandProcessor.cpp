@@ -129,6 +129,14 @@ const std::vector<CommandCatalogEntry>& CommandCatalog()
         { "project open", "project open <path.mai>", "Open a versioned MiaIA project archive.", true },
         { "project save", "project save [path.mai]", "Save to a new path or the current project path.", true },
         { "project info", "project info", "Show current project, dataset, training, and breakpoint metadata.", true },
+        { "checkpoint", "checkpoint <create|list|inspect|compare|restore|remove|clear>", "Manage process-local model checkpoints.", false },
+        { "checkpoint create", "checkpoint create <name>", "Capture the current validated model under a stable process-local ID.", true },
+        { "checkpoint list", "checkpoint list", "List captured model checkpoints.", true },
+        { "checkpoint inspect", "checkpoint inspect <id>", "Inspect one captured model checkpoint.", true },
+        { "checkpoint compare", "checkpoint compare <first-id> <second-id> [maximum-items]", "Compare biases and weights by stable element ID.", true },
+        { "checkpoint restore", "checkpoint restore <id>", "Transactionally restore a captured model.", true },
+        { "checkpoint remove", "checkpoint remove <id>", "Remove one process-local checkpoint.", true },
+        { "checkpoint clear", "checkpoint clear", "Remove every process-local checkpoint.", true },
         { "dataset", "dataset <action>", "Import, inspect, evaluate, or clear samples.", false },
         { "dataset import", "dataset import csv <inputs> <targets> [--no-header] <path>", "Import dataset samples.", false },
         { "dataset import csv", "dataset import csv <inputs> <targets> [--no-header] <path>", "Import a numeric CSV dataset.", true },
@@ -233,6 +241,16 @@ void PrintHelp()
         << "      Example:\n"
         << "        network configure --hidden-activation tanh "
            "--weight 0.01\n\n"
+
+        << "  checkpoint create <name>\n"
+        << "  checkpoint list\n"
+        << "  checkpoint inspect <id>\n"
+        << "  checkpoint compare <first-id> <second-id> [maximum-items]\n"
+        << "  checkpoint restore <id>\n"
+        << "  checkpoint remove <id>\n"
+        << "  checkpoint clear\n"
+        << "      Capture, compare, and transactionally restore process-local model states\n"
+        << "      Checkpoints are not yet stored in .mai project files\n\n"
 
         << "  network set neuron-bias <neuron-id> <value>\n"
         << "      Set one hidden or output neuron bias\n"
@@ -460,6 +478,221 @@ bool TryParseActivation(
     }
 
     return false;
+}
+
+void HandleCheckpointCommand(const std::string& command)
+{
+    const std::vector<std::string> tokens = CommandTokens(command);
+    const std::string usage =
+        "Usage:\n"
+        "  checkpoint create <name>\n"
+        "  checkpoint list\n"
+        "  checkpoint inspect <id>\n"
+        "  checkpoint compare <first-id> <second-id> [maximum-items]\n"
+        "  checkpoint restore <id>\n"
+        "  checkpoint remove <id>\n"
+        "  checkpoint clear\n";
+
+    if (tokens.size() < 2)
+    {
+        std::cout << usage;
+        return;
+    }
+
+    const std::string& action = tokens[1];
+    if (action == "create")
+    {
+        const std::size_t prefix = command.find("create");
+        std::string name = prefix == std::string::npos
+            ? ""
+            : Trim(command.substr(prefix + 6));
+        if (name.size() >= 2 &&
+            ((name.front() == '"' && name.back() == '"') ||
+             (name.front() == '\'' && name.back() == '\'')))
+        {
+            name = name.substr(1, name.size() - 2);
+        }
+
+        MiaIA::Core::ModelCheckpointSummarySnapshot checkpoint;
+        if (name.empty() ||
+            !MiaIA::SDK::MiaIAClient::CaptureModelCheckpoint(
+                name,
+                checkpoint))
+        {
+            std::cout << "Checkpoint capture failed. Check the name, model, and current training/debug state.\n";
+            return;
+        }
+
+        std::cout << "Checkpoint #" << checkpoint.Id << " captured: "
+            << checkpoint.Name << ".\n";
+        return;
+    }
+
+    if (action == "list" && tokens.size() == 2)
+    {
+        const auto checkpoints =
+            MiaIA::SDK::MiaIAClient::GetModelCheckpoints();
+        if (checkpoints.empty())
+        {
+            std::cout << "No process-local model checkpoints.\n";
+            return;
+        }
+
+        std::cout << "Model Checkpoints\n\n";
+        for (const auto& checkpoint : checkpoints)
+        {
+            std::cout << "#" << checkpoint.Id << " | "
+                << checkpoint.Name << " | "
+                << checkpoint.LayerCount << " layers | "
+                << checkpoint.NeuronCount << " neurons | "
+                << checkpoint.ConnectionCount << " connections\n";
+        }
+        return;
+    }
+
+    std::uint64_t firstId{};
+    if (tokens.size() >= 3)
+    {
+        std::stringstream idStream(tokens[2]);
+        if (!(idStream >> firstId) || !idStream.eof())
+        {
+            std::cout << usage;
+            return;
+        }
+    }
+
+    if (action == "inspect" && tokens.size() == 3)
+    {
+        MiaIA::Core::ModelCheckpointSnapshot checkpoint;
+        if (!MiaIA::SDK::MiaIAClient::TryGetModelCheckpoint(
+            firstId,
+            checkpoint))
+        {
+            std::cout << "Checkpoint not found.\n";
+            return;
+        }
+
+        std::cout << "Model Checkpoint\n\n"
+            << "ID: " << checkpoint.Summary.Id << "\n"
+            << "Name: " << checkpoint.Summary.Name << "\n"
+            << "Layers: " << checkpoint.Summary.LayerCount << "\n"
+            << "Neurons: " << checkpoint.Summary.NeuronCount << "\n"
+            << "Connections: " << checkpoint.Summary.ConnectionCount << "\n";
+        return;
+    }
+
+    if (action == "compare" &&
+        (tokens.size() == 4 || tokens.size() == 5))
+    {
+        std::uint64_t secondId{};
+        std::size_t maximumItems{ 10 };
+        std::stringstream secondStream(tokens[3]);
+        if (!(secondStream >> secondId) || !secondStream.eof())
+        {
+            std::cout << usage;
+            return;
+        }
+        if (tokens.size() == 5)
+        {
+            std::stringstream maximumStream(tokens[4]);
+            if (!(maximumStream >> maximumItems) ||
+                !maximumStream.eof() || maximumItems == 0)
+            {
+                std::cout << usage;
+                return;
+            }
+        }
+
+        MiaIA::Core::ModelCheckpointComparisonSnapshot comparison;
+        if (!MiaIA::SDK::MiaIAClient::TryCompareModelCheckpoints(
+            firstId,
+            secondId,
+            comparison))
+        {
+            std::cout << "Checkpoint comparison failed. Check both IDs.\n";
+            return;
+        }
+
+        std::cout << "Checkpoint Comparison\n\n"
+            << "First: #" << comparison.FirstCheckpointId << " "
+            << comparison.FirstCheckpointName << "\n"
+            << "Second: #" << comparison.SecondCheckpointId << " "
+            << comparison.SecondCheckpointName << "\n"
+            << "Topology compatible: "
+            << (comparison.TopologyCompatible ? "yes" : "no") << "\n";
+        if (!comparison.TopologyCompatible)
+        {
+            std::cout << "Parameter deltas require matching stable layer, neuron, and connection IDs.\n";
+            return;
+        }
+
+        std::cout << "Activation type changes: "
+            << comparison.ActivationTypeChangeCount << "\n"
+            << "Changed biases: " << comparison.ChangedBiasCount << "\n"
+            << "Changed weights: " << comparison.ChangedWeightCount << "\n";
+
+        auto neurons = comparison.Neurons;
+        std::sort(neurons.begin(), neurons.end(), [](const auto& left, const auto& right)
+        {
+            return left.Bias.AbsoluteDelta > right.Bias.AbsoluteDelta;
+        });
+        auto connections = comparison.Connections;
+        std::sort(connections.begin(), connections.end(), [](const auto& left, const auto& right)
+        {
+            return left.Weight.AbsoluteDelta > right.Weight.AbsoluteDelta;
+        });
+
+        std::cout << "\nLargest bias changes\n";
+        for (std::size_t index = 0;
+            index < std::min(maximumItems, neurons.size());
+            ++index)
+        {
+            const auto& item = neurons[index];
+            std::cout << "Neuron #" << item.Id << " | "
+                << item.Bias.FirstValue << " -> " << item.Bias.SecondValue
+                << " | delta " << item.Bias.Delta << "\n";
+        }
+
+        std::cout << "\nLargest weight changes\n";
+        for (std::size_t index = 0;
+            index < std::min(maximumItems, connections.size());
+            ++index)
+        {
+            const auto& item = connections[index];
+            std::cout << "Connection #" << item.Id << " ("
+                << item.FromNeuron << " -> " << item.ToNeuron << ") | "
+                << item.Weight.FirstValue << " -> "
+                << item.Weight.SecondValue << " | delta "
+                << item.Weight.Delta << "\n";
+        }
+        return;
+    }
+
+    if (action == "restore" && tokens.size() == 3)
+    {
+        std::cout << (MiaIA::SDK::MiaIAClient::RestoreModelCheckpoint(firstId)
+            ? "Model checkpoint restored.\n"
+            : "Checkpoint restore failed. Check the ID and current training/debug state.\n");
+        return;
+    }
+
+    if (action == "remove" && tokens.size() == 3)
+    {
+        std::cout << (MiaIA::SDK::MiaIAClient::RemoveModelCheckpoint(firstId)
+            ? "Model checkpoint removed.\n"
+            : "Checkpoint removal failed. Check the ID and current training/debug state.\n");
+        return;
+    }
+
+    if (action == "clear" && tokens.size() == 2)
+    {
+        std::cout << (MiaIA::SDK::MiaIAClient::ClearModelCheckpoints()
+            ? "Model checkpoints cleared.\n"
+            : "Checkpoint clear failed during active training/debug.\n");
+        return;
+    }
+
+    std::cout << usage;
 }
 
 void PrintCreateUsage()
@@ -4575,6 +4808,10 @@ MiaIA::CLI::MiaIACommandProcessor::Execute(
     else if (command.rfind("project", 0) == 0)
     {
         HandleProjectCommand(command);
+    }
+    else if (command.rfind("checkpoint", 0) == 0)
+    {
+        HandleCheckpointCommand(command);
     }
     else if (command.rfind("dataset", 0) == 0)
     {

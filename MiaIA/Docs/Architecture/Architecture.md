@@ -273,6 +273,22 @@ A bounded run composes repeated `next` operations synchronously. It can stop bec
 
 `TrainingSessionDebugController` attaches the same phase transaction to the session's current cursor and configuration. The session remains unchanged until candidate commit. A shared `TrainingSessionController::RecordStep` operation then records both ordinary and debugged steps, enforcing the expected sample and history position before advancing the cursor. SDK guards prevent synchronous or background session execution while an attached transaction is active.
 
+### Process-local model checkpoints
+
+`Engine/Checkpoint/ModelCheckpointStore` owns captured copies of validated networks and
+assigns stable process-local checkpoint IDs. The SDK owns one store beside the current
+model, dataset, and training state. Public callers only receive contracts from
+`Core/Public/ModelCheckpointSnapshot.h`.
+
+Comparison requires matching layer, neuron, and connection IDs before it compares
+activation types, biases, and weights. Restore copies and validates the stored model,
+then replaces the client model in one operation. A missing or invalid checkpoint cannot
+partially mutate the active network. Model-changing checkpoint operations use the same
+training/debug mutation guard as ordinary network editing.
+
+Checkpoint payloads are intentionally absent from `.mai` format version 1. A later
+tagged format version can add persistence without changing these contracts.
+
 ## Snapshot boundary
 
 Clients receive snapshots rather than references to mutable engine storage. A snapshot is a value object suitable for inspection, display, logging, comparison, or transport across an integration boundary.

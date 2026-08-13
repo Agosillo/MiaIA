@@ -147,6 +147,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="Analysis\SignalHealthAnalyzer.h" />
+    <ClInclude Include="Checkpoint\ModelCheckpointStore.h" />
     <ClInclude Include="Data\CsvDatasetImporter.h" />
     <ClInclude Include="Data\DatasetInspector.h" />
     <ClInclude Include="Data\DatasetRuntime.h" />
@@ -184,6 +185,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Analysis\SignalHealthAnalyzer.cpp" />
+    <ClCompile Include="Checkpoint\ModelCheckpointStore.cpp" />
     <ClCompile Include="Data\CsvDatasetImporter.cpp" />
     <ClCompile Include="Data\DatasetInspector.cpp" />
     <ClCompile Include="Data\DatasetRuntime.cpp" />

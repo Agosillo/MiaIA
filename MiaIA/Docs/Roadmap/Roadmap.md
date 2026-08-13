@@ -108,6 +108,17 @@ Building on trustworthy single steps and one explicit epoch, the current session
 
 ## Debugging experience
 
+Implemented process-local checkpoint foundation:
+
+- capture named model states with stable process-local IDs;
+- list and inspect topology summaries;
+- compare bias and weight deltas by stable neuron and connection ID;
+- reject scalar comparison when topologies are incompatible;
+- transactionally restore a validated checkpoint outside active training/debug;
+- share operations across SDK, CLI, StudioCore, and the Unreal `Checkpoints` tab.
+
+Checkpoint persistence remains a later `.mai` format-version feature.
+
 The first debugger-like training workflow is implemented for one sample: clients can stop before forward propagation, advance through forward, backward, candidate update and verification, then commit or cancel without changing the public network prematurely.
 
 Retained session steps can now be compared through one renderer-neutral Engine operation and the public SDK. The first comparison contract covers loss, output predictions, neuron and connection gradients, final weights, and final biases, associates elements by stable ID, and exposes both signed and absolute differences. The shared CLI ranks the largest changes without requiring a client to print the complete result.

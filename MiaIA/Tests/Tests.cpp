@@ -400,6 +400,103 @@ int main()
             StudioSelectionKind::None);
     });
 
+    runner.Run("Process-local model checkpoints", [&]()
+    {
+        assert(MiaIAClient::ClearModelCheckpoints());
+        assert(MiaIAClient::CreateDenseNetwork(2, 2, 1, 1));
+
+        MiaIA::Core::ModelCheckpointSummarySnapshot before;
+        assert(MiaIAClient::CaptureModelCheckpoint(
+            "before training",
+            before));
+        assert(before.Id > 0);
+        assert(before.Name == "before training");
+        assert(before.LayerCount == 3);
+        assert(before.NeuronCount == 5);
+        assert(before.ConnectionCount == 6);
+
+        assert(MiaIAClient::SetNeuronBias(1003, 0.75));
+        assert(MiaIAClient::SetConnectionWeight(1, -0.4));
+        MiaIA::Core::ModelCheckpointSummarySnapshot after;
+        assert(MiaIAClient::CaptureModelCheckpoint(
+            "after update",
+            after));
+        assert(after.Id > before.Id);
+
+        const auto checkpoints = MiaIAClient::GetModelCheckpoints();
+        assert(checkpoints.size() == 2);
+        assert(checkpoints[0].Id == before.Id);
+        assert(checkpoints[1].Id == after.Id);
+
+        MiaIA::Core::ModelCheckpointSnapshot inspected;
+        assert(MiaIAClient::TryGetModelCheckpoint(before.Id, inspected));
+        assert(inspected.Summary.Name == "before training");
+        assert(inspected.Network.Layers[1].Neurons[0].Bias == 0.0);
+        assert(inspected.Network.Connections[0].Weight == 0.1);
+
+        MiaIA::Core::ModelCheckpointComparisonSnapshot comparison;
+        assert(MiaIAClient::TryCompareModelCheckpoints(
+            before.Id,
+            after.Id,
+            comparison));
+        assert(comparison.TopologyCompatible);
+        assert(comparison.ChangedBiasCount == 1);
+        assert(comparison.ChangedWeightCount == 1);
+        assert(comparison.Neurons[2].Id == 1003);
+        assert(comparison.Neurons[2].Bias.Delta == 0.75);
+        assert(comparison.Connections[0].Id == 1);
+        assert(std::abs(comparison.Connections[0].Weight.Delta + 0.5) <
+            1e-12);
+
+        assert(MiaIAClient::CreateDenseNetwork(3, 2, 1, 1));
+        MiaIA::Core::ModelCheckpointSummarySnapshot incompatible;
+        assert(MiaIAClient::CaptureModelCheckpoint(
+            "different topology",
+            incompatible));
+        assert(MiaIAClient::TryCompareModelCheckpoints(
+            before.Id,
+            incompatible.Id,
+            comparison));
+        assert(!comparison.TopologyCompatible);
+        assert(comparison.Neurons.empty());
+        assert(comparison.Connections.empty());
+
+        assert(MiaIAClient::RestoreModelCheckpoint(before.Id));
+        const auto restored = MiaIAClient::GetSnapshot();
+        assert(restored.Layers.size() == 3);
+        assert(restored.Layers[0].Neurons.size() == 2);
+        assert(restored.Layers[1].Neurons[0].Bias == 0.0);
+        assert(restored.Connections[0].Weight == 0.1);
+        assert(!MiaIAClient::RestoreModelCheckpoint(999999));
+        assert(MiaIAClient::GetSnapshot().Connections[0].Weight == 0.1);
+
+        MiaIA::Studio::StudioController controller;
+        controller.RefreshModelCheckpoints();
+        assert(controller.State().ModelCheckpoints.Checkpoints.size() == 3);
+        assert(controller.SelectModelCheckpoint(after.Id));
+        assert(controller.CompareModelCheckpoints(before.Id, after.Id));
+        assert(controller.State().ModelCheckpoints.HasComparison);
+        assert(controller.RestoreModelCheckpoint(after.Id));
+        assert(MiaIAClient::GetSnapshot().Connections[0].Weight == -0.4);
+
+        using MiaIA::CLI::MiaIACommandProcessor;
+        const auto cliCapture = MiaIACommandProcessor::Execute(
+            "checkpoint create CLI checkpoint");
+        assert(cliCapture.Output.find("captured") != std::string::npos);
+        assert(MiaIACommandProcessor::Execute(
+            "checkpoint list").Output.find("CLI checkpoint") !=
+            std::string::npos);
+        assert(MiaIACommandProcessor::Execute(
+            "checkpoint compare " + std::to_string(before.Id) + " " +
+            std::to_string(after.Id) + " 1").Output.find(
+                "Checkpoint Comparison") != std::string::npos);
+
+        assert(MiaIAClient::RemoveModelCheckpoint(before.Id));
+        assert(!MiaIAClient::TryGetModelCheckpoint(before.Id, inspected));
+        assert(MiaIAClient::ClearModelCheckpoints());
+        assert(MiaIAClient::GetModelCheckpoints().empty());
+    });
+
     runner.Run("Shared CLI command processor", [&]()
     {
     using MiaIA::CLI::MiaIACommandProcessor;

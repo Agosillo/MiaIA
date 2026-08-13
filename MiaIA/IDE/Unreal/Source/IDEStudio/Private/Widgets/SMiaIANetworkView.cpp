@@ -651,7 +651,7 @@ int32 SMiaIANetworkView::PaintCompactOverview(
         const FVector2D position = CompactLayerPosition(index, size);
         positions.Add(position);
 
-        if (index > 0)
+        if (index > 0 && VisualizationSettings.bShowConnections)
         {
             const TArray<FVector2D> points{
                 positions[index - 1],
@@ -924,7 +924,8 @@ FVector2D SMiaIANetworkView::LocalToNormalized(
 bool SMiaIANetworkView::ShouldDrawConnection(
     const FMiaIAConnectionSnapshot& Connection) const
 {
-    if (VisualizationSettings.ConnectionScale <= UE_KINDA_SMALL_NUMBER)
+    if (!VisualizationSettings.bShowConnections ||
+        VisualizationSettings.ConnectionScale <= UE_KINDA_SMALL_NUMBER)
     {
         return false;
     }
@@ -1091,9 +1092,18 @@ int32 SMiaIANetworkView::OnPaint(
         }
     }
 
-    for (const FMiaIAConnectionSnapshot& connection :
-        Snapshot.Connections)
+    const int32 visibleConnectionCount =
+        VisualizationSettings.bShowConnections
+            ? Snapshot.Connections.Num()
+            : 0;
+
+    for (int32 connectionIndex = 0;
+        connectionIndex < visibleConnectionCount;
+        ++connectionIndex)
     {
+        const FMiaIAConnectionSnapshot& connection =
+            Snapshot.Connections[connectionIndex];
+
         if (!ShouldDrawConnection(connection))
         {
             continue;
@@ -1552,9 +1562,18 @@ FReply SMiaIANetworkView::OnMouseButtonDown(
     const FMiaIAConnectionSnapshot* closestConnection = nullptr;
     double closestDistance = ConnectionSelectionDistance;
 
-    for (const FMiaIAConnectionSnapshot& connection :
-        Snapshot.Connections)
+    const int32 selectableConnectionCount =
+        VisualizationSettings.bShowConnections
+            ? Snapshot.Connections.Num()
+            : 0;
+
+    for (int32 connectionIndex = 0;
+        connectionIndex < selectableConnectionCount;
+        ++connectionIndex)
     {
+        const FMiaIAConnectionSnapshot& connection =
+            Snapshot.Connections[connectionIndex];
+
         if (!ShouldDrawConnection(connection))
         {
             continue;

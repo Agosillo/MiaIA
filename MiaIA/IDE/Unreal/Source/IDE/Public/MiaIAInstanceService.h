@@ -68,6 +68,24 @@ public:
     static void SetSignalHealthFilter(
         FMiaIAInstanceHandle Instance,
         MiaIA::Studio::StudioSignalHealthFilter Filter);
+    static void RefreshModelCheckpoints(FMiaIAInstanceHandle Instance);
+    static bool CaptureModelCheckpoint(
+        FMiaIAInstanceHandle Instance,
+        const FString& Name);
+    static bool SelectModelCheckpoint(
+        FMiaIAInstanceHandle Instance,
+        uint64 CheckpointId);
+    static bool CompareModelCheckpoints(
+        FMiaIAInstanceHandle Instance,
+        uint64 FirstCheckpointId,
+        uint64 SecondCheckpointId);
+    static bool RestoreModelCheckpoint(
+        FMiaIAInstanceHandle Instance,
+        uint64 CheckpointId);
+    static bool RemoveModelCheckpoint(
+        FMiaIAInstanceHandle Instance,
+        uint64 CheckpointId);
+    static bool ClearModelCheckpoints(FMiaIAInstanceHandle Instance);
     static void RefreshTrainingTimeline(FMiaIAInstanceHandle Instance);
     static bool SelectTrainingTimelineStep(
         FMiaIAInstanceHandle Instance,
@@ -79,6 +97,8 @@ public:
     static MiaIA::Studio::StudioBackwardTraceState BackwardTraceState(
         FMiaIAInstanceHandle Instance);
     static MiaIA::Studio::StudioSignalHealthState SignalHealthState(
+        FMiaIAInstanceHandle Instance);
+    static MiaIA::Studio::StudioModelCheckpointState ModelCheckpointState(
         FMiaIAInstanceHandle Instance);
     static MiaIA::Studio::StudioTrainingTimelineState TrainingTimelineState(
         FMiaIAInstanceHandle Instance);

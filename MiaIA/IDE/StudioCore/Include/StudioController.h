@@ -6,6 +6,7 @@
 #include "../../../Core/Public/ForwardTraceSnapshot.h"
 #include "../../../Core/Public/NeuronInspectionSnapshot.h"
 #include "../../../Core/Public/SignalHealthSnapshot.h"
+#include "../../../Core/Public/ModelCheckpointSnapshot.h"
 #include "../../../Core/Public/TrainingDebugSnapshot.h"
 #include "../../../Core/Public/TrainingHistoryEntrySnapshot.h"
 #include "../../../Core/Public/TrainingSessionSnapshot.h"
@@ -138,6 +139,15 @@ namespace MiaIA::Studio
         Core::SignalHealthSnapshot Snapshot;
     };
 
+    struct StudioModelCheckpointState
+    {
+        std::vector<Core::ModelCheckpointSummarySnapshot> Checkpoints;
+        bool HasSelectedCheckpoint{};
+        Core::ModelCheckpointSnapshot SelectedCheckpoint;
+        bool HasComparison{};
+        Core::ModelCheckpointComparisonSnapshot Comparison;
+    };
+
     struct StudioState
     {
         Core::NetworkOverviewSnapshot Overview;
@@ -151,6 +161,7 @@ namespace MiaIA::Studio
         StudioForwardTraceState ForwardTrace;
         StudioBackwardTraceState BackwardTrace;
         StudioSignalHealthState SignalHealth;
+        StudioModelCheckpointState ModelCheckpoints;
         StudioTrainingTimelineState TrainingTimeline;
     };
 
@@ -207,6 +218,16 @@ namespace MiaIA::Studio
             const Core::SignalHealthConfiguration& configuration);
         void ClearSignalHealthDiagnostics();
         void SetSignalHealthFilter(StudioSignalHealthFilter filter);
+        void RefreshModelCheckpoints();
+        bool CaptureModelCheckpoint(const std::string& name);
+        bool SelectModelCheckpoint(std::uint64_t checkpointId);
+        bool CompareModelCheckpoints(
+            std::uint64_t firstCheckpointId,
+            std::uint64_t secondCheckpointId);
+        bool RestoreModelCheckpoint(std::uint64_t checkpointId);
+        bool RemoveModelCheckpoint(std::uint64_t checkpointId);
+        bool ClearModelCheckpoints();
+        void ClearModelCheckpointComparison();
         void RefreshTrainingTimeline();
         bool SelectTrainingTimelineStep(std::size_t stepIndex);
         void ClearTrainingTimelineSelection();

@@ -290,6 +290,13 @@ The first panel increment established:
 
 The panel refreshes runtime values automatically while rebuilding its explorer and breakpoint list only when their corresponding state changes. Command history is currently memory-only and belongs to the open panel instance. Persistent history, asynchronous command dispatch, paged cross-layer drill-down, and more advanced 3D filtering and analysis remain outside the current implementation.
 
+## Checkpoints tab
+
+The Unreal-hosted and packaged Studio surfaces expose the same process-local checkpoint
+registry as the SDK and shared CLI. The tab supports capture, refresh, selection,
+comparison slots A/B, transactional restore, individual removal, and clear-all. Restore
+is unavailable while training or phase debugging is actively mutating the network.
+
 ## Build order
 
 The Unreal module currently links the native Release libraries directly. After changing Core, Engine, or SDK:

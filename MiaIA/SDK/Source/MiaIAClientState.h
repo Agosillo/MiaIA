@@ -11,6 +11,11 @@ namespace MiaIA::Core
     struct TrainingDebugSession;
 }
 
+namespace MiaIA::Engine
+{
+    class ModelCheckpointStore;
+}
+
 namespace MiaIA::SDK::Detail
 {
     Core::Dataset& ClientDataset();
@@ -18,6 +23,7 @@ namespace MiaIA::SDK::Detail
     Core::ProjectInfoSnapshot& ClientProjectInfo();
     Core::TrainingSession& ClientTrainingSession();
     Core::TrainingDebugSession& ClientTrainingDebugSession();
+    Engine::ModelCheckpointStore& ClientCheckpointStore();
     std::mutex& ClientMutex();
     bool IsTrainingSessionRunning();
     bool IsTrainingDebugActive();

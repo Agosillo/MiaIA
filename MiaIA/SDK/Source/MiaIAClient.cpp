@@ -7,6 +7,7 @@
 #include "../../Engine/Input/NetworkInput.h"
 #include "../../Engine/Parameters/NetworkParameters.h"
 #include "../../Engine/Weights/NetworkWeights.h"
+#include "../../Engine/Checkpoint/ModelCheckpointStore.h"
 #include "../../Core/Model/Network.h"
 #include "../../Core/Model/Dataset.h"
 #include "../../Core/Model/TrainingSession.h"
@@ -22,6 +23,7 @@ namespace
     MiaIA::Core::ProjectInfoSnapshot CurrentProjectInfo;
     MiaIA::Core::TrainingSession CurrentTrainingSession;
     MiaIA::Core::TrainingDebugSession CurrentTrainingDebugSession;
+    MiaIA::Engine::ModelCheckpointStore CurrentCheckpointStore;
     std::mutex CurrentClientMutex;
 }
 
@@ -51,6 +53,12 @@ MiaIA::Core::TrainingDebugSession&
 MiaIA::SDK::Detail::ClientTrainingDebugSession()
 {
     return CurrentTrainingDebugSession;
+}
+
+MiaIA::Engine::ModelCheckpointStore&
+MiaIA::SDK::Detail::ClientCheckpointStore()
+{
+    return CurrentCheckpointStore;
 }
 
 std::mutex& MiaIA::SDK::Detail::ClientMutex()

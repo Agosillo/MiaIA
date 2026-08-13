@@ -84,6 +84,124 @@ void MiaIA::Studio::StudioController::Refresh()
     ValidateSelection();
     RefreshSelectionInspection();
     RefreshTrainingTimeline();
+    RefreshModelCheckpoints();
+}
+
+void MiaIA::Studio::StudioController::RefreshModelCheckpoints()
+{
+    CurrentState.ModelCheckpoints.Checkpoints =
+        SDK::MiaIAClient::GetModelCheckpoints();
+
+    if (!CurrentState.ModelCheckpoints.HasSelectedCheckpoint)
+    {
+        return;
+    }
+
+    Core::ModelCheckpointSnapshot selected;
+    if (SDK::MiaIAClient::TryGetModelCheckpoint(
+        CurrentState.ModelCheckpoints.SelectedCheckpoint.Summary.Id,
+        selected))
+    {
+        CurrentState.ModelCheckpoints.SelectedCheckpoint =
+            std::move(selected);
+    }
+    else
+    {
+        CurrentState.ModelCheckpoints.HasSelectedCheckpoint = false;
+        CurrentState.ModelCheckpoints.SelectedCheckpoint = {};
+    }
+}
+
+bool MiaIA::Studio::StudioController::CaptureModelCheckpoint(
+    const std::string& name)
+{
+    Core::ModelCheckpointSummarySnapshot captured;
+    if (!SDK::MiaIAClient::CaptureModelCheckpoint(name, captured))
+    {
+        return false;
+    }
+
+    RefreshModelCheckpoints();
+    return SelectModelCheckpoint(captured.Id);
+}
+
+bool MiaIA::Studio::StudioController::SelectModelCheckpoint(
+    std::uint64_t checkpointId)
+{
+    Core::ModelCheckpointSnapshot selected;
+    if (!SDK::MiaIAClient::TryGetModelCheckpoint(checkpointId, selected))
+    {
+        return false;
+    }
+
+    CurrentState.ModelCheckpoints.HasSelectedCheckpoint = true;
+    CurrentState.ModelCheckpoints.SelectedCheckpoint = std::move(selected);
+    return true;
+}
+
+bool MiaIA::Studio::StudioController::CompareModelCheckpoints(
+    std::uint64_t firstCheckpointId,
+    std::uint64_t secondCheckpointId)
+{
+    Core::ModelCheckpointComparisonSnapshot comparison;
+    if (!SDK::MiaIAClient::TryCompareModelCheckpoints(
+        firstCheckpointId,
+        secondCheckpointId,
+        comparison))
+    {
+        return false;
+    }
+
+    CurrentState.ModelCheckpoints.HasComparison = true;
+    CurrentState.ModelCheckpoints.Comparison = std::move(comparison);
+    return true;
+}
+
+bool MiaIA::Studio::StudioController::RestoreModelCheckpoint(
+    std::uint64_t checkpointId)
+{
+    if (!SDK::MiaIAClient::RestoreModelCheckpoint(checkpointId))
+    {
+        return false;
+    }
+
+    ClearForwardTrace();
+    ClearBackwardTrace();
+    ClearSignalHealthDiagnostics();
+    Refresh();
+    SelectModelCheckpoint(checkpointId);
+    return true;
+}
+
+bool MiaIA::Studio::StudioController::RemoveModelCheckpoint(
+    std::uint64_t checkpointId)
+{
+    if (!SDK::MiaIAClient::RemoveModelCheckpoint(checkpointId))
+    {
+        return false;
+    }
+
+    RefreshModelCheckpoints();
+    CurrentState.ModelCheckpoints.HasComparison = false;
+    CurrentState.ModelCheckpoints.Comparison = {};
+    return true;
+}
+
+bool MiaIA::Studio::StudioController::ClearModelCheckpoints()
+{
+    if (!SDK::MiaIAClient::ClearModelCheckpoints())
+    {
+        return false;
+    }
+
+    CurrentState.ModelCheckpoints = {};
+    return true;
+}
+
+void MiaIA::Studio::StudioController::ClearModelCheckpointComparison()
+{
+    CurrentState.ModelCheckpoints.HasComparison = false;
+    CurrentState.ModelCheckpoints.Comparison = {};
 }
 
 MiaIA::Studio::StudioCommandResult

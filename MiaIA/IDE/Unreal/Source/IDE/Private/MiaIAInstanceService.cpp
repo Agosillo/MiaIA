@@ -302,6 +302,66 @@ void FMiaIAInstanceService::SetSignalHealthFilter(
     }
 }
 
+void FMiaIAInstanceService::RefreshModelCheckpoints(
+    FMiaIAInstanceHandle Instance)
+{
+    if (MiaIA::Studio::StudioController* controller = Resolve(Instance))
+    {
+        controller->RefreshModelCheckpoints();
+    }
+}
+
+bool FMiaIAInstanceService::CaptureModelCheckpoint(
+    FMiaIAInstanceHandle Instance,
+    const FString& Name)
+{
+    MiaIA::Studio::StudioController* controller = Resolve(Instance);
+    return controller && controller->CaptureModelCheckpoint(
+        TCHAR_TO_UTF8(*Name));
+}
+
+bool FMiaIAInstanceService::SelectModelCheckpoint(
+    FMiaIAInstanceHandle Instance,
+    uint64 CheckpointId)
+{
+    MiaIA::Studio::StudioController* controller = Resolve(Instance);
+    return controller && controller->SelectModelCheckpoint(CheckpointId);
+}
+
+bool FMiaIAInstanceService::CompareModelCheckpoints(
+    FMiaIAInstanceHandle Instance,
+    uint64 FirstCheckpointId,
+    uint64 SecondCheckpointId)
+{
+    MiaIA::Studio::StudioController* controller = Resolve(Instance);
+    return controller && controller->CompareModelCheckpoints(
+        FirstCheckpointId,
+        SecondCheckpointId);
+}
+
+bool FMiaIAInstanceService::RestoreModelCheckpoint(
+    FMiaIAInstanceHandle Instance,
+    uint64 CheckpointId)
+{
+    MiaIA::Studio::StudioController* controller = Resolve(Instance);
+    return controller && controller->RestoreModelCheckpoint(CheckpointId);
+}
+
+bool FMiaIAInstanceService::RemoveModelCheckpoint(
+    FMiaIAInstanceHandle Instance,
+    uint64 CheckpointId)
+{
+    MiaIA::Studio::StudioController* controller = Resolve(Instance);
+    return controller && controller->RemoveModelCheckpoint(CheckpointId);
+}
+
+bool FMiaIAInstanceService::ClearModelCheckpoints(
+    FMiaIAInstanceHandle Instance)
+{
+    MiaIA::Studio::StudioController* controller = Resolve(Instance);
+    return controller && controller->ClearModelCheckpoints();
+}
+
 void FMiaIAInstanceService::RefreshTrainingTimeline(
     FMiaIAInstanceHandle Instance)
 {
@@ -354,6 +414,16 @@ FMiaIAInstanceService::SignalHealthState(FMiaIAInstanceHandle Instance)
     return controller
         ? controller->State().SignalHealth
         : MiaIA::Studio::StudioSignalHealthState{};
+}
+
+MiaIA::Studio::StudioModelCheckpointState
+FMiaIAInstanceService::ModelCheckpointState(
+    FMiaIAInstanceHandle Instance)
+{
+    const MiaIA::Studio::StudioController* controller = Resolve(Instance);
+    return controller
+        ? controller->State().ModelCheckpoints
+        : MiaIA::Studio::StudioModelCheckpointState{};
 }
 
 MiaIA::Studio::StudioTrainingTimelineState

@@ -31,6 +31,9 @@
 #include "Widgets/SNullWidget.h"
 #include "Widgets/Text/STextBlock.h"
 
+#include <algorithm>
+#include <limits>
+
 #define LOCTEXT_NAMESPACE "MiaIAStudioPanel"
 
 namespace
@@ -53,6 +56,8 @@ namespace
         TEXT("ConnectionDisplay");
     constexpr TCHAR NeuronScaleSettingsKey[] = TEXT("NeuronScale");
     constexpr TCHAR ConnectionScaleSettingsKey[] = TEXT("ConnectionScale");
+    constexpr TCHAR ShowConnectionsSettingsKey[] =
+        TEXT("ShowConnections");
     constexpr TCHAR ShowNeuronLabelsSettingsKey[] =
         TEXT("ShowNeuronLabels");
     constexpr TCHAR AlwaysShowSelectionCursorSettingsKey[] =
@@ -268,6 +273,11 @@ namespace
             GGameUserSettingsIni);
         GConfig->GetBool(
             DataRefreshSettingsSection,
+            ShowConnectionsSettingsKey,
+            settings.bShowConnections,
+            GGameUserSettingsIni);
+        GConfig->GetBool(
+            DataRefreshSettingsSection,
             ShowNeuronLabelsSettingsKey,
             settings.bShowNeuronLabels,
             GGameUserSettingsIni);
@@ -362,6 +372,11 @@ namespace
             DataRefreshSettingsSection,
             LayerGapSettingsKey,
             Settings.Layout.LayerGap,
+            GGameUserSettingsIni);
+        GConfig->SetBool(
+            DataRefreshSettingsSection,
+            ShowConnectionsSettingsKey,
+            Settings.bShowConnections,
             GGameUserSettingsIni);
         GConfig->SetBool(
             DataRefreshSettingsSection,
@@ -1820,6 +1835,20 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
                                 &SMiaIAEditorPanel::SelectBottomTab,
                                 1)
                         ]
+                        + SHorizontalBox::Slot()
+                        .AutoWidth()
+                        .Padding(2.0f)
+                        [
+                            SNew(SButton)
+                            .ButtonStyle(&ButtonStyle)
+                            .Text(LOCTEXT(
+                                "ModelCheckpointsTab",
+                                "Checkpoints"))
+                            .OnClicked(
+                                this,
+                                &SMiaIAEditorPanel::SelectBottomTab,
+                                6)
+                        ]
                     ]
                     + SVerticalBox::Slot()
                     .FillHeight(1.0f)
@@ -2935,8 +2964,134 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
                                 + SScrollBox::Slot()
                                 [
                                     SAssignNew(
-                                        BackwardTraceContent,
+                                    BackwardTraceContent,
                                         SVerticalBox)
+                                ]
+                            ]
+                        ]
+                        + SWidgetSwitcher::Slot()
+                        [
+                            SNew(SVerticalBox)
+                            + SVerticalBox::Slot()
+                            .AutoHeight()
+                            .Padding(2.0f, 2.0f, 2.0f, 6.0f)
+                            [
+                                SNew(SHorizontalBox)
+                                + SHorizontalBox::Slot()
+                                .FillWidth(1.0f)
+                                [
+                                    SAssignNew(
+                                        ModelCheckpointNameInput,
+                                        SEditableTextBox)
+                                    .Style(&InputStyle)
+                                    .HintText(LOCTEXT(
+                                        "ModelCheckpointNameHint",
+                                        "Checkpoint name, for example: before training"))
+                                ]
+                                + SHorizontalBox::Slot()
+                                .AutoWidth()
+                                .Padding(6.0f, 0.0f, 0.0f, 0.0f)
+                                [
+                                    SNew(SButton)
+                                    .ButtonStyle(&ButtonStyle)
+                                    .Text(LOCTEXT("CaptureCheckpoint", "Capture"))
+                                    .OnClicked(this, &SMiaIAEditorPanel::HandleCaptureModelCheckpoint)
+                                ]
+                                + SHorizontalBox::Slot()
+                                .AutoWidth()
+                                .Padding(4.0f, 0.0f, 0.0f, 0.0f)
+                                [
+                                    SNew(SButton)
+                                    .ButtonStyle(&ButtonStyle)
+                                    .Text(LOCTEXT("RefreshCheckpoints", "Refresh"))
+                                    .OnClicked(this, &SMiaIAEditorPanel::HandleRefreshModelCheckpoints)
+                                ]
+                                + SHorizontalBox::Slot()
+                                .AutoWidth()
+                                .Padding(4.0f, 0.0f, 0.0f, 0.0f)
+                                [
+                                    SNew(SButton)
+                                    .ButtonStyle(&ButtonStyle)
+                                    .Text(LOCTEXT("ClearCheckpoints", "Clear all"))
+                                    .OnClicked(this, &SMiaIAEditorPanel::HandleClearModelCheckpoints)
+                                ]
+                            ]
+                            + SVerticalBox::Slot()
+                            .FillHeight(1.0f)
+                            [
+                                SNew(SSplitter)
+                                .Style(&SplitterStyle)
+                                .Orientation(Orient_Horizontal)
+                                + SSplitter::Slot()
+                                .Value(0.42f)
+                                [
+                                    SNew(SScrollBox)
+                                    .ScrollBarStyle(&ScrollBarStyle)
+                                    + SScrollBox::Slot()
+                                    [
+                                        SAssignNew(
+                                            ModelCheckpointContent,
+                                            SVerticalBox)
+                                    ]
+                                ]
+                                + SSplitter::Slot()
+                                .Value(0.58f)
+                                [
+                                    SNew(SVerticalBox)
+                                    + SVerticalBox::Slot()
+                                    .AutoHeight()
+                                    .Padding(4.0f)
+                                    [
+                                        SNew(SHorizontalBox)
+                                        + SHorizontalBox::Slot()
+                                        .AutoWidth().Padding(2.0f)
+                                        [
+                                            SNew(SButton).ButtonStyle(&ButtonStyle)
+                                            .Text(LOCTEXT("CheckpointSetA", "Set A"))
+                                            .OnClicked(this, &SMiaIAEditorPanel::HandleSetCheckpointComparisonSide, true)
+                                        ]
+                                        + SHorizontalBox::Slot()
+                                        .AutoWidth().Padding(2.0f)
+                                        [
+                                            SNew(SButton).ButtonStyle(&ButtonStyle)
+                                            .Text(LOCTEXT("CheckpointSetB", "Set B"))
+                                            .OnClicked(this, &SMiaIAEditorPanel::HandleSetCheckpointComparisonSide, false)
+                                        ]
+                                        + SHorizontalBox::Slot()
+                                        .AutoWidth().Padding(2.0f)
+                                        [
+                                            SNew(SButton).ButtonStyle(&ButtonStyle)
+                                            .Text(LOCTEXT("CompareCheckpoints", "Compare A / B"))
+                                            .OnClicked(this, &SMiaIAEditorPanel::HandleCompareModelCheckpoints)
+                                        ]
+                                        + SHorizontalBox::Slot()
+                                        .AutoWidth().Padding(2.0f)
+                                        [
+                                            SNew(SButton).ButtonStyle(&ButtonStyle)
+                                            .Text(LOCTEXT("RestoreCheckpoint", "Restore selected"))
+                                            .OnClicked(this, &SMiaIAEditorPanel::HandleRestoreModelCheckpoint)
+                                        ]
+                                        + SHorizontalBox::Slot()
+                                        .AutoWidth().Padding(2.0f)
+                                        [
+                                            SNew(SButton).ButtonStyle(&ButtonStyle)
+                                            .Text(LOCTEXT("RemoveCheckpoint", "Remove selected"))
+                                            .OnClicked(this, &SMiaIAEditorPanel::HandleRemoveModelCheckpoint)
+                                        ]
+                                    ]
+                                    + SVerticalBox::Slot()
+                                    .FillHeight(1.0f)
+                                    .Padding(7.0f)
+                                    [
+                                        SNew(SScrollBox)
+                                        .ScrollBarStyle(&ScrollBarStyle)
+                                        + SScrollBox::Slot()
+                                        [
+                                            SNew(STextBlock)
+                                            .Text(this, &SMiaIAEditorPanel::ModelCheckpointDetailText)
+                                            .AutoWrapText(true)
+                                        ]
+                                    ]
                                 ]
                             ]
                         ]
@@ -3116,6 +3271,7 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
     RebuildForwardTrace();
     RebuildBackwardTrace();
     RebuildSignalHealth();
+    RebuildModelCheckpoints();
     RegisterActiveTimer(
         0.1f,
         FWidgetActiveTimerDelegate::CreateSP(
@@ -4074,6 +4230,56 @@ void SMiaIAEditorPanel::RebuildSignalHealth()
             .Text(LOCTEXT(
                 "SignalHealthNoFilteredFindings",
                 "No findings match the current filter."))
+        ];
+    }
+}
+
+void SMiaIAEditorPanel::RebuildModelCheckpoints()
+{
+    if (!ModelCheckpointContent.IsValid())
+    {
+        return;
+    }
+
+    ModelCheckpointContent->ClearChildren();
+    const MiaIA::Studio::StudioModelCheckpointState state =
+        FMiaIAInstanceService::ModelCheckpointState(MiaIAInstance);
+    if (state.Checkpoints.empty())
+    {
+        ModelCheckpointContent->AddSlot().AutoHeight().Padding(4.0f)
+        [
+            SNew(STextBlock)
+            .Text(LOCTEXT(
+                "NoModelCheckpoints",
+                "No process-local model checkpoints. Capture a validated model before or after training."))
+            .AutoWrapText(true)
+        ];
+        return;
+    }
+
+    for (const auto& checkpoint : state.Checkpoints)
+    {
+        const uint64 checkpointId = checkpoint.Id;
+        const FString name(UTF8_TO_TCHAR(checkpoint.Name.c_str()));
+        ModelCheckpointContent->AddSlot().AutoHeight().Padding(3.0f, 1.0f)
+        [
+            SNew(SButton)
+            .ButtonStyle(&ExplorerButtonStyle)
+            .OnClicked(
+                this,
+                &SMiaIAEditorPanel::HandleSelectModelCheckpoint,
+                checkpointId)
+            [
+                SNew(STextBlock)
+                .Text(FText::FromString(FString::Printf(
+                    TEXT("#%llu  %s  |  %llu layers  |  %llu neurons  |  %llu connections"),
+                    checkpointId,
+                    *name,
+                    static_cast<uint64>(checkpoint.LayerCount),
+                    static_cast<uint64>(checkpoint.NeuronCount),
+                    static_cast<uint64>(checkpoint.ConnectionCount))))
+                .AutoWrapText(true)
+            ]
         ];
     }
 }
@@ -5708,9 +5914,45 @@ TSharedRef<SWidget> SMiaIAEditorPanel::BuildLayoutMenu()
             ]
             + SVerticalBox::Slot()
             .AutoHeight()
+            .Padding(0.0f, 0.0f, 0.0f, 6.0f)
+            [
+                SNew(SCheckBox)
+                .IsChecked_Lambda([this]()
+                {
+                    return VisualizationSettings.bShowConnections
+                        ? ECheckBoxState::Checked
+                        : ECheckBoxState::Unchecked;
+                })
+                .OnCheckStateChanged_Lambda(
+                    [this](ECheckBoxState newState)
+                    {
+                        VisualizationSettings.bShowConnections =
+                            newState == ECheckBoxState::Checked;
+                        SaveVisualizationSettings(VisualizationSettings);
+                        NetworkView->SetVisualizationSettings(
+                            VisualizationSettings);
+                        Network3DView->SetVisualizationSettings(
+                            VisualizationSettings);
+                    })
+                .ToolTipText(LOCTEXT(
+                    "ShowConnectionsTooltip",
+                    "Hide connections to improve navigation performance on large networks."))
+                [
+                    SNew(STextBlock)
+                    .Text(LOCTEXT(
+                        "ShowConnections",
+                        "Show connections"))
+                ]
+            ]
+            + SVerticalBox::Slot()
+            .AutoHeight()
             .Padding(0.0f, 0.0f, 0.0f, 3.0f)
             [
                 SNew(STextBlock)
+                .IsEnabled_Lambda([this]()
+                {
+                    return VisualizationSettings.bShowConnections;
+                })
                 .Text(LOCTEXT(
                     "ConnectionScaleLabel",
                     "Connection visibility (%)"))
@@ -5720,6 +5962,10 @@ TSharedRef<SWidget> SMiaIAEditorPanel::BuildLayoutMenu()
             .Padding(0.0f, 0.0f, 0.0f, 8.0f)
             [
                 SNew(SSpinBox<float>)
+                .IsEnabled_Lambda([this]()
+                {
+                    return VisualizationSettings.bShowConnections;
+                })
                 .MinValue(0.0f)
                 .MaxValue(200.0f)
                 .MinSliderValue(0.0f)
@@ -5740,6 +5986,10 @@ TSharedRef<SWidget> SMiaIAEditorPanel::BuildLayoutMenu()
             .AutoHeight()
             [
                 SNew(SHorizontalBox)
+                .IsEnabled_Lambda([this]()
+                {
+                    return VisualizationSettings.bShowConnections;
+                })
                 + SHorizontalBox::Slot()
                 .FillWidth(1.0f)
                 [
@@ -6042,6 +6292,134 @@ FReply SMiaIAEditorPanel::HandleRunSignalHealthDiagnostics()
     ApplyForwardTraceOverlay();
     ApplyBackwardTraceOverlay();
     ApplySignalHealthOverlay();
+    return FReply::Handled();
+}
+
+FReply SMiaIAEditorPanel::HandleCaptureModelCheckpoint()
+{
+    const FString name = ModelCheckpointNameInput.IsValid()
+        ? ModelCheckpointNameInput->GetText().ToString().TrimStartAndEnd()
+        : FString();
+    if (name.IsEmpty() ||
+        !FMiaIAInstanceService::CaptureModelCheckpoint(MiaIAInstance, name))
+    {
+        ShowDialog(
+            LOCTEXT("CheckpointCaptureFailedTitle", "Checkpoint not captured"),
+            LOCTEXT("CheckpointCaptureFailed", "Enter a name and ensure a valid model is loaded with no active training/debug mutation."));
+        return FReply::Handled();
+    }
+
+    ModelCheckpointNameInput->SetText(FText::GetEmpty());
+    RebuildModelCheckpoints();
+    return FReply::Handled();
+}
+
+FReply SMiaIAEditorPanel::HandleRefreshModelCheckpoints()
+{
+    FMiaIAInstanceService::RefreshModelCheckpoints(MiaIAInstance);
+    RebuildModelCheckpoints();
+    return FReply::Handled();
+}
+
+FReply SMiaIAEditorPanel::HandleSelectModelCheckpoint(uint64 CheckpointId)
+{
+    FMiaIAInstanceService::SelectModelCheckpoint(
+        MiaIAInstance,
+        CheckpointId);
+    return FReply::Handled();
+}
+
+FReply SMiaIAEditorPanel::HandleSetCheckpointComparisonSide(bool bFirst)
+{
+    const auto state =
+        FMiaIAInstanceService::ModelCheckpointState(MiaIAInstance);
+    if (!state.HasSelectedCheckpoint)
+    {
+        ShowDialog(
+            LOCTEXT("CheckpointSelectionRequiredTitle", "Select a checkpoint"),
+            LOCTEXT("CheckpointSelectionRequired", "Select a checkpoint from the list first."));
+        return FReply::Handled();
+    }
+
+    if (bFirst)
+    {
+        FirstCheckpointComparisonId = state.SelectedCheckpoint.Summary.Id;
+    }
+    else
+    {
+        SecondCheckpointComparisonId = state.SelectedCheckpoint.Summary.Id;
+    }
+    return FReply::Handled();
+}
+
+FReply SMiaIAEditorPanel::HandleCompareModelCheckpoints()
+{
+    if (FirstCheckpointComparisonId == 0 ||
+        SecondCheckpointComparisonId == 0 ||
+        !FMiaIAInstanceService::CompareModelCheckpoints(
+            MiaIAInstance,
+            FirstCheckpointComparisonId,
+            SecondCheckpointComparisonId))
+    {
+        ShowDialog(
+            LOCTEXT("CheckpointComparisonFailedTitle", "Comparison not available"),
+            LOCTEXT("CheckpointComparisonFailed", "Select a checkpoint as A and another as B, then compare them."));
+    }
+    return FReply::Handled();
+}
+
+FReply SMiaIAEditorPanel::HandleRestoreModelCheckpoint()
+{
+    const auto state =
+        FMiaIAInstanceService::ModelCheckpointState(MiaIAInstance);
+    if (!state.HasSelectedCheckpoint ||
+        !FMiaIAInstanceService::RestoreModelCheckpoint(
+            MiaIAInstance,
+            state.SelectedCheckpoint.Summary.Id))
+    {
+        ShowDialog(
+            LOCTEXT("CheckpointRestoreFailedTitle", "Checkpoint not restored"),
+            LOCTEXT("CheckpointRestoreFailed", "Select a checkpoint and ensure training/debug is not actively mutating the model."));
+        return FReply::Handled();
+    }
+
+    RefreshData();
+    RebuildModelCheckpoints();
+    return FReply::Handled();
+}
+
+FReply SMiaIAEditorPanel::HandleRemoveModelCheckpoint()
+{
+    const auto state =
+        FMiaIAInstanceService::ModelCheckpointState(MiaIAInstance);
+    if (!state.HasSelectedCheckpoint ||
+        !FMiaIAInstanceService::RemoveModelCheckpoint(
+            MiaIAInstance,
+            state.SelectedCheckpoint.Summary.Id))
+    {
+        ShowDialog(
+            LOCTEXT("CheckpointRemoveFailedTitle", "Checkpoint not removed"),
+            LOCTEXT("CheckpointRemoveFailed", "Select a checkpoint and ensure training/debug is not active."));
+        return FReply::Handled();
+    }
+
+    RebuildModelCheckpoints();
+    return FReply::Handled();
+}
+
+FReply SMiaIAEditorPanel::HandleClearModelCheckpoints()
+{
+    if (!FMiaIAInstanceService::ClearModelCheckpoints(MiaIAInstance))
+    {
+        ShowDialog(
+            LOCTEXT("CheckpointClearFailedTitle", "Checkpoints not cleared"),
+            LOCTEXT("CheckpointClearFailed", "Checkpoint changes are blocked during active training/debug."));
+        return FReply::Handled();
+    }
+
+    FirstCheckpointComparisonId = 0;
+    SecondCheckpointComparisonId = 0;
+    RebuildModelCheckpoints();
     return FReply::Handled();
 }
 
@@ -7965,6 +8343,11 @@ void SMiaIAEditorPanel::HandleConsoleCommandCommitted(
     }
 
     RefreshData();
+    if (command.StartsWith(TEXT("checkpoint")))
+    {
+        FMiaIAInstanceService::RefreshModelCheckpoints(MiaIAInstance);
+        RebuildModelCheckpoints();
+    }
 
     if (ConsoleInput.IsValid())
     {
@@ -8108,10 +8491,14 @@ void SMiaIAEditorPanel::RebuildConsoleSuggestions(
     }
 
     ConsoleSuggestionsContent->ClearChildren();
+    const std::size_t maximumResults =
+        Input.TrimStartAndEnd().IsEmpty()
+            ? std::numeric_limits<std::size_t>::max()
+            : 8;
     const auto suggestions =
         MiaIA::CLI::MiaIACommandProcessor::GetSuggestions(
             std::string(TCHAR_TO_UTF8(*Input)),
-            8);
+            maximumResults);
 
     for (const auto& suggestion : suggestions)
     {
@@ -8666,6 +9053,102 @@ FText SMiaIAEditorPanel::SignalHealthSelectionText() const
     return LOCTEXT(
         "SignalHealthSelectFinding",
         "Signal health active. Select a detailed neuron or connection for its aggregated evidence.");
+}
+
+FText SMiaIAEditorPanel::ModelCheckpointDetailText() const
+{
+    const auto state =
+        FMiaIAInstanceService::ModelCheckpointState(MiaIAInstance);
+    FString text = FString::Printf(
+        TEXT("Comparison slots: A = %s  |  B = %s\n\n"),
+        FirstCheckpointComparisonId == 0
+            ? TEXT("not set")
+            : *FString::Printf(TEXT("#%llu"), FirstCheckpointComparisonId),
+        SecondCheckpointComparisonId == 0
+            ? TEXT("not set")
+            : *FString::Printf(TEXT("#%llu"), SecondCheckpointComparisonId));
+
+    if (state.HasSelectedCheckpoint)
+    {
+        const auto& selected = state.SelectedCheckpoint.Summary;
+        text += FString::Printf(
+            TEXT("Selected checkpoint\n#%llu  %s\n%llu layers | %llu neurons | %llu connections\n\n"),
+            selected.Id,
+            UTF8_TO_TCHAR(selected.Name.c_str()),
+            static_cast<uint64>(selected.LayerCount),
+            static_cast<uint64>(selected.NeuronCount),
+            static_cast<uint64>(selected.ConnectionCount));
+    }
+    else
+    {
+        text += TEXT("Select a checkpoint to inspect, restore, remove, or assign it to comparison slot A/B.\n\n");
+    }
+
+    if (!state.HasComparison)
+    {
+        text += TEXT("Checkpoint comparisons match parameters by stable neuron and connection IDs. Changes are reported as B - A.");
+        return FText::FromString(text);
+    }
+
+    const auto& comparison = state.Comparison;
+    text += FString::Printf(
+        TEXT("Comparison\n#%llu %s  ->  #%llu %s\nTopology compatible: %s\n"),
+        comparison.FirstCheckpointId,
+        UTF8_TO_TCHAR(comparison.FirstCheckpointName.c_str()),
+        comparison.SecondCheckpointId,
+        UTF8_TO_TCHAR(comparison.SecondCheckpointName.c_str()),
+        comparison.TopologyCompatible ? TEXT("yes") : TEXT("no"));
+    if (!comparison.TopologyCompatible)
+    {
+        text += TEXT("Stable layer, neuron, or connection IDs differ, so scalar parameter deltas are intentionally unavailable.");
+        return FText::FromString(text);
+    }
+
+    text += FString::Printf(
+        TEXT("Activation type changes: %llu\nChanged biases: %llu\nChanged weights: %llu\n\nLargest bias changes\n"),
+        static_cast<uint64>(comparison.ActivationTypeChangeCount),
+        static_cast<uint64>(comparison.ChangedBiasCount),
+        static_cast<uint64>(comparison.ChangedWeightCount));
+
+    auto neurons = comparison.Neurons;
+    std::sort(neurons.begin(), neurons.end(), [](const auto& left, const auto& right)
+    {
+        return left.Bias.AbsoluteDelta > right.Bias.AbsoluteDelta;
+    });
+    for (std::size_t index = 0;
+        index < std::min<std::size_t>(10, neurons.size());
+        ++index)
+    {
+        const auto& item = neurons[index];
+        text += FString::Printf(
+            TEXT("Neuron #%llu | %.6g -> %.6g | delta %.6g\n"),
+            item.Id,
+            item.Bias.FirstValue,
+            item.Bias.SecondValue,
+            item.Bias.Delta);
+    }
+
+    text += TEXT("\nLargest weight changes\n");
+    auto connections = comparison.Connections;
+    std::sort(connections.begin(), connections.end(), [](const auto& left, const auto& right)
+    {
+        return left.Weight.AbsoluteDelta > right.Weight.AbsoluteDelta;
+    });
+    for (std::size_t index = 0;
+        index < std::min<std::size_t>(10, connections.size());
+        ++index)
+    {
+        const auto& item = connections[index];
+        text += FString::Printf(
+            TEXT("Connection #%llu (%llu -> %llu) | %.6g -> %.6g | delta %.6g\n"),
+            item.Id,
+            item.FromNeuron,
+            item.ToNeuron,
+            item.Weight.FirstValue,
+            item.Weight.SecondValue,
+            item.Weight.Delta);
+    }
+    return FText::FromString(text);
 }
 
 FText SMiaIAEditorPanel::TrainingTimelineSummaryText() const

@@ -65,6 +65,19 @@ The integrated Console keeps command output separate from command history and Mi
 
 In the Unreal host, the panel addresses this state through an opaque `FMiaIAInstanceHandle`. `FMiaIAInstanceService` owns the corresponding controller in the runtime `IDE` module and performs every stateful call there, including forward- and backward-trace playback and training-timeline selection, so Blueprint, the integrated CLI, and `IDEStudio` observe one SDK state even though Unreal builds them across multiple DLL modules. Only the `default` instance exists today. The handle is the frontend seam for future independent project contexts; it is not yet a claim that the process-global SDK can host several networks simultaneously.
 
+## Model checkpoints
+
+The `Checkpoints` tab captures and compares complete model states without leaving
+MiaIA Studio. Enter a name and choose `Capture`, select an item, and use `Set A` / `Set
+B` followed by `Compare A / B` for stable-ID parameter deltas. The detail panel reports
+topology compatibility, changed parameter counts, and the ten largest bias and weight
+changes.
+
+`Restore selected` uses the transactional SDK restore and clears stale execution,
+gradient, and signal-health views before refreshing the topology. `Remove selected` and
+`Clear all` affect only the in-memory registry. Checkpoints do not survive process exit
+and are not stored in `.mai` version 1.
+
 ## Layout conventions
 
 In the two-dimensional layout:

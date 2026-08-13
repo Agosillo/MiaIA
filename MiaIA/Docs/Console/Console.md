@@ -666,6 +666,41 @@ dataset diagnose --vanishing-magnitude 1e-7 --exploding-magnitude 50
 
 The result is evidence about the selected dataset and thresholds, not an automatic proof that a neuron is permanently dead. A different input distribution can produce different classifications.
 
+## Process-local model checkpoints
+
+Model checkpoints capture a complete validated network in memory. They support
+before/after training inspection, safe experimentation, parameter comparison, and fast
+rollback during one MiaIA process. They are independent from the current dataset and
+are not yet persisted in `.mai` project archives.
+
+```text
+checkpoint create <name>
+checkpoint list
+checkpoint inspect <id>
+checkpoint compare <first-id> <second-id> [maximum-items]
+checkpoint restore <id>
+checkpoint remove <id>
+checkpoint clear
+```
+
+Names may contain spaces. Each checkpoint receives a stable, monotonically increasing
+ID for the process lifetime. Comparison matches neurons and connections by stable ID,
+reports `second - first`, and orders the displayed bias and weight changes by absolute
+magnitude. A topology mismatch is reported instead of producing misleading deltas.
+
+Restore is transactional: MiaIA validates a copy before replacing the current network.
+Capture, restore, remove, and clear are rejected while a training session is running or
+a phase-debug transaction is active. Listing, inspection, and comparison are read-only.
+
+```text
+checkpoint create before training
+train session start 10 0.01 mse
+train session run all
+checkpoint create after training
+checkpoint compare 1 2 20
+checkpoint restore 1
+```
+
 ## Training
 
 ### `train step`

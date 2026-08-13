@@ -15,6 +15,7 @@
 #include "../../Core/Public/DenseNetworkConfiguration.h"
 #include "../../Core/Public/ForwardTraceSnapshot.h"
 #include "../../Core/Public/LossType.h"
+#include "../../Core/Public/ModelCheckpointSnapshot.h"
 #include "../../Core/Public/OptimizerType.h"
 #include "../../Core/Public/PredictionSnapshot.h"
 #include "../../Core/Public/ProjectInfoSnapshot.h"
@@ -96,6 +97,22 @@ namespace MiaIA::SDK
             const Core::DenseNetworkConfiguration& configuration);
         static bool ImportOnnx(const std::string& path);
         static bool ExportOnnx(const std::string& path);
+        static bool CaptureModelCheckpoint(
+            const std::string& name,
+            Core::ModelCheckpointSummarySnapshot& result);
+        [[nodiscard]]
+        static std::vector<Core::ModelCheckpointSummarySnapshot>
+            GetModelCheckpoints();
+        static bool TryGetModelCheckpoint(
+            std::uint64_t checkpointId,
+            Core::ModelCheckpointSnapshot& result);
+        static bool TryCompareModelCheckpoints(
+            std::uint64_t firstCheckpointId,
+            std::uint64_t secondCheckpointId,
+            Core::ModelCheckpointComparisonSnapshot& result);
+        static bool RestoreModelCheckpoint(std::uint64_t checkpointId);
+        static bool RemoveModelCheckpoint(std::uint64_t checkpointId);
+        static bool ClearModelCheckpoints();
         static bool NewProject();
         static bool OpenProject(const std::string& path);
         static bool SaveProject(const std::string& path);

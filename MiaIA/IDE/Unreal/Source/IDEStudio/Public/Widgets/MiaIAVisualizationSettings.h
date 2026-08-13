@@ -25,6 +25,7 @@ struct FMiaIAVisualizationSettings
         EMiaIAConnectionDisplayMode::All};
     float NeuronScale{1.0f};
     float ConnectionScale{1.0f};
+    bool bShowConnections{true};
     bool bShowNeuronLabels{true};
     bool bAlwaysShowSelectionCursor{};
 };

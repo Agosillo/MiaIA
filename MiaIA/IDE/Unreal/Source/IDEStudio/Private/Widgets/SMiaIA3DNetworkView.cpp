@@ -1565,7 +1565,8 @@ float SMiaIA3DNetworkView::LayoutUnitSize() const
 bool SMiaIA3DNetworkView::ShouldDrawConnection(
     const FMiaIAConnectionSnapshot& Connection) const
 {
-    if (VisualizationSettings.ConnectionScale <= UE_KINDA_SMALL_NUMBER)
+    if (!VisualizationSettings.bShowConnections ||
+        VisualizationSettings.ConnectionScale <= UE_KINDA_SMALL_NUMBER)
     {
         return false;
     }
@@ -1658,9 +1659,13 @@ void SMiaIA3DNetworkView::RebuildDetailedScene()
 
     positions.Reserve(neuronCount);
     RenderedNodes.Reserve(neuronCount);
+    const int32 visibleConnectionCount =
+        VisualizationSettings.bShowConnections
+            ? Snapshot.Connections.Num()
+            : 0;
     ViewportClient->ReservePrimitives(
         neuronCount,
-        Snapshot.Connections.Num());
+        visibleConnectionCount);
 
     for (int32 layerIndex = 0;
         layerIndex < Snapshot.Layers.Num();
@@ -1736,11 +1741,15 @@ void SMiaIA3DNetworkView::RebuildDetailedScene()
         }
     }
 
-    RenderedConnections.Reserve(Snapshot.Connections.Num());
+    RenderedConnections.Reserve(visibleConnectionCount);
 
-    for (const FMiaIAConnectionSnapshot& connection :
-        Snapshot.Connections)
+    for (int32 connectionIndex = 0;
+        connectionIndex < visibleConnectionCount;
+        ++connectionIndex)
     {
+        const FMiaIAConnectionSnapshot& connection =
+            Snapshot.Connections[connectionIndex];
+
         if (!ShouldDrawConnection(connection))
         {
             continue;
@@ -1875,7 +1884,7 @@ void SMiaIA3DNetworkView::RebuildCompactScene()
             CompactSphereRadius);
         RenderedNodes.Add({Overview.Layers[layerIndex].Id, position});
 
-        if (hasPrevious)
+        if (hasPrevious && VisualizationSettings.bShowConnections)
         {
             ViewportClient->AddLine(
                 previousPosition,

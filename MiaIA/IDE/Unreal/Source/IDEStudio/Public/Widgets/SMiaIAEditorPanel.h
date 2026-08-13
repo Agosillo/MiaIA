@@ -60,6 +60,7 @@ private:
     void RebuildForwardTrace();
     void RebuildBackwardTrace();
     void RebuildSignalHealth();
+    void RebuildModelCheckpoints();
     void RebuildTrainingTimeline();
     void ApplyForwardTraceOverlay();
     void ApplyBackwardTraceOverlay();
@@ -200,6 +201,14 @@ private:
     TSharedRef<SWidget> BuildSignalHealthFilterMenu();
     FReply SelectSignalHealthFilter(
         MiaIA::Studio::StudioSignalHealthFilter Filter);
+    FReply HandleCaptureModelCheckpoint();
+    FReply HandleRefreshModelCheckpoints();
+    FReply HandleSelectModelCheckpoint(uint64 CheckpointId);
+    FReply HandleSetCheckpointComparisonSide(bool bFirst);
+    FReply HandleCompareModelCheckpoints();
+    FReply HandleRestoreModelCheckpoint();
+    FReply HandleRemoveModelCheckpoint();
+    FReply HandleClearModelCheckpoints();
     FReply HandleSelectTrainingTimelineStep(uint64 StepIndex);
     FReply HandleClearTrainingTimelineView();
     void ShowDialog(const FText& Title, const FText& Content);
@@ -257,6 +266,7 @@ private:
     FText SignalHealthSummaryText() const;
     FText SignalHealthFilterText() const;
     FText SignalHealthSelectionText() const;
+    FText ModelCheckpointDetailText() const;
     FText TrainingTimelineSummaryText() const;
     FText TrainingTimelineDetailText() const;
     FText SelectedConnectionEndpointText(bool bToNeuron) const;
@@ -373,6 +383,8 @@ private:
     FMiaIAInstanceHandle MiaIAInstance;
     MiaIA::Studio::StudioTrainingTimelineState TrainingTimeline;
     MiaIA::Core::SignalHealthConfiguration SignalHealthConfiguration;
+    uint64 FirstCheckpointComparisonId{};
+    uint64 SecondCheckpointComparisonId{};
 
     TSharedPtr<SVerticalBox> ExplorerContent;
     TSharedPtr<SVerticalBox> RelationshipContent;
@@ -381,6 +393,7 @@ private:
     TSharedPtr<SVerticalBox> ForwardTraceContent;
     TSharedPtr<SVerticalBox> BackwardTraceContent;
     TSharedPtr<SVerticalBox> SignalHealthContent;
+    TSharedPtr<SVerticalBox> ModelCheckpointContent;
     TSharedPtr<SVerticalBox> TrainingTimelineContent;
     TSharedPtr<SMiaIANetworkView> NetworkView;
     TSharedPtr<SMiaIA3DNetworkView> Network3DView;
@@ -395,4 +408,5 @@ private:
     TSharedPtr<SEditableTextBox> ForwardTraceInput;
     TSharedPtr<SEditableTextBox> BackwardTraceInput;
     TSharedPtr<SEditableTextBox> BackwardTraceTarget;
+    TSharedPtr<SEditableTextBox> ModelCheckpointNameInput;
 };

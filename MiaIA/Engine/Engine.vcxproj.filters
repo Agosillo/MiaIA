@@ -4,6 +4,9 @@
     <ClInclude Include="Analysis\SignalHealthAnalyzer.h">
       <Filter>File di intestazione</Filter>
     </ClInclude>
+    <ClInclude Include="Checkpoint\ModelCheckpointStore.h">
+      <Filter>File di intestazione</Filter>
+    </ClInclude>
     <ClInclude Include="Data\CsvDatasetImporter.h">
       <Filter>File di intestazione</Filter>
     </ClInclude>
@@ -28,6 +31,9 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Analysis\SignalHealthAnalyzer.cpp">
+      <Filter>File di origine</Filter>
+    </ClCompile>
+    <ClCompile Include="Checkpoint\ModelCheckpointStore.cpp">
       <Filter>File di origine</Filter>
     </ClCompile>
     <ClCompile Include="Data\CsvDatasetImporter.cpp">
