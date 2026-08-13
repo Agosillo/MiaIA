@@ -2,6 +2,7 @@
 
 #include "../../Core/Model/Network.h"
 #include "../../Core/Public/ConnectionInspectionSnapshot.h"
+#include "../../Core/Public/ForwardTraceSnapshot.h"
 #include "../../Core/Public/NetworkSnapshot.h"
 #include "../../Core/Public/NeuronInspectionSnapshot.h"
 
@@ -45,6 +46,18 @@ namespace MiaIA::Engine
             const Core::Network& network,
             std::uint64_t connectionId,
             Core::ConnectionInspectionSnapshot& result);
+
+        static bool TraceForward(
+            const Core::Network& network,
+            const std::vector<double>& inputs,
+            Core::ForwardTraceSnapshot& result);
+
+        static bool TryGetForwardTraceContributions(
+            const Core::Network& network,
+            const std::vector<double>& inputs,
+            std::uint64_t neuronId,
+            const Core::ForwardTraceContributionPageRequest& request,
+            Core::ForwardTraceContributionPageSnapshot& result);
 
         static bool TryGetLayer(
             const Core::Network& network,

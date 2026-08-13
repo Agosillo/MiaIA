@@ -33,7 +33,7 @@ Core contains the stable representation of data:
 - `Network`, `Layer`, `Neuron`, and `Connection`;
 - `Dataset` and `Sample`;
 - activation primitives;
-- public snapshots for networks, focused element relationships, datasets, evaluations, and gradients.
+- public snapshots for networks, focused element relationships, forward traces, datasets, evaluations, and gradients.
 
 Core structures describe state. They do not import files, run training commands, or manage a user interface.
 
@@ -64,7 +64,7 @@ This separation allows a mathematical subsystem to evolve without requiring clie
 
 ### SDK
 
-`MiaIAClient` is the public facade used by clients. It exposes network creation and editing, complete and focused inspection snapshots, ONNX interchange, versioned `.mai` project persistence, datasets, forward execution, sample and full-dataset evaluation, gradient evaluation, atomic sample training, and an ordered dataset epoch.
+`MiaIAClient` is the public facade used by clients. It exposes network creation and editing, complete and focused inspection snapshots, immutable forward execution traces, ONNX interchange, versioned `.mai` project persistence, datasets, forward execution, sample and full-dataset evaluation, gradient evaluation, atomic sample training, and an ordered dataset epoch.
 
 The current SDK owns one process-local network and one process-local dataset through its internal client state. This is sufficient for the present console and integration tests. Multiple sessions, explicit contexts, concurrency, and persisted workspace state are future concerns and should not be assumed to exist today.
 
@@ -134,6 +134,14 @@ Input values
 ```
 
 For each non-input neuron, forward propagation computes the weighted sum of incoming activations plus the neuron bias, then applies the layer activation function.
+
+### Immutable forward execution trace
+
+`ForwardTraceSnapshot` explains the same forward calculation without changing public runtime state. `NetworkInspector::TraceForward` copies the current network, validates and applies the supplied input vector to that copy, and invokes the traced `ForwardEngine` overload. The trace records ordered layers and, for every neuron, the weighted input sum before bias, bias, pre-activation, and final activation. Input neurons are marked explicitly; their raw input is both pre-activation and activation because layer zero does not apply an activation function.
+
+`ForwardTraceContributionPageRequest` provides the focused counterpart for one target neuron. Each returned record keeps the stable connection and endpoint IDs, source activation, weight, and exact `source activation * weight` contribution. Queries support a bounded page of at most `1000` records, deterministic ordering by connection ID or signed/absolute contribution, ascending or descending direction, and a non-negative absolute-contribution threshold. Exact and filtered totals plus previous/next flags let clients navigate dense neurons without requesting all incoming relationships.
+
+Both Engine operations construct a complete local result before publishing it. Invalid networks, input dimensions, non-finite inputs, neuron IDs, filters, or page limits leave the caller result unchanged. `MiaIAClient` serializes the operations through the normal state lock, while `trace forward` and `trace neuron` expose the renderer-neutral contract to the shared CLI. Unlike `predict`, a successful trace does not publish its temporary activations to the current network.
 
 ### Prediction
 

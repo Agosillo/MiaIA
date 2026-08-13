@@ -116,6 +116,9 @@ const std::vector<CommandCatalogEntry>& CommandCatalog()
         { "network set connection-weight", "network set connection-weight <connection-id> <value>", "Set one connection weight.", true },
         { "input", "input <value...>", "Assign values to the input layer.", true },
         { "predict", "predict <value...>", "Run inference for one input vector.", true },
+        { "trace", "trace <forward|neuron>", "Inspect immutable forward execution values.", false },
+        { "trace forward", "trace forward <value...>", "Trace every neuron for one input vector.", true },
+        { "trace neuron", "trace neuron <neuron-id> [page] [page-size] [id|contribution|abs-contribution] [asc|desc] [minimum-absolute-contribution] -- <value...>", "Page one neuron's incoming forward contributions.", true },
         { "import", "import onnx <path>", "Import a model from a supported format.", false },
         { "import onnx", "import onnx <path>", "Import the supported dense ONNX subset.", true },
         { "export", "export onnx <path>", "Export the current model.", false },
@@ -246,6 +249,14 @@ void PrintHelp()
 
         << "      Example:\n"
         << "        predict 1 1\n\n"
+
+        << "  trace forward <values>\n"
+        << "      Calculate an immutable forward trace for every neuron\n\n"
+
+        << "  trace neuron <neuron-id> [page] [page-size]\n"
+           "      [id|contribution|abs-contribution] [asc|desc]\n"
+           "      [minimum-absolute-contribution] -- <values>\n"
+        << "      Page one neuron's incoming signal contributions\n\n"
 
         << "  import onnx [path]\n"
         << "      Replace the current network with an ONNX model\n\n"
@@ -3572,6 +3583,294 @@ void InspectElement(const std::string& command)
            "|connection <connection-id>]\n";
 }
 
+bool TryParseTraceDouble(const std::string& token, double& result)
+{
+    std::stringstream stream(token);
+    return (stream >> result) &&
+        (stream >> std::ws).eof() &&
+        std::isfinite(result);
+}
+
+template<typename Integer>
+bool TryParseTraceInteger(const std::string& token, Integer& result)
+{
+    std::stringstream stream(token);
+    return (stream >> result) && (stream >> std::ws).eof();
+}
+
+bool TryParseTraceInputs(
+    const std::vector<std::string>& tokens,
+    std::size_t first,
+    std::vector<double>& inputs)
+{
+    if (first >= tokens.size())
+    {
+        return false;
+    }
+
+    inputs.reserve(tokens.size() - first);
+
+    for (std::size_t index = first; index < tokens.size(); ++index)
+    {
+        double value{};
+
+        if (!TryParseTraceDouble(tokens[index], value))
+        {
+            return false;
+        }
+
+        inputs.push_back(value);
+    }
+
+    return true;
+}
+
+void PrintForwardTraceNeuron(
+    const MiaIA::Core::ForwardTraceNeuronSnapshot& neuron)
+{
+    std::cout
+        << "  Neuron " << neuron.Id
+        << " | weighted " << neuron.WeightedInputSum
+        << " | bias " << neuron.Bias
+        << " | pre-activation " << neuron.PreActivation
+        << " | activation " << neuron.Activation;
+
+    if (neuron.IsInput)
+    {
+        std::cout << " | input";
+    }
+
+    std::cout << "\n";
+}
+
+void HandleTraceCommand(const std::string& command)
+{
+    using MiaIA::SDK::MiaIAClient;
+
+    const auto tokens = CommandTokens(command);
+    constexpr const char* usage =
+        "Usage: trace forward <value...>\n"
+        "       trace neuron <neuron-id> [page] [page-size] "
+        "[id|contribution|abs-contribution] [asc|desc] "
+        "[minimum-absolute-contribution] -- <value...>\n";
+
+    if (tokens.size() < 3)
+    {
+        std::cout << usage;
+        return;
+    }
+
+    if (tokens[1] == "forward")
+    {
+        std::vector<double> inputs;
+
+        if (!TryParseTraceInputs(tokens, 2, inputs))
+        {
+            std::cout << usage;
+            return;
+        }
+
+        MiaIA::Core::ForwardTraceSnapshot trace;
+
+        if (!MiaIAClient::TraceForward(inputs, trace))
+        {
+            std::cout
+                << "Forward trace failed. Check the network and input values.\n";
+            return;
+        }
+
+        std::cout << "\nForward Execution Trace\n\nInputs: ";
+        PrintValues(trace.Inputs);
+        std::cout << "\n";
+
+        for (const auto& layer : trace.Layers)
+        {
+            std::cout
+                << "\nLayer [" << layer.Order << "] " << layer.Name
+                << " (" << ActivationTypeName(layer.Activation) << ")\n";
+
+            for (const auto& neuron : layer.Neurons)
+            {
+                PrintForwardTraceNeuron(neuron);
+            }
+        }
+
+        std::cout << "\nOutputs: ";
+        PrintValues(trace.Outputs);
+        std::cout << "\n\n";
+        return;
+    }
+
+    if (tokens[1] != "neuron")
+    {
+        std::cout << usage;
+        return;
+    }
+
+    const auto delimiter = std::find(tokens.begin() + 2, tokens.end(), "--");
+
+    if (delimiter == tokens.end())
+    {
+        std::cout << usage;
+        return;
+    }
+
+    const std::size_t delimiterIndex =
+        static_cast<std::size_t>(delimiter - tokens.begin());
+
+    if (delimiterIndex < 3 || delimiterIndex > 8)
+    {
+        std::cout << usage;
+        return;
+    }
+
+    std::uint64_t neuronId{};
+    std::int64_t pageNumber{ 1 };
+    std::int64_t pageSize{ 10 };
+    std::string sortToken{ "id" };
+    std::string orderToken{ "asc" };
+    double minimumAbsoluteContribution{};
+
+    if (tokens[2].empty() || tokens[2][0] == '-' ||
+        !TryParseTraceInteger(tokens[2], neuronId) ||
+        (delimiterIndex >= 4 &&
+            !TryParseTraceInteger(tokens[3], pageNumber)) ||
+        (delimiterIndex >= 5 &&
+            !TryParseTraceInteger(tokens[4], pageSize)) ||
+        (delimiterIndex >= 8 &&
+            !TryParseTraceDouble(tokens[7], minimumAbsoluteContribution)))
+    {
+        std::cout << usage;
+        return;
+    }
+
+    if (delimiterIndex >= 6)
+    {
+        sortToken = tokens[5];
+    }
+    if (delimiterIndex >= 7)
+    {
+        orderToken = tokens[6];
+    }
+
+    std::transform(
+        sortToken.begin(), sortToken.end(), sortToken.begin(),
+        [](unsigned char value)
+        {
+            return static_cast<char>(std::tolower(value));
+        });
+    std::transform(
+        orderToken.begin(), orderToken.end(), orderToken.begin(),
+        [](unsigned char value)
+        {
+            return static_cast<char>(std::tolower(value));
+        });
+
+    MiaIA::Core::ForwardTraceContributionPageRequest request;
+
+    if (sortToken == "id")
+    {
+        request.Sort = MiaIA::Core::ForwardTraceContributionSort::ConnectionId;
+    }
+    else if (sortToken == "contribution")
+    {
+        request.Sort = MiaIA::Core::ForwardTraceContributionSort::Contribution;
+    }
+    else if (sortToken == "abs-contribution")
+    {
+        request.Sort = MiaIA::Core::ForwardTraceContributionSort::
+            AbsoluteContribution;
+    }
+    else
+    {
+        std::cout << usage;
+        return;
+    }
+
+    if (pageNumber <= 0 || pageSize <= 0 || pageSize > 1000 ||
+        minimumAbsoluteContribution < 0.0 ||
+        (orderToken != "asc" && orderToken != "desc"))
+    {
+        std::cout << usage;
+        return;
+    }
+
+    const std::uint64_t zeroBasedPage =
+        static_cast<std::uint64_t>(pageNumber - 1);
+    const std::uint64_t unsignedPageSize =
+        static_cast<std::uint64_t>(pageSize);
+
+    if (zeroBasedPage >
+        std::numeric_limits<std::uint64_t>::max() / unsignedPageSize)
+    {
+        std::cout << usage;
+        return;
+    }
+
+    const std::uint64_t offset = zeroBasedPage * unsignedPageSize;
+
+    if (offset > std::numeric_limits<std::size_t>::max())
+    {
+        std::cout << usage;
+        return;
+    }
+
+    std::vector<double> inputs;
+
+    if (!TryParseTraceInputs(tokens, delimiterIndex + 1, inputs))
+    {
+        std::cout << usage;
+        return;
+    }
+
+    request.Offset = static_cast<std::size_t>(offset);
+    request.Limit = static_cast<std::size_t>(pageSize);
+    request.Descending = orderToken == "desc";
+    request.MinimumAbsoluteContribution = minimumAbsoluteContribution;
+
+    MiaIA::Core::ForwardTraceContributionPageSnapshot page;
+
+    if (!MiaIAClient::TryGetForwardTraceContributions(
+        inputs,
+        neuronId,
+        request,
+        page))
+    {
+        std::cout
+            << "Forward contribution trace failed. "
+               "Check the network, neuron ID, input values, and query.\n";
+        return;
+    }
+
+    const std::size_t pageCount = page.FilteredContributionCount == 0
+        ? 1
+        : (page.FilteredContributionCount + page.Limit - 1) / page.Limit;
+
+    std::cout << "\nForward Neuron Contribution Trace\n\n";
+    PrintForwardTraceNeuron(page.Neuron);
+    std::cout
+        << "Page: " << pageNumber << " of " << pageCount
+        << "\nFiltered: " << page.FilteredContributionCount
+        << " of " << page.TotalContributionCount
+        << "\nReturned: " << page.Contributions.size() << "\n";
+
+    for (const auto& contribution : page.Contributions)
+    {
+        std::cout
+            << "  Connection " << contribution.ConnectionId
+            << ": " << contribution.FromNeuron
+            << " -> " << contribution.ToNeuron
+            << " | source " << contribution.SourceActivation
+            << " * weight " << contribution.Weight
+            << " = " << contribution.Contribution << "\n";
+    }
+
+    std::cout
+        << "Previous: " << (page.HasPrevious ? "yes" : "no")
+        << " | Next: " << (page.HasNext ? "yes" : "no")
+        << "\n\n";
+}
+
 void RunForward()
 {
     using MiaIA::SDK::MiaIAClient;
@@ -3895,6 +4194,10 @@ MiaIA::CLI::MiaIACommandProcessor::Execute(
     else if (command.rfind("predict", 0) == 0)
     {
         Predict(command);
+    }
+    else if (command.rfind("trace", 0) == 0)
+    {
+        HandleTraceCommand(command);
     }
     else if (command.rfind("import", 0) == 0)
     {

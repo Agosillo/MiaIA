@@ -12,6 +12,7 @@
 #include "../../Core/Public/DatasetSummary.h"
 #include "../../Core/Public/DatasetEvaluationSnapshot.h"
 #include "../../Core/Public/DenseNetworkConfiguration.h"
+#include "../../Core/Public/ForwardTraceSnapshot.h"
 #include "../../Core/Public/LossType.h"
 #include "../../Core/Public/OptimizerType.h"
 #include "../../Core/Public/PredictionSnapshot.h"
@@ -62,6 +63,14 @@ namespace MiaIA::SDK
         static bool TryInspectConnection(
             std::uint64_t connectionId,
             Core::ConnectionInspectionSnapshot& result);
+        static bool TraceForward(
+            const std::vector<double>& inputs,
+            Core::ForwardTraceSnapshot& result);
+        static bool TryGetForwardTraceContributions(
+            const std::vector<double>& inputs,
+            std::uint64_t neuronId,
+            const Core::ForwardTraceContributionPageRequest& request,
+            Core::ForwardTraceContributionPageSnapshot& result);
         static bool TryGetLayer(std::uint64_t layerId, Core::LayerSnapshot& result);
         static bool RemoveConnection(std::uint64_t connectionId);
         static bool RemoveNeuron(std::uint64_t neuronId);

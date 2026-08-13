@@ -1,14 +1,18 @@
 #include "NetworkInspector.h"
+#include "../Execution/ForwardEngine.h"
+#include "../Input/NetworkInput.h"
 #include "../Topology/NetworkTopology.h"
 #include "../../Core/Execution/SnapshotBuilder.h"
 
 #include <algorithm>
 #include <cmath>
+#include <unordered_map>
 #include <utility>
 
 namespace
 {
     constexpr std::size_t MaximumRelationshipPageSize = 1000;
+    constexpr std::size_t MaximumTraceContributionPageSize = 1000;
 
     bool TryBuildNeuronContext(
         const MiaIA::Engine::NetworkTopology& topology,
@@ -74,6 +78,29 @@ namespace
         }
 
         return false;
+    }
+
+    const MiaIA::Core::ForwardTraceNeuronSnapshot* FindTraceNeuron(
+        const MiaIA::Core::ForwardTraceSnapshot& trace,
+        std::uint64_t neuronId)
+    {
+        for (const auto& layer : trace.Layers)
+        {
+            const auto neuron = std::find_if(
+                layer.Neurons.begin(),
+                layer.Neurons.end(),
+                [neuronId](const auto& candidate)
+                {
+                    return candidate.Id == neuronId;
+                });
+
+            if (neuron != layer.Neurons.end())
+            {
+                return &*neuron;
+            }
+        }
+
+        return nullptr;
     }
 }
 
@@ -393,6 +420,182 @@ namespace MiaIA::Engine
         {
             return false;
         }
+
+        result = std::move(snapshot);
+        return true;
+    }
+
+    bool NetworkInspector::TraceForward(
+        const Core::Network& network,
+        const std::vector<double>& inputs,
+        Core::ForwardTraceSnapshot& result)
+    {
+        Core::Network candidate = network;
+
+        if (!NetworkInput::SetValues(candidate, inputs))
+        {
+            return false;
+        }
+
+        Core::ForwardTraceSnapshot snapshot;
+
+        if (!ForwardEngine::Run(candidate, snapshot))
+        {
+            return false;
+        }
+
+        result = std::move(snapshot);
+        return true;
+    }
+
+    bool NetworkInspector::TryGetForwardTraceContributions(
+        const Core::Network& network,
+        const std::vector<double>& inputs,
+        std::uint64_t neuronId,
+        const Core::ForwardTraceContributionPageRequest& request,
+        Core::ForwardTraceContributionPageSnapshot& result)
+    {
+        const bool validSort = request.Sort ==
+            Core::ForwardTraceContributionSort::ConnectionId ||
+            request.Sort ==
+                Core::ForwardTraceContributionSort::Contribution ||
+            request.Sort == Core::ForwardTraceContributionSort::
+                AbsoluteContribution;
+
+        if (!validSort || request.Limit == 0 ||
+            request.Limit > MaximumTraceContributionPageSize ||
+            !std::isfinite(request.MinimumAbsoluteContribution) ||
+            request.MinimumAbsoluteContribution < 0.0)
+        {
+            return false;
+        }
+
+        Core::ForwardTraceSnapshot trace;
+
+        if (!TraceForward(network, inputs, trace))
+        {
+            return false;
+        }
+
+        const Core::ForwardTraceNeuronSnapshot* tracedNeuron =
+            FindTraceNeuron(trace, neuronId);
+
+        if (tracedNeuron == nullptr)
+        {
+            return false;
+        }
+
+        Core::ForwardTraceContributionPageSnapshot snapshot;
+        snapshot.Neuron = *tracedNeuron;
+        snapshot.Offset = request.Offset;
+        snapshot.Limit = request.Limit;
+
+        std::unordered_map<std::uint64_t, double> activationByNeuron;
+        activationByNeuron.reserve(network.Connections.size());
+
+        for (const Core::ForwardTraceLayerSnapshot& layer : trace.Layers)
+        {
+            for (const Core::ForwardTraceNeuronSnapshot& neuron :
+                layer.Neurons)
+            {
+                activationByNeuron.emplace(neuron.Id, neuron.Activation);
+            }
+        }
+
+        std::vector<Core::ForwardTraceConnectionContributionSnapshot>
+            contributions;
+
+        for (const Core::Connection& connection : network.Connections)
+        {
+            if (connection.ToNeuron != neuronId)
+            {
+                continue;
+            }
+
+            ++snapshot.TotalContributionCount;
+            const auto source = activationByNeuron.find(
+                connection.FromNeuron);
+
+            if (source == activationByNeuron.end())
+            {
+                return false;
+            }
+
+            const double contribution =
+                source->second * connection.Weight;
+
+            if (std::abs(contribution) <
+                request.MinimumAbsoluteContribution)
+            {
+                continue;
+            }
+
+            contributions.push_back({
+                connection.Id,
+                connection.FromNeuron,
+                connection.ToNeuron,
+                source->second,
+                connection.Weight,
+                contribution
+            });
+        }
+
+        snapshot.FilteredContributionCount = contributions.size();
+
+        const auto ascendingLess = [&request](
+            const auto& left,
+            const auto& right)
+        {
+            switch (request.Sort)
+            {
+            case Core::ForwardTraceContributionSort::Contribution:
+                if (left.Contribution != right.Contribution)
+                {
+                    return left.Contribution < right.Contribution;
+                }
+                break;
+
+            case Core::ForwardTraceContributionSort::AbsoluteContribution:
+                if (std::abs(left.Contribution) !=
+                    std::abs(right.Contribution))
+                {
+                    return std::abs(left.Contribution) <
+                        std::abs(right.Contribution);
+                }
+                break;
+
+            case Core::ForwardTraceContributionSort::ConnectionId:
+                break;
+            }
+
+            return left.ConnectionId < right.ConnectionId;
+        };
+
+        std::sort(
+            contributions.begin(),
+            contributions.end(),
+            [&ascendingLess, &request](const auto& left, const auto& right)
+            {
+                return request.Descending
+                    ? ascendingLess(right, left)
+                    : ascendingLess(left, right);
+            });
+
+        if (request.Offset < contributions.size())
+        {
+            const std::size_t count = std::min(
+                request.Limit,
+                contributions.size() - request.Offset);
+            const auto begin = contributions.begin() + request.Offset;
+            snapshot.Contributions.assign(begin, begin + count);
+        }
+
+        snapshot.HasPrevious = request.Offset > 0 &&
+            snapshot.FilteredContributionCount > 0;
+        snapshot.HasNext = request.Offset <
+            snapshot.FilteredContributionCount &&
+            snapshot.Contributions.size() <
+                snapshot.FilteredContributionCount - request.Offset;
 
         result = std::move(snapshot);
         return true;

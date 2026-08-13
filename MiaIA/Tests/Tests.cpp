@@ -476,8 +476,9 @@ int main()
 
     const auto trainRoot =
         MiaIACommandProcessor::GetSuggestions("tr");
-    assert(trainRoot.size() == 1);
-    assert(trainRoot[0].Completion == "train");
+    assert(trainRoot.size() == 2);
+    assert(trainRoot[0].Completion == "trace");
+    assert(trainRoot[1].Completion == "train");
 
     const auto trainActions =
         MiaIACommandProcessor::GetSuggestions("train s");
@@ -685,6 +686,177 @@ int main()
         999999,
         preservedConnectionInspection));
     assert(preservedConnectionInspection.Connection.Id == 888);
+
+    MiaIAClient::ClearNetwork();
+    });
+
+    runner.Run("Immutable forward execution trace", [&]()
+    {
+    using MiaIA::CLI::MiaIACommandProcessor;
+
+    MiaIAClient::ClearNetwork();
+
+    assert(MiaIAClient::AddLayer(30, "Output", 2));
+    assert(MiaIAClient::AddLayer(10, "Input", 0));
+    assert(MiaIAClient::AddLayer(20, "Hidden", 1));
+    assert(MiaIAClient::SetLayerActivation(
+        20,
+        MiaIA::Core::ActivationType::Linear));
+    assert(MiaIAClient::SetLayerActivation(
+        30,
+        MiaIA::Core::ActivationType::Linear));
+
+    assert(MiaIAClient::AddNeuron(10, 1001, 0.0, 9.0));
+    assert(MiaIAClient::AddNeuron(10, 1002, 0.0, 8.0));
+    assert(MiaIAClient::AddNeuron(20, 1003, 0.5, 7.0));
+    assert(MiaIAClient::AddNeuron(30, 1004, -1.0, 6.0));
+
+    assert(MiaIAClient::AddConnection(1, 1001, 1003, 2.0));
+    assert(MiaIAClient::AddConnection(2, 1002, 1003, -1.0));
+    assert(MiaIAClient::AddConnection(3, 1003, 1004, 0.25));
+
+    const auto before = MiaIAClient::GetSnapshot();
+    MiaIA::Core::ForwardTraceSnapshot trace;
+    assert(MiaIAClient::TraceForward({ 3.0, 4.0 }, trace));
+    assert(trace.Inputs == std::vector<double>({ 3.0, 4.0 }));
+    assert(trace.Outputs == std::vector<double>({ -0.375 }));
+    assert(trace.Layers.size() == 3);
+    assert(trace.Layers[0].Order == 0);
+    assert(trace.Layers[1].Order == 1);
+    assert(trace.Layers[2].Order == 2);
+    assert(trace.Layers[0].Neurons[0].IsInput);
+    assert(trace.Layers[0].Neurons[0].WeightedInputSum == 0.0);
+    assert(trace.Layers[0].Neurons[0].PreActivation == 3.0);
+    assert(trace.Layers[0].Neurons[0].Activation == 3.0);
+    assert(!trace.Layers[1].Neurons[0].IsInput);
+    assert(trace.Layers[1].Neurons[0].WeightedInputSum == 2.0);
+    assert(trace.Layers[1].Neurons[0].Bias == 0.5);
+    assert(trace.Layers[1].Neurons[0].PreActivation == 2.5);
+    assert(trace.Layers[1].Neurons[0].Activation == 2.5);
+    assert(trace.Layers[2].Neurons[0].WeightedInputSum == 0.625);
+    assert(trace.Layers[2].Neurons[0].Bias == -1.0);
+    assert(trace.Layers[2].Neurons[0].PreActivation == -0.375);
+    assert(trace.Layers[2].Neurons[0].Activation == -0.375);
+
+    const auto after = MiaIAClient::GetSnapshot();
+    assert(after.Layers.size() == before.Layers.size());
+    assert(after.Connections.size() == before.Connections.size());
+
+    for (std::size_t layerIndex = 0;
+        layerIndex < before.Layers.size();
+        ++layerIndex)
+    {
+        assert(after.Layers[layerIndex].Id == before.Layers[layerIndex].Id);
+        assert(after.Layers[layerIndex].Order ==
+            before.Layers[layerIndex].Order);
+
+        for (std::size_t neuronIndex = 0;
+            neuronIndex < before.Layers[layerIndex].Neurons.size();
+            ++neuronIndex)
+        {
+            assert(after.Layers[layerIndex].Neurons[neuronIndex].Activation ==
+                before.Layers[layerIndex].Neurons[neuronIndex].Activation);
+            assert(after.Layers[layerIndex].Neurons[neuronIndex].Bias ==
+                before.Layers[layerIndex].Neurons[neuronIndex].Bias);
+        }
+    }
+
+    for (std::size_t index = 0; index < before.Connections.size(); ++index)
+    {
+        assert(after.Connections[index].Id == before.Connections[index].Id);
+        assert(after.Connections[index].Weight ==
+            before.Connections[index].Weight);
+    }
+
+    MiaIA::Core::ForwardTraceContributionPageRequest request;
+    request.Offset = 1;
+    request.Limit = 1;
+    request.Sort = MiaIA::Core::ForwardTraceContributionSort::
+        AbsoluteContribution;
+    request.Descending = true;
+
+    MiaIA::Core::ForwardTraceContributionPageSnapshot page;
+    assert(MiaIAClient::TryGetForwardTraceContributions(
+        { 3.0, 4.0 },
+        1003,
+        request,
+        page));
+    assert(page.Neuron.Id == 1003);
+    assert(page.TotalContributionCount == 2);
+    assert(page.FilteredContributionCount == 2);
+    assert(page.HasPrevious);
+    assert(!page.HasNext);
+    assert(page.Contributions.size() == 1);
+    assert(page.Contributions[0].ConnectionId == 2);
+    assert(page.Contributions[0].SourceActivation == 4.0);
+    assert(page.Contributions[0].Weight == -1.0);
+    assert(page.Contributions[0].Contribution == -4.0);
+
+    request.Offset = 0;
+    request.Limit = 10;
+    request.MinimumAbsoluteContribution = 5.0;
+    assert(MiaIAClient::TryGetForwardTraceContributions(
+        { 3.0, 4.0 },
+        1003,
+        request,
+        page));
+    assert(page.TotalContributionCount == 2);
+    assert(page.FilteredContributionCount == 1);
+    assert(page.Contributions.size() == 1);
+    assert(page.Contributions[0].ConnectionId == 1);
+    assert(page.Contributions[0].Contribution == 6.0);
+
+    MiaIA::Core::ForwardTraceSnapshot preservedTrace;
+    preservedTrace.Outputs = { 777.0 };
+    assert(!MiaIAClient::TraceForward({ 3.0 }, preservedTrace));
+    assert(preservedTrace.Outputs == std::vector<double>({ 777.0 }));
+
+    MiaIA::Core::ForwardTraceContributionPageSnapshot preservedPage;
+    preservedPage.TotalContributionCount = 888;
+    request.Limit = 0;
+    assert(!MiaIAClient::TryGetForwardTraceContributions(
+        { 3.0, 4.0 },
+        1003,
+        request,
+        preservedPage));
+    assert(preservedPage.TotalContributionCount == 888);
+    request.Limit = 1001;
+    assert(!MiaIAClient::TryGetForwardTraceContributions(
+        { 3.0, 4.0 },
+        1003,
+        request,
+        preservedPage));
+    assert(preservedPage.TotalContributionCount == 888);
+    request.Limit = 10;
+    assert(!MiaIAClient::TryGetForwardTraceContributions(
+        { 3.0, 4.0 },
+        999999,
+        request,
+        preservedPage));
+    assert(preservedPage.TotalContributionCount == 888);
+
+    const auto cliTrace = MiaIACommandProcessor::Execute(
+        "trace forward 3 4");
+    assert(cliTrace.Output.find("Forward Execution Trace") !=
+        std::string::npos);
+    assert(cliTrace.Output.find("weighted 2") != std::string::npos);
+    assert(cliTrace.Output.find("Outputs: -0.375") != std::string::npos);
+
+    const auto cliContributions = MiaIACommandProcessor::Execute(
+        "trace neuron 1003 1 1 abs-contribution desc 0 -- 3 4");
+    assert(cliContributions.Output.find(
+        "Forward Neuron Contribution Trace") != std::string::npos);
+    assert(cliContributions.Output.find("Connection 1") !=
+        std::string::npos);
+    assert(cliContributions.Output.find("= 6") != std::string::npos);
+    assert(MiaIACommandProcessor::Execute(
+        "trace neuron 1003 -- 3").Output.find("failed") !=
+        std::string::npos);
+
+    const auto traceSuggestions =
+        MiaIACommandProcessor::GetSuggestions("trace n");
+    assert(traceSuggestions.size() == 1);
+    assert(traceSuggestions[0].Completion == "trace neuron");
 
     MiaIAClient::ClearNetwork();
     });

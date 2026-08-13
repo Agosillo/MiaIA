@@ -281,6 +281,32 @@ namespace MiaIA::SDK
             result);
     }
 
+    bool MiaIAClient::TraceForward(
+        const std::vector<double>& inputs,
+        Core::ForwardTraceSnapshot& result)
+    {
+        const std::scoped_lock lock(Detail::ClientMutex());
+        return Engine::NetworkInspector::TraceForward(
+            Detail::ClientNetwork(),
+            inputs,
+            result);
+    }
+
+    bool MiaIAClient::TryGetForwardTraceContributions(
+        const std::vector<double>& inputs,
+        std::uint64_t neuronId,
+        const Core::ForwardTraceContributionPageRequest& request,
+        Core::ForwardTraceContributionPageSnapshot& result)
+    {
+        const std::scoped_lock lock(Detail::ClientMutex());
+        return Engine::NetworkInspector::TryGetForwardTraceContributions(
+            Detail::ClientNetwork(),
+            inputs,
+            neuronId,
+            request,
+            result);
+    }
+
     bool MiaIAClient::TryGetLayer(
         std::uint64_t layerId,
         Core::LayerSnapshot& result)

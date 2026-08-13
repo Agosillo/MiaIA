@@ -178,6 +178,12 @@ The topology flow then gained a universal whole-network preview shared by 2D and
 
 Focused relationships then gained an explicit page contract above the original bounded compatibility snapshot. Engine queries select one direction, offset and page size, order by stable ID or signed/absolute weight, and filter on minimum absolute magnitude while preserving exact unfiltered and filtered totals. SDK, CLI, and Blueprint expose the same immutable operation. MiaIA Studio uses it as an interactive Relationship Explorer with previous/next navigation, connection selection, and opposite-neuron navigation; compact large models switch atomically between focused layers rather than copying the complete graph.
 
+### Immutable forward execution trace
+
+Forward propagation gained a renderer-neutral explanation contract without introducing a second mathematical implementation. The traced `ForwardEngine` path records each neuron's weighted input sum, bias, pre-activation, and final activation while executing the same activation switch as ordinary forward propagation. `NetworkInspector` runs this path on a network copy, so successful traces preserve public activations, layer order, weights, and biases.
+
+A focused contribution query pages one target neuron's incoming `source activation * weight` terms with deterministic sorting and absolute-magnitude filtering. `MiaIAClient`, `trace forward`, and `trace neuron` expose the complete and focused views. Exact numerical tests cover the full calculation, pagination, filtering, invalid-query result preservation, and unchanged public state. Graphical animation remains separate from this first Engine contract.
+
 ## Current position
 
 MiaIA can now create dense networks with explicit initialization choices, reconfigure existing parameters transactionally, represent, execute, interchange, persist a `.mai` v1 project, inspect individual network relationships, evaluate, differentiate, debug one training step phase by phase, train through controlled foreground or background sessions, and navigate or compare the complete history of successful steps. It cannot yet persist visualization layouts or training history inside that project, retain complete hidden-neuron activations for every step, or deliver the planned complete graphical debugging experience.

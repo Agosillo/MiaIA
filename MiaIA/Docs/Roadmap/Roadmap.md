@@ -110,11 +110,13 @@ The first debugger-like training workflow is implemented for one sample: clients
 
 Retained session steps can now be compared through one renderer-neutral Engine operation and the public SDK. The first comparison contract covers loss, output predictions, neuron and connection gradients, final weights, and final biases, associates elements by stable ID, and exposes both signed and absolute differences. The shared CLI ranks the largest changes without requiring a client to print the complete result.
 
+Forward execution now also has an immutable renderer-neutral trace. Engine and SDK expose each neuron's weighted sum, bias, pre-activation, and activation plus paged incoming connection contributions, while the shared CLI provides complete and focused textual views. The trace evaluates a copy and therefore remains safe for inspection without publishing temporary activations. A later Studio step can animate this data without moving mathematical rules into Unreal.
+
 The debugging experience should next evolve toward:
 
 - extend retained history with an explicit bounded policy for hidden-neuron activations;
 - identify inactive or consistently saturated neurons;
-- trace signal and gradient flow through the network;
+- animate the implemented forward signal trace and add an equivalent gradient-flow trace;
 - preserve selected checkpoints for comparison;
 - provide structured diagnostics rather than only Boolean failure results.
 

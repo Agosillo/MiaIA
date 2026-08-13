@@ -256,6 +256,43 @@ Prediction is inference: it requires no dataset and no target values. It updates
 
 Use `predict` when only the model output is needed. Use separate `input`, `forward`, and `inspect` commands when examining execution phase by phase.
 
+### `trace forward`
+
+```text
+trace forward <value...>
+```
+
+Calculates a read-only forward execution trace for one input vector. The command prints every ordered layer and every neuron with these values:
+
+- `weighted`: the sum of incoming `source activation * weight` terms, before bias;
+- `bias`: the neuron's bias;
+- `pre-activation`: `weighted + bias` for a non-input neuron;
+- `activation`: the value after the layer activation function.
+
+Input neurons are marked as `input`. Their weighted sum is zero and their raw supplied value is both pre-activation and activation because the input layer does not transform values.
+
+```text
+trace forward 1 1
+```
+
+The operation evaluates a private network copy. It does not replace current activations, reorder public layers, or modify weights and biases. This differs intentionally from a successful `predict`, which leaves its calculated activations available as current runtime state.
+
+### `trace neuron`
+
+```text
+trace neuron <neuron-id> [page] [page-size]
+        [id|contribution|abs-contribution] [asc|desc]
+        [minimum-absolute-contribution] -- <value...>
+```
+
+Traces one neuron and returns a bounded page of its incoming connection contributions. The `--` delimiter separates optional query arguments from the input vector. Defaults are page `1`, page size `10`, connection-ID order, ascending direction, and no contribution filter. The maximum page size is `1000`.
+
+```text
+trace neuron 1003 1 25 abs-contribution desc 0.01 -- 1 1
+```
+
+Each record shows `source activation * weight = contribution`. The output also reports exact incoming count, filtered count, current page, and previous/next availability. Input neurons validly return zero contributions. Rejected dimensions, non-finite inputs, unknown neuron IDs, invalid page values, or invalid filters leave both the current network and caller-owned SDK result unchanged.
+
 ## Network inspection and execution
 
 ### `summary`
