@@ -29,19 +29,31 @@
 
 MiaIA makes neural networks observable. Build or import a model, execute it, inspect activations and gradients, follow parameter updates, and advance training one mathematical phase at a time.
 
-The current early-alpha foundation includes:
+The MiaIA Studio **0.1 Alpha** release includes:
 
 - a C++20 neural-network Engine and public SDK;
 - direct inference, evaluation, observable backpropagation, and atomic SGD training;
 - controlled foreground and background sessions with navigable history;
 - phase-by-phase training debug with candidate-state inspection and rollback;
+- immutable forward and backward gradient-flow traces with graphical playback;
+- process-local model checkpoints with inspection, comparison, and transactional restore;
 - bounded neuron and connection relationship inspection with exact topology counts;
 - ONNX model interchange and numeric CSV datasets;
 - one shared command processor for the terminal and Unreal clients;
 - interactive 2D and 3D topology views in MiaIA Studio;
 - a renderer-neutral StudioCore application layer and Windows standalone host.
 
-> **Project status:** the mathematical and application foundations and versioned `.mai` v1 project persistence are implemented and tested. Persisted training history, checkpoints, visualization layouts, and the complete production debugging experience remain planned work. APIs and file formats may change during early development.
+> **Project status — 0.1 Alpha:** the mathematical and application foundations, versioned `.mai` v1 project persistence, execution traces, diagnostics, and process-local model checkpoints are implemented and tested. Persisting session history, process-local checkpoints, and visualization layouts remains planned work. APIs and supported file-format behavior may evolve during the alpha series.
+
+## Alpha limitations
+
+- The native engine currently focuses on observable feed-forward networks and the activations documented by the project.
+- ONNX import and export support the documented dense subset, not arbitrary ONNX graphs or operators.
+- Built-in optimization currently focuses on mean squared error and stochastic gradient descent.
+- `.mai` version 1 does not persist transient training progress, session history, process-local checkpoints, annotations, or visualization layout.
+- Live model, dataset, training, and checkpoint state is process-local; separate executables do not share one running session.
+- The packaged application is currently verified for Windows x64. Other platforms and solution configurations are not release targets yet.
+- Alpha APIs and workflows can change; preserve important interoperable models through ONNX exports where supported.
 
 Official releases are published at [www.nonop.biz](https://www.nonop.biz). The corresponding source code is maintained in this repository.
 

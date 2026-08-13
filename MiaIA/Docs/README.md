@@ -2,7 +2,7 @@
 
 MiaIA is an Interactive Development Environment for Artificial Intelligence. Its purpose is not to compete with large training frameworks on throughput. Its purpose is to make a neural network observable: users should be able to build a model, execute it, inspect its state, evaluate samples, follow gradients, and eventually control training step by step.
 
-The project is currently in its foundation stage. The C++ engine, public SDK facade, shared command processor, terminal and Unreal command consoles, test harness, ONNX interchange, CSV dataset pipeline, versioned `.mai` project persistence, fixed-model dataset evaluation, immutable forward execution and backward gradient-flow tracing with graphical Studio playback, non-mutating gradient inspection, phase-by-phase SGD debugging, controlled sessions, background pause/resume, navigable training history, interactive 2D and first runtime 3D topology views, renderer-neutral Studio application foundation, shared Unreal editor/standalone runtime UI, and verified Win64 packaging workflow are implemented. The complete production visualization experience remains planned work.
+The project is currently at **0.1 Alpha**. The C++ engine, public SDK facade, shared command processor, terminal and Unreal command consoles, test harness, ONNX interchange, CSV dataset pipeline, versioned `.mai` project persistence, fixed-model dataset evaluation, immutable forward execution and backward gradient-flow tracing with graphical Studio playback, non-mutating gradient inspection, process-local model checkpoints, phase-by-phase SGD debugging, controlled sessions, background pause/resume, navigable training history, interactive 2D and first runtime 3D topology views, renderer-neutral Studio application foundation, shared Unreal editor/standalone runtime UI, and verified Win64 packaging workflow are implemented. The complete production visualization experience remains planned work.
 
 ## Documentation map
 
@@ -32,6 +32,7 @@ The project is currently in its foundation stage. The C++ engine, public SDK fac
 | Datasets | Numeric CSV import with explicit input and target column counts |
 | Evaluation | Per-sample details and fixed-model mean squared error across a complete dataset |
 | Differentiation | Per-neuron, per-bias, and per-connection gradients without parameter updates |
+| Checkpoints | Process-local capture, listing, inspection, comparison, transactional restore, removal, and clearing |
 | Optimization | Standalone and session-attached phase debugging, atomic SGD, ordered epochs, history, bounded runs, and background control |
 | Clients | Shared CLI hosted by Console.exe and Unreal, Blueprint nodes, a shared editor/standalone topology panel, and renderer-neutral StudioCore |
 | Verification | Named Debug- and Release-capable C++ test harness, including numerical gradient checks |
@@ -74,6 +75,10 @@ The primary development configuration is x64. The solution also contains x86 con
 For a complete console session, see the [Console guide](Console/Console.md).
 
 The Unreal-based standalone application is packaged through `IDE/Unreal/Build/Package-Windows.ps1`. A Shipping archive can then be converted into an unsigned Microsoft Store MSIX through `IDE/Unreal/Build/Package-StoreMsix.ps1`. See the [Unreal integration guide](Unreal/Unreal.md#packaged-windows-application) for the complete build, Store, and verification workflows.
+
+## Alpha limitations
+
+The 0.1 Alpha release focuses on observable feed-forward networks, the documented dense ONNX subset, numeric CSV datasets, mean squared error, and stochastic gradient descent. `.mai` version 1 deliberately excludes transient training progress, session history, process-local checkpoints, annotations, and visualization layout. Runtime state belongs to one SDK context and is not shared between separate processes. Windows x64 is the currently verified packaged target; alpha APIs and workflows may evolve before a stable release.
 
 ## Architectural direction
 

@@ -43,10 +43,10 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass `
     -OutputDirectory "D:\MiaIA-Releases\Store-1.0.0.0"
 ```
 
-The Store package version is independent from the early-alpha label shown to
-users. It has four numeric parts, its first part cannot be zero, and its fourth
-part must be zero because Microsoft Store reserves that part. Every later
-submission must use a higher version, for example `1.0.1.0`.
+The Store package version is independent from the user-facing **MiaIA Studio
+0.1 Alpha** version. It has four numeric parts, its first part cannot be zero,
+and its fourth part must be zero because Microsoft Store reserves that part.
+Every later submission must use a higher version, for example `1.0.1.0`.
 
 The script copies the Shipping runtime into an MSIX layout while omitting the
 Unreal bootstrap launcher, prerequisite installers, symbols, archive manifests,
@@ -87,9 +87,9 @@ the application launches and closes cleanly, model operations work, external
 datasets can be opened, user-selected files can be saved outside the install
 directory, and Help/About show the expected licensing information.
 
-## First Partner Center submission
+## First Alpha Partner Center submission
 
-For the early-alpha release, prefer **direct link** visibility so the package is
+For the 0.1 Alpha release, prefer **direct link** visibility so the package is
 available from the MiaIA page on `www.nonop.biz` without being discoverable in
 Store search. Keep the price free. Complete the listing, age rating, privacy and
 support fields, upload screenshots and the generated `.msix`, then submit it for

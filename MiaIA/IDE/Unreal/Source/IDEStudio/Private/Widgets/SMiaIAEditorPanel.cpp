@@ -8231,7 +8231,7 @@ FReply SMiaIAEditorPanel::HandleAbout()
                 "Licensed under the Mozilla Public License 2.0.\n\n"
                 "MiaIA Studio uses Unreal\u00AE Engine. Unreal\u00AE is a trademark or registered trademark of Epic Games, Inc. in the United States of America and elsewhere.\n"
                 "Unreal\u00AE Engine, Copyright 1998-2026, Epic Games, Inc. All rights reserved.\n\n"
-                "Early development build."),
+                "Release channel: 0.1 Alpha."),
             FText::FromString(version)));
     return FReply::Handled();
 }
