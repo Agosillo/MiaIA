@@ -25,6 +25,10 @@ namespace
         TEXT("CustomNegativeContribution");
     constexpr TCHAR CustomSelectionKey[] = TEXT("CustomSelection");
     constexpr TCHAR CustomDebugKey[] = TEXT("CustomDebug");
+    constexpr TCHAR CustomDiagnosticInactiveKey[] = TEXT("CustomDiagnosticInactive");
+    constexpr TCHAR CustomDiagnosticSaturatedKey[] = TEXT("CustomDiagnosticSaturated");
+    constexpr TCHAR CustomDiagnosticVanishingKey[] = TEXT("CustomDiagnosticVanishing");
+    constexpr TCHAR CustomDiagnosticExplodingKey[] = TEXT("CustomDiagnosticExploding");
 
     EMiaIAVisualizationPalettePreset CurrentVisualizationPreset =
         EMiaIAVisualizationPalettePreset::MiaIAClassic;
@@ -71,7 +75,11 @@ namespace
             Palette.PositiveWeight,
             Palette.NegativeWeight,
             Palette.Selection,
-            Palette.Debug
+            Palette.Debug,
+            FLinearColor(0.25f, 0.55f, 0.95f, 1.0f),
+            FLinearColor(0.95f, 0.55f, 0.12f, 1.0f),
+            FLinearColor(0.65f, 0.35f, 0.95f, 1.0f),
+            FLinearColor(0.95f, 0.15f, 0.12f, 1.0f)
         };
     }
 
@@ -274,7 +282,11 @@ FMiaIAEditorTheme::LoadCustomVisualizationPalette(
             CustomNegativeContributionKey,
             defaults.NegativeWeight),
         LoadColor(CustomSelectionKey, defaults.Selection),
-        LoadColor(CustomDebugKey, defaults.Debug)
+        LoadColor(CustomDebugKey, defaults.Debug),
+        LoadColor(CustomDiagnosticInactiveKey, defaults.DiagnosticInactive),
+        LoadColor(CustomDiagnosticSaturatedKey, defaults.DiagnosticSaturated),
+        LoadColor(CustomDiagnosticVanishingKey, defaults.DiagnosticVanishing),
+        LoadColor(CustomDiagnosticExplodingKey, defaults.DiagnosticExploding)
     };
 }
 
@@ -287,6 +299,10 @@ void FMiaIAEditorTheme::SaveCustomVisualizationPalette(
     SaveColor(CustomNegativeContributionKey, Palette.NegativeWeight);
     SaveColor(CustomSelectionKey, Palette.Selection);
     SaveColor(CustomDebugKey, Palette.Debug);
+    SaveColor(CustomDiagnosticInactiveKey, Palette.DiagnosticInactive);
+    SaveColor(CustomDiagnosticSaturatedKey, Palette.DiagnosticSaturated);
+    SaveColor(CustomDiagnosticVanishingKey, Palette.DiagnosticVanishing);
+    SaveColor(CustomDiagnosticExplodingKey, Palette.DiagnosticExploding);
 
     if (GConfig)
     {
@@ -326,7 +342,11 @@ FMiaIAEditorTheme::VisualizationPaletteForPreset(
             FLinearColor(0.00f, 0.78f, 1.00f, 1.0f),
             FLinearColor(1.00f, 0.15f, 0.45f, 1.0f),
             FLinearColor(1.00f, 0.85f, 0.00f, 1.0f),
-            FLinearColor(0.68f, 0.38f, 1.00f, 1.0f)
+            FLinearColor(0.68f, 0.38f, 1.00f, 1.0f),
+            FLinearColor(0.15f, 0.65f, 1.00f, 1.0f),
+            FLinearColor(1.00f, 0.62f, 0.00f, 1.0f),
+            FLinearColor(0.72f, 0.42f, 1.00f, 1.0f),
+            FLinearColor(1.00f, 0.10f, 0.18f, 1.0f)
         };
     case EMiaIAVisualizationPalettePreset::ColorBlindSafe:
         return {
@@ -335,7 +355,11 @@ FMiaIAEditorTheme::VisualizationPaletteForPreset(
             FLinearColor(0.34f, 0.71f, 0.91f, 1.0f),
             FLinearColor(0.84f, 0.37f, 0.00f, 1.0f),
             FLinearColor(0.94f, 0.89f, 0.26f, 1.0f),
-            FLinearColor(0.80f, 0.47f, 0.65f, 1.0f)
+            FLinearColor(0.80f, 0.47f, 0.65f, 1.0f),
+            FLinearColor(0.34f, 0.71f, 0.91f, 1.0f),
+            FLinearColor(0.90f, 0.62f, 0.00f, 1.0f),
+            FLinearColor(0.80f, 0.47f, 0.65f, 1.0f),
+            FLinearColor(0.84f, 0.37f, 0.00f, 1.0f)
         };
     case EMiaIAVisualizationPalettePreset::Monochrome:
         return {
@@ -344,7 +368,11 @@ FMiaIAEditorTheme::VisualizationPaletteForPreset(
             FLinearColor(0.68f, 0.68f, 0.68f, 1.0f),
             FLinearColor(0.44f, 0.44f, 0.44f, 1.0f),
             FLinearColor(1.00f, 1.00f, 1.00f, 1.0f),
-            FLinearColor(0.86f, 0.86f, 0.86f, 1.0f)
+            FLinearColor(0.86f, 0.86f, 0.86f, 1.0f),
+            FLinearColor(0.48f, 0.48f, 0.48f, 1.0f),
+            FLinearColor(0.62f, 0.62f, 0.62f, 1.0f),
+            FLinearColor(0.76f, 0.76f, 0.76f, 1.0f),
+            FLinearColor(0.94f, 0.94f, 0.94f, 1.0f)
         };
     case EMiaIAVisualizationPalettePreset::Custom:
         return CustomPalette;
@@ -392,6 +420,14 @@ FText FMiaIAEditorTheme::VisualizationColorRoleDisplayName(
             "Negative contribution");
     case EMiaIAVisualizationColorRole::Selection:
         return LOCTEXT("SelectionColor", "Selection");
+    case EMiaIAVisualizationColorRole::DiagnosticInactive:
+        return LOCTEXT("DiagnosticInactiveColor", "Diagnostic: inactive");
+    case EMiaIAVisualizationColorRole::DiagnosticSaturated:
+        return LOCTEXT("DiagnosticSaturatedColor", "Diagnostic: saturated");
+    case EMiaIAVisualizationColorRole::DiagnosticVanishing:
+        return LOCTEXT("DiagnosticVanishingColor", "Diagnostic: vanishing gradient");
+    case EMiaIAVisualizationColorRole::DiagnosticExploding:
+        return LOCTEXT("DiagnosticExplodingColor", "Diagnostic: exploding gradient");
     case EMiaIAVisualizationColorRole::Debug:
     default:
         return LOCTEXT("DebugColor", "Debug / cursor");

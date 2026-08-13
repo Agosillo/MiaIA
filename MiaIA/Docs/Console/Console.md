@@ -63,6 +63,7 @@ dataset inspect 0
 dataset evaluate 0 mse
 dataset evaluate all mse
 dataset gradients 0 mse
+dataset diagnose
 train step 0 0.01 mse
 train debug start 0 0.01 mse
 train debug next
@@ -634,6 +635,37 @@ It also prints `dLoss/dWeight` for every connection.
 
 This command does **not** train the network. Weights and biases remain unchanged. The separation is intentional: MiaIA treats gradients as inspectable debugging data before an optimizer is allowed to apply them.
 
+### `dataset diagnose`
+
+```text
+dataset diagnose [sample-limit]
+    [--inactive-magnitude <value>] [--inactive-ratio <value>]
+    [--saturation-margin <value>] [--saturation-ratio <value>]
+    [--vanishing-magnitude <value>] [--vanishing-ratio <value>]
+    [--exploding-magnitude <value>] [--exploding-ratio <value>]
+    [--max-items <count>]
+```
+
+Analyzes activation and gradient health over a fixed dataset without training or publishing temporary activations. The network and dataset dimensions must match. Samples are processed in their existing deterministic order; omit `sample-limit`, or use `0`, to inspect all samples.
+
+The command aggregates every neuron's activation and gradient magnitude and every connection's weight-gradient magnitude. It then reports candidates in four categories:
+
+- **inactive**: activation magnitude remains at or below the configured threshold for the required share of samples;
+- **saturated**: a non-input Sigmoid or Tanh activation remains within the configured margin of its range boundary for the required share of samples;
+- **vanishing gradient**: gradient magnitude remains at or below its threshold for the required share of samples;
+- **exploding gradient**: gradient magnitude reaches or exceeds its threshold for the required share of samples.
+
+ReLU and Linear neurons are not classified as saturated by this diagnostic. Input neurons can be reported as inactive input features, but they are not treated as trainable biases. Neuron gradients use `dL/dz` for non-input neurons and `dL/da` for input neurons. Connection diagnostics use `dL/dWeight`.
+
+Defaults are deliberately conservative: activation magnitude `1e-6` over `95%` of samples, saturation margin `0.01` over `95%`, vanishing magnitude `1e-8` over `95%`, and exploding magnitude `100` over `5%`. `--max-items` bounds only the printed findings; it does not reduce the analysis. For example:
+
+```text
+dataset diagnose 500 --inactive-ratio 0.99 --max-items 40
+dataset diagnose --vanishing-magnitude 1e-7 --exploding-magnitude 50
+```
+
+The result is evidence about the selected dataset and thresholds, not an automatic proof that a neuron is permanently dead. A different input distribution can produce different classifications.
+
 ## Training
 
 ### `train step`
@@ -931,6 +963,7 @@ train session status
 train session pause
 train session cancel
 dataset gradients 0 mse
+dataset diagnose --max-items 20
 train debug start 0 0.01 mse
 train debug next
 train debug next
@@ -950,20 +983,21 @@ This sequence demonstrates the difference between stages:
 4. `dataset evaluate 0` performs apply plus forward and calculates one sample loss;
 5. `dataset evaluate all` measures the entire dataset without changing public network state;
 6. `dataset gradients` performs evaluation plus backward differentiation;
-7. `train debug` exposes the forward, backward, update, verification, and commit phases of one candidate step;
-8. `train step` runs those same phases atomically for one selected sample;
-9. `train epoch` performs the same update once for every sample in dataset order;
-10. the final `dataset evaluate all` measures the trained fixed model for comparison;
-11. `train session start` creates a paused multi-epoch schedule;
-12. `train session next` performs one inspectable update;
-13. `train session status` reports the unchanged cursor;
-14. `train session run 1` executes one additional synchronous step;
-15. `train session history` lists the retained updates;
-16. `train session inspect 0` opens one complete mathematical step;
-17. `train session compare 0 2` compares two retained mathematical steps;
-18. `train session cancel` stops future steps without reverting completed updates;
-19. `train session resume` starts non-blocking background execution;
-20. `train session pause` joins the worker at the next atomic step boundary.
+7. `dataset diagnose` aggregates activation and gradient evidence across the fixed dataset;
+8. `train debug` exposes the forward, backward, update, verification, and commit phases of one candidate step;
+9. `train step` runs those same phases atomically for one selected sample;
+10. `train epoch` performs the same update once for every sample in dataset order;
+11. the final `dataset evaluate all` measures the trained fixed model for comparison;
+12. `train session start` creates a paused multi-epoch schedule;
+13. `train session next` performs one inspectable update;
+14. `train session status` reports the unchanged cursor;
+15. `train session run 1` executes one additional synchronous step;
+16. `train session history` lists the retained updates;
+17. `train session inspect 0` opens one complete mathematical step;
+18. `train session compare 0 2` compares two retained mathematical steps;
+19. `train session cancel` stops future steps without reverting completed updates;
+20. `train session resume` starts non-blocking background execution;
+21. `train session pause` joins the worker at the next atomic step boundary.
 
 ## Common failures
 

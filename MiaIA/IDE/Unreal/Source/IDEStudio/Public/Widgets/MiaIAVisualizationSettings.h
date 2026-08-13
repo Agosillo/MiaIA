@@ -9,6 +9,15 @@ enum class EMiaIAConnectionDisplayMode : uint8
     Selected
 };
 
+enum class EMiaIASignalHealthVisualState : uint8
+{
+    Inactive,
+    Saturated,
+    VanishingGradient,
+    ExplodingGradient,
+    Mixed
+};
+
 struct FMiaIAVisualizationSettings
 {
     MiaIA::Studio::StudioLayoutPreferences Layout;

@@ -33,7 +33,7 @@ Core contains the stable representation of data:
 - `Network`, `Layer`, `Neuron`, and `Connection`;
 - `Dataset` and `Sample`;
 - activation primitives;
-- public snapshots for networks, focused element relationships, forward and backward traces, datasets, evaluations, and gradients.
+- public snapshots for networks, focused element relationships, forward and backward traces, datasets, evaluations, gradients, and dataset-wide signal-health diagnostics.
 
 Core structures describe state. They do not import files, run training commands, or manage a user interface.
 
@@ -57,6 +57,7 @@ Engine owns operations and mathematical behavior. Its current responsibilities a
 | `Data` | Import, inspect, and apply CSV dataset samples |
 | `Evaluation` | Calculate predictions, errors, loss, and loss derivatives |
 | `Differentiation` | Run backward propagation and produce gradient snapshots and immutable gradient-flow traces |
+| `Analysis` | Aggregate activation, saturation, and gradient-health evidence over a fixed dataset |
 | `Optimization` | Validate and apply explicit optimizer updates |
 | `Training` | Coordinate phased, atomic, epoch, and session training flows |
 
@@ -64,7 +65,7 @@ This separation allows a mathematical subsystem to evolve without requiring clie
 
 ### SDK
 
-`MiaIAClient` is the public facade used by clients. It exposes network creation and editing, complete and focused inspection snapshots, immutable forward execution and backward gradient-flow traces, ONNX interchange, versioned `.mai` project persistence, datasets, forward execution, sample and full-dataset evaluation, gradient evaluation, atomic sample training, and an ordered dataset epoch.
+`MiaIAClient` is the public facade used by clients. It exposes network creation and editing, complete and focused inspection snapshots, immutable forward execution and backward gradient-flow traces, dataset-wide signal-health diagnostics, ONNX interchange, versioned `.mai` project persistence, datasets, forward execution, sample and full-dataset evaluation, gradient evaluation, atomic sample training, and an ordered dataset epoch.
 
 The current SDK owns one process-local network and one process-local dataset through its internal client state. This is sufficient for the present console and integration tests. Multiple sessions, explicit contexts, concurrency, and persisted workspace state are future concerns and should not be assumed to exist today.
 
@@ -205,6 +206,12 @@ Sample evaluation
 Backward propagation currently calculates gradients only. It deliberately does not apply them. This keeps observation separate from optimization and makes gradients available to Console, Unreal, Blueprint wrappers, and future debugging tools.
 
 `NetworkInspector::TraceBackward` evaluates a private network copy, delegates differentiation to `BackwardEngine`, and combines captured activations with neuron, bias, weight, and per-connection source-gradient contributions. It publishes the complete `BackwardTraceSnapshot` only after every lookup and finite-value check succeeds. The SDK lock provides one coherent source network, while `trace backward` and StudioCore expose the same renderer-neutral contract without applying an optimizer or publishing temporary activations.
+
+### Dataset signal-health analysis
+
+`SignalHealthAnalyzer` repeatedly applies the immutable backward-trace boundary to a deterministic prefix, or all, of the current dataset. It aggregates activation ranges and means plus neuron and connection gradient magnitudes by stable model ID. Threshold ratios classify consistently inactive activations, Sigmoid/Tanh saturation, vanishing gradients, and exploding gradients without applying an optimizer or publishing the temporary forward activations.
+
+The analyzer deliberately returns evidence rather than changing the model. Its configuration and complete aggregate values are copied into `SignalHealthSnapshot`, allowing the CLI, StudioCore, and graphical frontends to filter the same result without recomputing mathematical rules. A failed sample, invalid threshold, incompatible dimension, non-finite value, or unsupported loss leaves the caller's previous result unchanged. `MiaIAClient::DiagnoseDataset` executes the operation under the ordinary SDK state lock, so the network and dataset form one coherent read-only source.
 
 ### Atomic SGD training step
 

@@ -7,6 +7,7 @@
 #include "../../Engine/Evaluation/SampleEvaluator.h"
 #include "../../Engine/Evaluation/DatasetEvaluator.h"
 #include "../../Engine/Differentiation/SampleGradientEvaluator.h"
+#include "../../Engine/Analysis/SignalHealthAnalyzer.h"
 #include "../../Core/Model/Dataset.h"
 
 namespace MiaIA::SDK
@@ -127,6 +128,20 @@ namespace MiaIA::SDK
             index,
             Detail::ClientNetwork(),
             type,
+            result);
+    }
+
+    bool MiaIAClient::DiagnoseDataset(
+        Core::LossType type,
+        const Core::SignalHealthConfiguration& configuration,
+        Core::SignalHealthSnapshot& result)
+    {
+        const std::scoped_lock lock(Detail::ClientMutex());
+        return Engine::SignalHealthAnalyzer::Analyze(
+            Detail::ClientDataset(),
+            Detail::ClientNetwork(),
+            type,
+            configuration,
             result);
     }
 }

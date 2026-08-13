@@ -51,6 +51,10 @@ public:
         const TMap<int64, double>& InConnectionGradients,
         const TSet<int64>& InPlaybackConnections,
         bool bInPlaybackActive);
+    void SetSignalHealthOverlay(
+        const TMap<int64, EMiaIASignalHealthVisualState>& InNeurons,
+        const TMap<int64, EMiaIASignalHealthVisualState>& InConnections,
+        bool bInActive);
     void SetSelectedNeurons(
         const TSet<int64>& InNeuronIds,
         int64 InPrimaryNeuronId);
@@ -151,6 +155,8 @@ private:
     FLinearColor SignedConnectionColor(
         double Value,
         double Maximum) const;
+    FLinearColor SignalHealthColor(
+        EMiaIASignalHealthVisualState State) const;
     double NeuronMetric(const FMiaIADebugNeuronTelemetry& Telemetry) const;
     double ConnectionMetric(
         const FMiaIADebugConnectionTelemetry& Telemetry) const;
@@ -170,6 +176,8 @@ private:
     TMap<int64, double> BackwardTraceNeuronGradients;
     TMap<int64, double> BackwardTraceConnectionGradients;
     TSet<int64> BackwardTracePlaybackConnections;
+    TMap<int64, EMiaIASignalHealthVisualState> SignalHealthNeurons;
+    TMap<int64, EMiaIASignalHealthVisualState> SignalHealthConnections;
     TMap<int64, FVector> ManualNodePositions;
     TArray<FNodeRenderData> RenderedNodes;
     TArray<FConnectionRenderData> RenderedConnections;
@@ -208,6 +216,7 @@ private:
     int64 DraggedNeuronId{-1};
     int32 SelectionBlinkFrame{-1};
     bool bCompactMode{};
+    bool bSignalHealthActive{};
     bool bNetworkAggregateMode{};
     bool bForwardTracePlaybackActive{};
     bool bBackwardTracePlaybackActive{};

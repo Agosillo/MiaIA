@@ -63,6 +63,7 @@ The roadmap is organized by dependency rather than by a fixed release date. Math
 - paged incoming/outgoing relationship traversal with ID or weight ordering, absolute-weight filtering, connection selection, and cross-layer neuron navigation;
 - selected-connection inspection with contextual source and target neuron snapshots across SDK, CLI, StudioCore, Blueprint, 2D, and 3D clients.
 - immutable graphical forward traces with per-neuron values, paged exact contributions, and deterministic layer-by-layer 2D/3D playback controls;
+- immutable dataset-wide signal-health diagnostics for inactive and saturated neurons plus vanishing and exploding neuron/connection gradients, shared by Engine, SDK, CLI, StudioCore, and 2D/3D Studio views;
 - engine-owned training breakpoints for debug phases, neuron activations and gradients, and connection updates;
 - safe automatic worker pause with structured trigger telemetry;
 - shared CLI, SDK, Blueprint, and MiaIA Studio breakpoint authoring.
@@ -118,9 +119,8 @@ Backward differentiation now has the equivalent immutable gradient-flow trace. E
 The debugging experience should next evolve toward:
 
 - extend retained history with an explicit bounded policy for hidden-neuron activations;
-- identify inactive or consistently saturated neurons;
 - preserve selected checkpoints for comparison;
-- provide structured diagnostics rather than only Boolean failure results.
+- compare diagnostic snapshots across datasets and checkpoints.
 
 ## Persistence and interchange
 
@@ -173,7 +173,7 @@ Longer-term analysis features may include:
 
 - side-by-side model comparison;
 - activation and gradient distributions;
-- dead-neuron and saturation analysis;
+- richer distributions and temporal trends built on the implemented signal-health aggregates;
 - weight-change heat maps;
 - sample-specific execution traces;
 - checkpoint comparison;

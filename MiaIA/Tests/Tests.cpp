@@ -1836,6 +1836,145 @@ int main()
 
     });
 
+    runner.Run("Dataset signal health diagnostics", [&]()
+    {
+    const std::filesystem::path diagnosticsPath =
+        std::filesystem::temp_directory_path() /
+        "miaia_signal_health_diagnostics_test.csv";
+
+    {
+        std::ofstream output(diagnosticsPath);
+        assert(output.good());
+        output
+            << "x,target\n"
+            << "0,0\n"
+            << "0,0\n"
+            << "0,0\n";
+    }
+
+    MiaIAClient::ClearDataset();
+    MiaIAClient::ClearNetwork();
+    assert(MiaIAClient::ImportCsvDataset(
+        diagnosticsPath.string(),
+        1,
+        1));
+    assert(MiaIAClient::CreateDenseNetwork(1, 1, 0, 1));
+    assert(MiaIAClient::SetLayerActivation(
+        1,
+        MiaIA::Core::ActivationType::Linear));
+    assert(MiaIAClient::SetConnectionWeight(1, 0.0));
+    assert(MiaIAClient::SetNeuronBias(1002, 0.0));
+
+    const auto beforeDiagnostics = MiaIAClient::GetSnapshot();
+    MiaIA::Core::SignalHealthConfiguration configuration;
+    configuration.MaximumSamples = 2;
+    MiaIA::Core::SignalHealthSnapshot diagnostics;
+
+    assert(MiaIAClient::DiagnoseDataset(
+        MiaIA::Core::LossType::MeanSquaredError,
+        configuration,
+        diagnostics));
+    assert(diagnostics.DatasetSampleCount == 3);
+    assert(diagnostics.AnalyzedSampleCount == 2);
+    assert(diagnostics.Neurons.size() == 2);
+    assert(diagnostics.Connections.size() == 1);
+    assert(diagnostics.InactiveNeuronCount == 2);
+    assert(diagnostics.SaturatedNeuronCount == 0);
+    assert(diagnostics.VanishingGradientNeuronCount == 2);
+    assert(diagnostics.ExplodingGradientNeuronCount == 0);
+    assert(diagnostics.VanishingGradientConnectionCount == 1);
+    assert(diagnostics.HealthyNeuronCount == 0);
+    assert(diagnostics.Neurons[0].ConsistentlyInactive);
+    assert(diagnostics.Neurons[0].VanishingGradient);
+    assert(diagnostics.Neurons[0].InactiveSampleRatio == 1.0);
+    assert(diagnostics.Neurons[1].MeanAbsoluteActivation == 0.0);
+    assert(diagnostics.Connections[0].MeanAbsoluteGradient == 0.0);
+
+    const auto afterDiagnostics = MiaIAClient::GetSnapshot();
+    assert(afterDiagnostics.Connections[0].Weight ==
+        beforeDiagnostics.Connections[0].Weight);
+    assert(afterDiagnostics.Layers[0].Neurons[0].Activation ==
+        beforeDiagnostics.Layers[0].Neurons[0].Activation);
+    assert(afterDiagnostics.Layers[1].Neurons[0].Activation ==
+        beforeDiagnostics.Layers[1].Neurons[0].Activation);
+
+    {
+        std::ofstream output(diagnosticsPath);
+        assert(output.good());
+        output
+            << "x,target\n"
+            << "1,0\n";
+    }
+    assert(MiaIAClient::ImportCsvDataset(
+        diagnosticsPath.string(),
+        1,
+        1));
+
+    assert(MiaIAClient::SetLayerActivation(
+        1,
+        MiaIA::Core::ActivationType::Sigmoid));
+    assert(MiaIAClient::SetConnectionWeight(1, 1000.0));
+    MiaIA::Core::SignalHealthSnapshot saturationDiagnostics;
+    assert(MiaIAClient::DiagnoseDataset(
+        MiaIA::Core::LossType::MeanSquaredError,
+        {},
+        saturationDiagnostics));
+    assert(saturationDiagnostics.SaturatedNeuronCount == 1);
+    assert(!saturationDiagnostics.Neurons[0].ConsistentlySaturated);
+    assert(saturationDiagnostics.Neurons[1].ConsistentlySaturated);
+
+    assert(MiaIAClient::SetLayerActivation(
+        1,
+        MiaIA::Core::ActivationType::Linear));
+
+    MiaIA::Core::SignalHealthSnapshot explodingDiagnostics;
+    assert(MiaIAClient::DiagnoseDataset(
+        MiaIA::Core::LossType::MeanSquaredError,
+        {},
+        explodingDiagnostics));
+    assert(explodingDiagnostics.ExplodingGradientNeuronCount == 2);
+    assert(explodingDiagnostics.ExplodingGradientConnectionCount == 1);
+    assert(explodingDiagnostics.Neurons[0].ExplodingGradient);
+    assert(explodingDiagnostics.Neurons[1].ExplodingGradient);
+    assert(explodingDiagnostics.Connections[0].ExplodingGradient);
+
+    MiaIA::Studio::StudioController diagnosticsController;
+    assert(diagnosticsController.RunSignalHealthDiagnostics({}));
+    assert(diagnosticsController.State().SignalHealth.Active);
+    assert(diagnosticsController.State().SignalHealth.Snapshot.
+        AnalyzedSampleCount == 1);
+    diagnosticsController.SetSignalHealthFilter(
+        MiaIA::Studio::StudioSignalHealthFilter::ExplodingGradient);
+    assert(diagnosticsController.State().SignalHealth.Filter ==
+        MiaIA::Studio::StudioSignalHealthFilter::ExplodingGradient);
+
+    const auto diagnosticCommand =
+        MiaIA::CLI::MiaIACommandProcessor::Execute(
+            "dataset diagnose 1 --max-items 5");
+    assert(diagnosticCommand.Output.find("Signal Health Diagnostics") !=
+        std::string::npos);
+    assert(diagnosticCommand.Output.find("exploding") !=
+        std::string::npos);
+    diagnosticsController.ClearSignalHealthDiagnostics();
+    assert(!diagnosticsController.State().SignalHealth.Active);
+    assert(diagnosticsController.State().SignalHealth.Filter ==
+        MiaIA::Studio::StudioSignalHealthFilter::ExplodingGradient);
+
+    MiaIA::Core::SignalHealthSnapshot preserved;
+    preserved.AnalyzedSampleCount = 77;
+    configuration.ExplodingGradientMagnitude = 0.0;
+    assert(!MiaIAClient::DiagnoseDataset(
+        MiaIA::Core::LossType::MeanSquaredError,
+        configuration,
+        preserved));
+    assert(preserved.AnalyzedSampleCount == 77);
+
+    MiaIAClient::ClearDataset();
+    MiaIAClient::ClearNetwork();
+    std::filesystem::remove(diagnosticsPath);
+
+    });
+
     runner.Run("Dataset sample gradients", [&]()
     {
     const std::filesystem::path analyticalPath =

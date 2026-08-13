@@ -60,6 +60,14 @@ public:
     static bool SetBackwardTraceFrameDuration(
         FMiaIAInstanceHandle Instance,
         double DurationSeconds);
+    static bool RunSignalHealthDiagnostics(
+        FMiaIAInstanceHandle Instance,
+        const MiaIA::Core::SignalHealthConfiguration& Configuration);
+    static void ClearSignalHealthDiagnostics(
+        FMiaIAInstanceHandle Instance);
+    static void SetSignalHealthFilter(
+        FMiaIAInstanceHandle Instance,
+        MiaIA::Studio::StudioSignalHealthFilter Filter);
     static void RefreshTrainingTimeline(FMiaIAInstanceHandle Instance);
     static bool SelectTrainingTimelineStep(
         FMiaIAInstanceHandle Instance,
@@ -69,6 +77,8 @@ public:
     static MiaIA::Studio::StudioForwardTraceState ForwardTraceState(
         FMiaIAInstanceHandle Instance);
     static MiaIA::Studio::StudioBackwardTraceState BackwardTraceState(
+        FMiaIAInstanceHandle Instance);
+    static MiaIA::Studio::StudioSignalHealthState SignalHealthState(
         FMiaIAInstanceHandle Instance);
     static MiaIA::Studio::StudioTrainingTimelineState TrainingTimelineState(
         FMiaIAInstanceHandle Instance);

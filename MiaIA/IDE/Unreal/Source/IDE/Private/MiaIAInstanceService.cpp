@@ -274,6 +274,34 @@ bool FMiaIAInstanceService::SetBackwardTraceFrameDuration(
         controller->SetBackwardTraceFrameDuration(DurationSeconds);
 }
 
+bool FMiaIAInstanceService::RunSignalHealthDiagnostics(
+    FMiaIAInstanceHandle Instance,
+    const MiaIA::Core::SignalHealthConfiguration& Configuration)
+{
+    MiaIA::Studio::StudioController* controller = Resolve(Instance);
+    return controller &&
+        controller->RunSignalHealthDiagnostics(Configuration);
+}
+
+void FMiaIAInstanceService::ClearSignalHealthDiagnostics(
+    FMiaIAInstanceHandle Instance)
+{
+    if (MiaIA::Studio::StudioController* controller = Resolve(Instance))
+    {
+        controller->ClearSignalHealthDiagnostics();
+    }
+}
+
+void FMiaIAInstanceService::SetSignalHealthFilter(
+    FMiaIAInstanceHandle Instance,
+    MiaIA::Studio::StudioSignalHealthFilter Filter)
+{
+    if (MiaIA::Studio::StudioController* controller = Resolve(Instance))
+    {
+        controller->SetSignalHealthFilter(Filter);
+    }
+}
+
 void FMiaIAInstanceService::RefreshTrainingTimeline(
     FMiaIAInstanceHandle Instance)
 {
@@ -317,6 +345,15 @@ FMiaIAInstanceService::BackwardTraceState(FMiaIAInstanceHandle Instance)
     return controller
         ? controller->State().BackwardTrace
         : MiaIA::Studio::StudioBackwardTraceState{};
+}
+
+MiaIA::Studio::StudioSignalHealthState
+FMiaIAInstanceService::SignalHealthState(FMiaIAInstanceHandle Instance)
+{
+    const MiaIA::Studio::StudioController* controller = Resolve(Instance);
+    return controller
+        ? controller->State().SignalHealth
+        : MiaIA::Studio::StudioSignalHealthState{};
 }
 
 MiaIA::Studio::StudioTrainingTimelineState

@@ -59,9 +59,11 @@ private:
     void RebuildBreakpoints();
     void RebuildForwardTrace();
     void RebuildBackwardTrace();
+    void RebuildSignalHealth();
     void RebuildTrainingTimeline();
     void ApplyForwardTraceOverlay();
     void ApplyBackwardTraceOverlay();
+    void ApplySignalHealthOverlay();
     bool ExpandExplorerForNeuron(int64 NeuronId);
     bool ExpandExplorerForNeurons(const TSet<int64>& NeuronIds);
     FReply HandleToggleExplorerLayer(int64 LayerId);
@@ -193,6 +195,11 @@ private:
     FReply HandleNextBackwardTraceFrame();
     TSharedRef<SWidget> BuildBackwardTraceSpeedMenu();
     FReply SelectBackwardTraceSpeed(double SpeedMultiplier);
+    FReply HandleRunSignalHealthDiagnostics();
+    FReply HandleClearSignalHealthDiagnostics();
+    TSharedRef<SWidget> BuildSignalHealthFilterMenu();
+    FReply SelectSignalHealthFilter(
+        MiaIA::Studio::StudioSignalHealthFilter Filter);
     FReply HandleSelectTrainingTimelineStep(uint64 StepIndex);
     FReply HandleClearTrainingTimelineView();
     void ShowDialog(const FText& Title, const FText& Content);
@@ -247,6 +254,9 @@ private:
     FText BackwardTraceSelectionText() const;
     FText BackwardTracePlayPauseText() const;
     FText BackwardTraceSpeedText() const;
+    FText SignalHealthSummaryText() const;
+    FText SignalHealthFilterText() const;
+    FText SignalHealthSelectionText() const;
     FText TrainingTimelineSummaryText() const;
     FText TrainingTimelineDetailText() const;
     FText SelectedConnectionEndpointText(bool bToNeuron) const;
@@ -362,6 +372,7 @@ private:
     double PeriodicRefreshElapsedSeconds{};
     FMiaIAInstanceHandle MiaIAInstance;
     MiaIA::Studio::StudioTrainingTimelineState TrainingTimeline;
+    MiaIA::Core::SignalHealthConfiguration SignalHealthConfiguration;
 
     TSharedPtr<SVerticalBox> ExplorerContent;
     TSharedPtr<SVerticalBox> RelationshipContent;
@@ -369,6 +380,7 @@ private:
     TSharedPtr<SVerticalBox> BreakpointContent;
     TSharedPtr<SVerticalBox> ForwardTraceContent;
     TSharedPtr<SVerticalBox> BackwardTraceContent;
+    TSharedPtr<SVerticalBox> SignalHealthContent;
     TSharedPtr<SVerticalBox> TrainingTimelineContent;
     TSharedPtr<SMiaIANetworkView> NetworkView;
     TSharedPtr<SMiaIA3DNetworkView> Network3DView;

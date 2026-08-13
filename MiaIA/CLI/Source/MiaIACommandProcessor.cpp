@@ -137,6 +137,7 @@ const std::vector<CommandCatalogEntry>& CommandCatalog()
         { "dataset apply", "dataset apply <sample-index>", "Apply one sample to the network input.", true },
         { "dataset evaluate", "dataset evaluate <sample-index|all> mse", "Evaluate one sample or the fixed model.", true },
         { "dataset gradients", "dataset gradients <sample-index> mse", "Calculate gradients without updating parameters.", true },
+        { "dataset diagnose", "dataset diagnose [sample-limit] [--inactive-magnitude <value>] [--inactive-ratio <value>] [--saturation-margin <value>] [--saturation-ratio <value>] [--vanishing-magnitude <value>] [--vanishing-ratio <value>] [--exploding-magnitude <value>] [--exploding-ratio <value>] [--max-items <count>]", "Analyze activation and gradient health over the fixed dataset.", true },
         { "dataset clear", "dataset clear", "Clear the current dataset.", true },
         { "train", "train <step|epoch|debug|session|breakpoint>", "Run or inspect training operations.", false },
         { "train breakpoint", "train breakpoint <action>", "Create and manage safe training breakpoints.", false },
@@ -308,6 +309,14 @@ void PrintHelp()
 
         << "  dataset gradients [index] mse\n"
         << "      Calculate gradients without changing weights or biases\n\n"
+
+        << "  dataset diagnose [sample-limit] [options]\n"
+        << "      Aggregate activation, saturation, and gradient health\n"
+        << "      over a fixed network without changing its parameters\n"
+        << "      Options: --inactive-magnitude, --inactive-ratio,\n"
+        << "      --saturation-margin, --saturation-ratio,\n"
+        << "      --vanishing-magnitude, --vanishing-ratio,\n"
+        << "      --exploding-magnitude, --exploding-ratio, --max-items\n\n"
 
         << "  dataset clear\n"
         << "      Clear the current dataset\n\n"
@@ -1149,9 +1158,17 @@ void Predict(const std::string& command)
     std::cout << "\n";
 }
 
+void HandleDatasetDiagnosticsCommand(const std::string& command);
+
 void HandleDatasetCommand(const std::string& command)
 {
     using MiaIA::SDK::MiaIAClient;
+
+    if (command.rfind("dataset diagnose", 0) == 0)
+    {
+        HandleDatasetDiagnosticsCommand(command);
+        return;
+    }
 
     if (command.rfind("dataset import", 0) == 0)
     {
@@ -1756,6 +1773,229 @@ void PrintTrainingBreakpoint(
     }
 
     std::cout << " hits " << breakpoint.HitCount << "\n";
+}
+
+void HandleDatasetDiagnosticsCommand(const std::string& command)
+{
+    using MiaIA::SDK::MiaIAClient;
+
+    if (command.rfind("dataset diagnose", 0) == 0)
+    {
+        const auto usage = []()
+        {
+            std::cout
+                << "Usage: dataset diagnose [sample-limit] "
+                << "[--inactive-magnitude <value>] "
+                << "[--inactive-ratio <value>] "
+                << "[--saturation-margin <value>] "
+                << "[--saturation-ratio <value>] "
+                << "[--vanishing-magnitude <value>] "
+                << "[--vanishing-ratio <value>] "
+                << "[--exploding-magnitude <value>] "
+                << "[--exploding-ratio <value>] "
+                << "[--max-items <count>]\n";
+        };
+        const auto parseDouble = [](const std::string& token, double& value)
+        {
+            std::stringstream stream(token);
+            return static_cast<bool>(stream >> value) &&
+                (stream >> std::ws).eof() && std::isfinite(value);
+        };
+        const auto parseSize = [](const std::string& token, std::size_t& value)
+        {
+            if (token.empty() || token.front() == '-')
+            {
+                return false;
+            }
+
+            std::stringstream stream(token);
+            return static_cast<bool>(stream >> value) &&
+                (stream >> std::ws).eof();
+        };
+
+        const std::vector<std::string> tokens = CommandTokens(command);
+        MiaIA::Core::SignalHealthConfiguration configuration;
+        std::size_t maximumItems = 25;
+        std::size_t tokenIndex = 2;
+
+        if (tokenIndex < tokens.size() &&
+            !StartsWith(tokens[tokenIndex], "--"))
+        {
+            if (!parseSize(tokens[tokenIndex], configuration.MaximumSamples))
+            {
+                usage();
+                return;
+            }
+            ++tokenIndex;
+        }
+
+        while (tokenIndex < tokens.size())
+        {
+            if (tokenIndex + 1 >= tokens.size())
+            {
+                usage();
+                return;
+            }
+
+            const std::string& option = tokens[tokenIndex++];
+            const std::string& value = tokens[tokenIndex++];
+            double* destination = nullptr;
+
+            if (option == "--inactive-magnitude")
+                destination = &configuration.InactiveActivationMagnitude;
+            else if (option == "--inactive-ratio")
+                destination = &configuration.InactiveSampleRatio;
+            else if (option == "--saturation-margin")
+                destination = &configuration.SaturationMargin;
+            else if (option == "--saturation-ratio")
+                destination = &configuration.SaturationSampleRatio;
+            else if (option == "--vanishing-magnitude")
+                destination = &configuration.VanishingGradientMagnitude;
+            else if (option == "--vanishing-ratio")
+                destination = &configuration.VanishingGradientSampleRatio;
+            else if (option == "--exploding-magnitude")
+                destination = &configuration.ExplodingGradientMagnitude;
+            else if (option == "--exploding-ratio")
+                destination = &configuration.ExplodingGradientSampleRatio;
+            else if (option == "--max-items")
+            {
+                if (!parseSize(value, maximumItems) || maximumItems == 0)
+                {
+                    usage();
+                    return;
+                }
+                continue;
+            }
+            else
+            {
+                usage();
+                return;
+            }
+
+            if (!parseDouble(value, *destination))
+            {
+                usage();
+                return;
+            }
+        }
+
+        MiaIA::Core::SignalHealthSnapshot diagnostics;
+
+        if (!MiaIAClient::DiagnoseDataset(
+            MiaIA::Core::LossType::MeanSquaredError,
+            configuration,
+            diagnostics))
+        {
+            std::cout
+                << "Dataset diagnostics failed. Check the dataset, network, "
+                << "dimensions, and threshold configuration.\n";
+            return;
+        }
+
+        std::cout
+            << "\nSignal Health Diagnostics"
+            << "\nSamples: " << diagnostics.AnalyzedSampleCount
+            << " of " << diagnostics.DatasetSampleCount
+            << "\nNeurons: " << diagnostics.Neurons.size()
+            << " | Healthy " << diagnostics.HealthyNeuronCount
+            << " | Inactive candidates " << diagnostics.InactiveNeuronCount
+            << " | Saturated candidates " << diagnostics.SaturatedNeuronCount
+            << " | Vanishing gradients "
+            << diagnostics.VanishingGradientNeuronCount
+            << " | Exploding gradients "
+            << diagnostics.ExplodingGradientNeuronCount
+            << "\nConnections: " << diagnostics.Connections.size()
+            << " | Healthy " << diagnostics.HealthyConnectionCount
+            << " | Vanishing gradients "
+            << diagnostics.VanishingGradientConnectionCount
+            << " | Exploding gradients "
+            << diagnostics.ExplodingGradientConnectionCount
+            << "\n\nFlagged Neurons\n";
+
+        std::size_t printedItems{};
+        for (const auto& neuron : diagnostics.Neurons)
+        {
+            if ((!neuron.ConsistentlyInactive &&
+                !neuron.ConsistentlySaturated &&
+                !neuron.VanishingGradient &&
+                !neuron.ExplodingGradient) ||
+                printedItems >= maximumItems)
+            {
+                continue;
+            }
+
+            std::cout
+                << "Neuron " << neuron.Id
+                << " Layer " << neuron.LayerOrder
+                << " Mean |activation| " << neuron.MeanAbsoluteActivation
+                << " Mean |gradient| " << neuron.MeanAbsoluteGradient
+                << " Max |gradient| " << neuron.MaximumAbsoluteGradient
+                << " Flags";
+            if (neuron.ConsistentlyInactive) std::cout << " inactive";
+            if (neuron.ConsistentlySaturated) std::cout << " saturated";
+            if (neuron.VanishingGradient) std::cout << " vanishing";
+            if (neuron.ExplodingGradient) std::cout << " exploding";
+            std::cout << "\n";
+            ++printedItems;
+        }
+
+        if (printedItems == 0)
+        {
+            std::cout << "None\n";
+        }
+        else
+        {
+            const std::size_t totalFlagged = diagnostics.Neurons.size() -
+                diagnostics.HealthyNeuronCount;
+            if (totalFlagged > printedItems)
+            {
+                std::cout << "... " << totalFlagged - printedItems
+                    << " more\n";
+            }
+        }
+
+        std::cout << "\nFlagged Connections\n";
+        printedItems = 0;
+        for (const auto& connection : diagnostics.Connections)
+        {
+            if ((!connection.VanishingGradient &&
+                !connection.ExplodingGradient) ||
+                printedItems >= maximumItems)
+            {
+                continue;
+            }
+
+            std::cout
+                << "Connection " << connection.Id
+                << " (" << connection.FromNeuron
+                << " -> " << connection.ToNeuron << ")"
+                << " Mean |gradient| " << connection.MeanAbsoluteGradient
+                << " Max |gradient| " << connection.MaximumAbsoluteGradient
+                << " Flags";
+            if (connection.VanishingGradient) std::cout << " vanishing";
+            if (connection.ExplodingGradient) std::cout << " exploding";
+            std::cout << "\n";
+            ++printedItems;
+        }
+
+        if (printedItems == 0)
+        {
+            std::cout << "None\n";
+        }
+        else
+        {
+            const std::size_t totalFlagged = diagnostics.Connections.size() -
+                diagnostics.HealthyConnectionCount;
+            if (totalFlagged > printedItems)
+            {
+                std::cout << "... " << totalFlagged - printedItems
+                    << " more\n";
+            }
+        }
+
+        std::cout << "\n";
+        return;
+    }
 }
 
 void HandleTrainingBreakpointCommand(std::stringstream& stream)

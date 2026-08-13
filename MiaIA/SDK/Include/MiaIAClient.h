@@ -20,6 +20,7 @@
 #include "../../Core/Public/ProjectInfoSnapshot.h"
 #include "../../Core/Public/SampleEvaluationSnapshot.h"
 #include "../../Core/Public/SampleGradientSnapshot.h"
+#include "../../Core/Public/SignalHealthSnapshot.h"
 #include "../../Core/Public/SampleSnapshot.h"
 #include "../../Core/Public/TrainingStepSnapshot.h"
 #include "../../Core/Public/TrainingEpochSnapshot.h"
@@ -123,6 +124,10 @@ namespace MiaIA::SDK
             std::size_t index,
             Core::LossType type,
             Core::SampleGradientSnapshot& result);
+        static bool DiagnoseDataset(
+            Core::LossType type,
+            const Core::SignalHealthConfiguration& configuration,
+            Core::SignalHealthSnapshot& result);
         static bool TrainDatasetSample(
             std::size_t index,
             double learningRate,

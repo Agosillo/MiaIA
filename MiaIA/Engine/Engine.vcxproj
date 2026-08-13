@@ -146,6 +146,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="Analysis\SignalHealthAnalyzer.h" />
     <ClInclude Include="Data\CsvDatasetImporter.h" />
     <ClInclude Include="Data\DatasetInspector.h" />
     <ClInclude Include="Data\DatasetRuntime.h" />
@@ -182,6 +183,7 @@
     <ClInclude Include="Weights\NetworkWeights.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="Analysis\SignalHealthAnalyzer.cpp" />
     <ClCompile Include="Data\CsvDatasetImporter.cpp" />
     <ClCompile Include="Data\DatasetInspector.cpp" />
     <ClCompile Include="Data\DatasetRuntime.cpp" />

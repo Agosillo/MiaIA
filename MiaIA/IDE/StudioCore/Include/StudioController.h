@@ -5,6 +5,7 @@
 #include "../../../Core/Public/ConnectionInspectionSnapshot.h"
 #include "../../../Core/Public/ForwardTraceSnapshot.h"
 #include "../../../Core/Public/NeuronInspectionSnapshot.h"
+#include "../../../Core/Public/SignalHealthSnapshot.h"
 #include "../../../Core/Public/TrainingDebugSnapshot.h"
 #include "../../../Core/Public/TrainingHistoryEntrySnapshot.h"
 #include "../../../Core/Public/TrainingSessionSnapshot.h"
@@ -120,6 +121,23 @@ namespace MiaIA::Studio
         Core::TrainingStepSnapshot SelectedStep;
     };
 
+    enum class StudioSignalHealthFilter
+    {
+        AllFindings,
+        Inactive,
+        Saturated,
+        VanishingGradient,
+        ExplodingGradient
+    };
+
+    struct StudioSignalHealthState
+    {
+        bool Active{};
+        StudioSignalHealthFilter Filter{
+            StudioSignalHealthFilter::AllFindings };
+        Core::SignalHealthSnapshot Snapshot;
+    };
+
     struct StudioState
     {
         Core::NetworkOverviewSnapshot Overview;
@@ -132,6 +150,7 @@ namespace MiaIA::Studio
         Core::ConnectionInspectionSnapshot ConnectionInspection;
         StudioForwardTraceState ForwardTrace;
         StudioBackwardTraceState BackwardTrace;
+        StudioSignalHealthState SignalHealth;
         StudioTrainingTimelineState TrainingTimeline;
     };
 
@@ -184,6 +203,10 @@ namespace MiaIA::Studio
         bool StepBackwardTraceBackward();
         bool AdvanceBackwardTracePlayback(double elapsedSeconds);
         bool SetBackwardTraceFrameDuration(double durationSeconds);
+        bool RunSignalHealthDiagnostics(
+            const Core::SignalHealthConfiguration& configuration);
+        void ClearSignalHealthDiagnostics();
+        void SetSignalHealthFilter(StudioSignalHealthFilter filter);
         void RefreshTrainingTimeline();
         bool SelectTrainingTimelineStep(std::size_t stepIndex);
         void ClearTrainingTimelineSelection();

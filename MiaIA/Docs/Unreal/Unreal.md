@@ -145,7 +145,7 @@ Use the `Theme` selector in the panel toolbar to choose `Follow Unreal`, `Dark`,
 
 The adjacent `Colors` selector independently controls semantic model visualization. `MiaIA Classic` preserves the exact previous colors for the active theme. `High Contrast`, `Color-blind Safe`, and `Monochrome` provide alternative complete presets. Every preset previews inactive, active, positive, negative, selection, and debug colors directly in the menu. `Custom` retains six user-defined colors; selecting any Customize row opens Unreal's runtime color picker, and confirming it activates and saves the custom palette. `Reset to MiaIA Classic` restores the original semantic mapping without changing the interface theme.
 
-Theme, palette preset, and custom colors are stored in the local Unreal game-user settings configuration and restored by both hosts. They are per-user preferences and do not modify tracked project configuration. The semantic palette is shared by 2D, 3D, legends, execution traces, selection markers, debug emphasis, and the training-timeline cursor.
+Theme, palette preset, and custom colors are stored in the local Unreal game-user settings configuration and restored by both hosts. They are per-user preferences and do not modify tracked project configuration. The semantic palette is shared by 2D, 3D, legends, execution traces, signal-health diagnostics, selection markers, debug emphasis, and the training-timeline cursor.
 
 ### Data refresh, detail limits, and application help
 

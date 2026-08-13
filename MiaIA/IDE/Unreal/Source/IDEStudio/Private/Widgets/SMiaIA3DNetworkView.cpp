@@ -590,6 +590,17 @@ void SMiaIA3DNetworkView::SetBackwardTraceOverlay(
     bSceneDirty = true;
 }
 
+void SMiaIA3DNetworkView::SetSignalHealthOverlay(
+    const TMap<int64, EMiaIASignalHealthVisualState>& InNeurons,
+    const TMap<int64, EMiaIASignalHealthVisualState>& InConnections,
+    bool bInActive)
+{
+    SignalHealthNeurons = InNeurons;
+    SignalHealthConnections = InConnections;
+    bSignalHealthActive = bInActive;
+    bSceneDirty = true;
+}
+
 void SMiaIA3DNetworkView::SetSelectedNeurons(
     const TSet<int64>& InNeuronIds,
     int64 InPrimaryNeuronId)
@@ -1694,7 +1705,13 @@ void SMiaIA3DNetworkView::RebuildDetailedScene()
                 ForwardTraceActivations.Find(neuron.Id);
             const double* backwardGradient =
                 BackwardTraceNeuronGradients.Find(neuron.Id);
-            const FLinearColor color = backwardGradient
+            const EMiaIASignalHealthVisualState* signalHealth =
+                SignalHealthNeurons.Find(neuron.Id);
+            const FLinearColor color = signalHealth
+                ? SignalHealthColor(*signalHealth)
+                : bSignalHealthActive
+                    ? palette.InactiveNeuron.CopyWithNewOpacity(0.18f)
+                : backwardGradient
                 ? SignedNeuronColor(
                     *backwardGradient,
                     MaximumBackwardTraceNeuronGradient)
@@ -1747,6 +1764,8 @@ void SMiaIA3DNetworkView::RebuildDetailedScene()
             BackwardTraceConnectionGradients.Find(connection.Id);
         const bool backwardPlaybackConnection =
             BackwardTracePlaybackConnections.Contains(connection.Id);
+        const EMiaIASignalHealthVisualState* signalHealth =
+            SignalHealthConnections.Find(connection.Id);
         const double displayedValue = backwardGradient
             ? *backwardGradient
             : traceContribution
@@ -1781,6 +1800,10 @@ void SMiaIA3DNetworkView::RebuildDetailedScene()
             connection.Id == SelectedConnectionId;
         const FLinearColor color = selected
             ? palette.Selection
+            : signalHealth
+                ? SignalHealthColor(*signalHealth).CopyWithNewOpacity(0.8f)
+            : bSignalHealthActive
+                ? palette.SubduedText.CopyWithNewOpacity(0.08f)
             : backwardGradient
                 ? SignedConnectionColor(
                     displayedValue,
@@ -2396,6 +2419,30 @@ FLinearColor SMiaIA3DNetworkView::SignedConnectionColor(
         ? palette.PositiveWeight
         : palette.NegativeWeight;
     return target.CopyWithNewOpacity(0.15f + strength * 0.85f);
+}
+
+FLinearColor SMiaIA3DNetworkView::SignalHealthColor(
+    EMiaIASignalHealthVisualState State) const
+{
+    const FMiaIAVisualizationPalette palette =
+        FMiaIAEditorTheme::VisualizationPalette(Theme);
+    switch (State)
+    {
+    case EMiaIASignalHealthVisualState::Inactive:
+        return palette.DiagnosticInactive;
+    case EMiaIASignalHealthVisualState::Saturated:
+        return palette.DiagnosticSaturated;
+    case EMiaIASignalHealthVisualState::VanishingGradient:
+        return palette.DiagnosticVanishing;
+    case EMiaIASignalHealthVisualState::ExplodingGradient:
+        return palette.DiagnosticExploding;
+    case EMiaIASignalHealthVisualState::Mixed:
+    default:
+        return FLinearColor::LerpUsingHSV(
+            palette.DiagnosticSaturated,
+            palette.DiagnosticVanishing,
+            0.5f);
+    }
 }
 
 double SMiaIA3DNetworkView::NeuronMetric(

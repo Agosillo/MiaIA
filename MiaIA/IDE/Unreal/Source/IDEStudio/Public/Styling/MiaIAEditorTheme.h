@@ -26,7 +26,11 @@ enum class EMiaIAVisualizationColorRole : uint8
     PositiveContribution,
     NegativeContribution,
     Selection,
-    Debug
+    Debug,
+    DiagnosticInactive,
+    DiagnosticSaturated,
+    DiagnosticVanishing,
+    DiagnosticExploding
 };
 
 struct FMiaIAVisualizationPalette
@@ -37,6 +41,10 @@ struct FMiaIAVisualizationPalette
     FLinearColor NegativeWeight;
     FLinearColor Selection;
     FLinearColor Debug;
+    FLinearColor DiagnosticInactive;
+    FLinearColor DiagnosticSaturated;
+    FLinearColor DiagnosticVanishing;
+    FLinearColor DiagnosticExploding;
 };
 
 struct FMiaIAEditorPalette

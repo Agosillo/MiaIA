@@ -1367,6 +1367,17 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
                         ]
                         + SVerticalBox::Slot()
                         .AutoHeight()
+                        .Padding(0.0f, 5.0f)
+                        [
+                            SNew(STextBlock)
+                            .Text(
+                                this,
+                                &SMiaIAEditorPanel::
+                                    SignalHealthSelectionText)
+                            .AutoWrapText(true)
+                        ]
+                        + SVerticalBox::Slot()
+                        .AutoHeight()
                         .Padding(0.0f, 7.0f, 0.0f, 3.0f)
                         [
                             SNew(SHorizontalBox)
@@ -1741,7 +1752,7 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
                             .OnClicked(
                                 this,
                                 &SMiaIAEditorPanel::SelectBottomTab,
-                                1)
+                                2)
                         ]
                         + SHorizontalBox::Slot()
                         .AutoWidth()
@@ -1765,7 +1776,7 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
                             .OnClicked(
                                 this,
                                 &SMiaIAEditorPanel::SelectBottomTab,
-                                2)
+                                3)
                         ]
                         + SHorizontalBox::Slot()
                         .AutoWidth()
@@ -1779,7 +1790,7 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
                             .OnClicked(
                                 this,
                                 &SMiaIAEditorPanel::SelectBottomTab,
-                                3)
+                                4)
                         ]
                         + SHorizontalBox::Slot()
                         .AutoWidth()
@@ -1793,7 +1804,21 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
                             .OnClicked(
                                 this,
                                 &SMiaIAEditorPanel::SelectBottomTab,
-                                4)
+                                5)
+                        ]
+                        + SHorizontalBox::Slot()
+                        .AutoWidth()
+                        .Padding(2.0f)
+                        [
+                            SNew(SButton)
+                            .ButtonStyle(&ButtonStyle)
+                            .Text(LOCTEXT(
+                                "SignalHealthTab",
+                                "Diagnostics"))
+                            .OnClicked(
+                                this,
+                                &SMiaIAEditorPanel::SelectBottomTab,
+                                1)
                         ]
                     ]
                     + SVerticalBox::Slot()
@@ -2063,6 +2088,242 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
                                             .AutoWrapText(true)
                                         ]
                                     ]
+                                ]
+                            ]
+                        ]
+                        + SWidgetSwitcher::Slot()
+                        [
+                            SNew(SVerticalBox)
+                            + SVerticalBox::Slot()
+                            .AutoHeight()
+                            .Padding(2.0f, 2.0f, 2.0f, 5.0f)
+                            [
+                                SNew(SHorizontalBox)
+                                + SHorizontalBox::Slot()
+                                .AutoWidth()
+                                .Padding(2.0f)
+                                [
+                                    SNew(SButton)
+                                    .ButtonStyle(&ButtonStyle)
+                                    .Text(LOCTEXT(
+                                        "RunSignalHealthDiagnostics",
+                                        "Analyze dataset"))
+                                    .OnClicked(
+                                        this,
+                                        &SMiaIAEditorPanel::
+                                            HandleRunSignalHealthDiagnostics)
+                                ]
+                                + SHorizontalBox::Slot()
+                                .AutoWidth()
+                                .Padding(2.0f)
+                                [
+                                    SNew(SButton)
+                                    .ButtonStyle(&ButtonStyle)
+                                    .Text(LOCTEXT(
+                                        "ClearSignalHealthDiagnostics",
+                                        "Clear"))
+                                    .OnClicked(
+                                        this,
+                                        &SMiaIAEditorPanel::
+                                            HandleClearSignalHealthDiagnostics)
+                                ]
+                                + SHorizontalBox::Slot()
+                                .AutoWidth()
+                                .VAlign(VAlign_Center)
+                                .Padding(8.0f, 2.0f, 2.0f, 2.0f)
+                                [
+                                    SNew(STextBlock)
+                                    .Text(LOCTEXT(
+                                        "SignalHealthSampleLimit",
+                                        "Sample limit"))
+                                ]
+                                + SHorizontalBox::Slot()
+                                .AutoWidth()
+                                .Padding(2.0f)
+                                [
+                                    SNew(SSpinBox<int32>)
+                                    .MinValue(0)
+                                    .MaxValue(100000000)
+                                    .MinDesiredWidth(90.0f)
+                                    .Value_Lambda([this]()
+                                    {
+                                        return static_cast<int32>(
+                                            SignalHealthConfiguration.MaximumSamples > 100000000
+                                                ? 100000000
+                                                : SignalHealthConfiguration.MaximumSamples);
+                                    })
+                                    .OnValueChanged_Lambda([this](int32 Value)
+                                    {
+                                        SignalHealthConfiguration.MaximumSamples =
+                                            static_cast<std::size_t>(FMath::Max(0, Value));
+                                    })
+                                ]
+                                + SHorizontalBox::Slot()
+                                .AutoWidth()
+                                .VAlign(VAlign_Center)
+                                .Padding(8.0f, 2.0f, 2.0f, 2.0f)
+                                [
+                                    SNew(STextBlock)
+                                    .Text(LOCTEXT(
+                                        "SignalHealthFilterLabel",
+                                        "Show"))
+                                ]
+                                + SHorizontalBox::Slot()
+                                .AutoWidth()
+                                .Padding(2.0f)
+                                [
+                                    SNew(SComboButton)
+                                    .ComboButtonStyle(&ComboButtonStyle)
+                                    .ButtonContent()
+                                    [
+                                        SNew(STextBlock)
+                                        .Text(
+                                            this,
+                                            &SMiaIAEditorPanel::
+                                                SignalHealthFilterText)
+                                    ]
+                                    .OnGetMenuContent(
+                                        this,
+                                        &SMiaIAEditorPanel::
+                                            BuildSignalHealthFilterMenu)
+                                ]
+                            ]
+                            + SVerticalBox::Slot()
+                            .AutoHeight()
+                            .Padding(4.0f, 0.0f, 4.0f, 4.0f)
+                            [
+                                SNew(STextBlock)
+                                .Text(LOCTEXT(
+                                    "SignalHealthThresholdHint",
+                                    "Thresholds: inactive |activation| / ratio, saturation margin / ratio, vanishing |gradient| / ratio, exploding |gradient| / ratio"))
+                                .AutoWrapText(true)
+                            ]
+                            + SVerticalBox::Slot()
+                            .AutoHeight()
+                            .Padding(2.0f)
+                            [
+                                SNew(SUniformGridPanel)
+                                .SlotPadding(FMargin(3.0f))
+                                + SUniformGridPanel::Slot(0, 0)
+                                [
+                                    SNew(SSpinBox<double>)
+                                    .ToolTipText(LOCTEXT("SignalHealthInactiveMagnitudeTip", "Inactive activation magnitude"))
+                                    .MinValue(0.0)
+                                    .MaxValue(1.0e6)
+                                    .MinFractionalDigits(0)
+                                    .MaxFractionalDigits(12)
+                                    .MinDesiredWidth(105.0f)
+                                    .Value_Lambda([this]() { return SignalHealthConfiguration.InactiveActivationMagnitude; })
+                                    .OnValueChanged_Lambda([this](double V) { SignalHealthConfiguration.InactiveActivationMagnitude = V; })
+                                ]
+                                + SUniformGridPanel::Slot(1, 0)
+                                [
+                                    SNew(SSpinBox<double>)
+                                    .ToolTipText(LOCTEXT("SignalHealthInactiveRatioTip", "Required inactive sample ratio"))
+                                    .MinValue(0.0)
+                                    .MaxValue(1.0)
+                                    .MinFractionalDigits(0)
+                                    .MaxFractionalDigits(4)
+                                    .MinDesiredWidth(85.0f)
+                                    .Value_Lambda([this]() { return SignalHealthConfiguration.InactiveSampleRatio; })
+                                    .OnValueChanged_Lambda([this](double V) { SignalHealthConfiguration.InactiveSampleRatio = V; })
+                                ]
+                                + SUniformGridPanel::Slot(2, 0)
+                                [
+                                    SNew(SSpinBox<double>)
+                                    .ToolTipText(LOCTEXT("SignalHealthSaturationMarginTip", "Sigmoid/Tanh saturation margin"))
+                                    .MinValue(0.0)
+                                    .MaxValue(0.5)
+                                    .MinFractionalDigits(0)
+                                    .MaxFractionalDigits(8)
+                                    .MinDesiredWidth(105.0f)
+                                    .Value_Lambda([this]() { return SignalHealthConfiguration.SaturationMargin; })
+                                    .OnValueChanged_Lambda([this](double V) { SignalHealthConfiguration.SaturationMargin = V; })
+                                ]
+                                + SUniformGridPanel::Slot(3, 0)
+                                [
+                                    SNew(SSpinBox<double>)
+                                    .ToolTipText(LOCTEXT("SignalHealthSaturationRatioTip", "Required saturated sample ratio"))
+                                    .MinValue(0.0)
+                                    .MaxValue(1.0)
+                                    .MinFractionalDigits(0)
+                                    .MaxFractionalDigits(4)
+                                    .MinDesiredWidth(85.0f)
+                                    .Value_Lambda([this]() { return SignalHealthConfiguration.SaturationSampleRatio; })
+                                    .OnValueChanged_Lambda([this](double V) { SignalHealthConfiguration.SaturationSampleRatio = V; })
+                                ]
+                                + SUniformGridPanel::Slot(0, 1)
+                                [
+                                    SNew(SSpinBox<double>)
+                                    .ToolTipText(LOCTEXT("SignalHealthVanishingMagnitudeTip", "Vanishing gradient magnitude"))
+                                    .MinValue(0.0)
+                                    .MaxValue(1.0e6)
+                                    .MinFractionalDigits(0)
+                                    .MaxFractionalDigits(12)
+                                    .MinDesiredWidth(105.0f)
+                                    .Value_Lambda([this]() { return SignalHealthConfiguration.VanishingGradientMagnitude; })
+                                    .OnValueChanged_Lambda([this](double V) { SignalHealthConfiguration.VanishingGradientMagnitude = V; })
+                                ]
+                                + SUniformGridPanel::Slot(1, 1)
+                                [
+                                    SNew(SSpinBox<double>)
+                                    .ToolTipText(LOCTEXT("SignalHealthVanishingRatioTip", "Required vanishing-gradient sample ratio"))
+                                    .MinValue(0.0)
+                                    .MaxValue(1.0)
+                                    .MinFractionalDigits(0)
+                                    .MaxFractionalDigits(4)
+                                    .MinDesiredWidth(85.0f)
+                                    .Value_Lambda([this]() { return SignalHealthConfiguration.VanishingGradientSampleRatio; })
+                                    .OnValueChanged_Lambda([this](double V) { SignalHealthConfiguration.VanishingGradientSampleRatio = V; })
+                                ]
+                                + SUniformGridPanel::Slot(2, 1)
+                                [
+                                    SNew(SSpinBox<double>)
+                                    .ToolTipText(LOCTEXT("SignalHealthExplodingMagnitudeTip", "Exploding gradient magnitude"))
+                                    .MinValue(0.0)
+                                    .MaxValue(1.0e12)
+                                    .MinFractionalDigits(0)
+                                    .MaxFractionalDigits(8)
+                                    .MinDesiredWidth(105.0f)
+                                    .Value_Lambda([this]() { return SignalHealthConfiguration.ExplodingGradientMagnitude; })
+                                    .OnValueChanged_Lambda([this](double V) { SignalHealthConfiguration.ExplodingGradientMagnitude = V; })
+                                ]
+                                + SUniformGridPanel::Slot(3, 1)
+                                [
+                                    SNew(SSpinBox<double>)
+                                    .ToolTipText(LOCTEXT("SignalHealthExplodingRatioTip", "Required exploding-gradient sample ratio"))
+                                    .MinValue(0.0)
+                                    .MaxValue(1.0)
+                                    .MinFractionalDigits(0)
+                                    .MaxFractionalDigits(4)
+                                    .MinDesiredWidth(85.0f)
+                                    .Value_Lambda([this]() { return SignalHealthConfiguration.ExplodingGradientSampleRatio; })
+                                    .OnValueChanged_Lambda([this](double V) { SignalHealthConfiguration.ExplodingGradientSampleRatio = V; })
+                                ]
+                            ]
+                            + SVerticalBox::Slot()
+                            .AutoHeight()
+                            .Padding(4.0f, 3.0f, 4.0f, 6.0f)
+                            [
+                                SNew(STextBlock)
+                                .Text(
+                                    this,
+                                    &SMiaIAEditorPanel::
+                                        SignalHealthSummaryText)
+                                .Font(FAppStyle::GetFontStyle(
+                                    TEXT("SmallFontBold")))
+                                .AutoWrapText(true)
+                            ]
+                            + SVerticalBox::Slot()
+                            .FillHeight(1.0f)
+                            [
+                                SNew(SScrollBox)
+                                .ScrollBarStyle(&ScrollBarStyle)
+                                + SScrollBox::Slot()
+                                [
+                                    SAssignNew(
+                                        SignalHealthContent,
+                                        SVerticalBox)
                                 ]
                             ]
                         ]
@@ -2844,7 +3105,7 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
         ]
     ];
 
-    BottomSwitcher->SetActiveWidgetIndex(1);
+    BottomSwitcher->SetActiveWidgetIndex(2);
     TopologySwitcher->SetActiveWidgetIndex(0);
     NetworkView->SetTheme(Theme);
     Network3DView->SetTheme(Theme);
@@ -2854,6 +3115,7 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
     RefreshData();
     RebuildForwardTrace();
     RebuildBackwardTrace();
+    RebuildSignalHealth();
     RegisterActiveTimer(
         0.1f,
         FWidgetActiveTimerDelegate::CreateSP(
@@ -3204,6 +3466,7 @@ void SMiaIAEditorPanel::RefreshData()
 
     ApplyForwardTraceOverlay();
     ApplyBackwardTraceOverlay();
+    ApplySignalHealthOverlay();
 
     if (topologyChanged)
     {
@@ -3458,6 +3721,109 @@ void SMiaIAEditorPanel::ApplyBackwardTraceOverlay()
     }
 }
 
+void SMiaIAEditorPanel::ApplySignalHealthOverlay()
+{
+    TMap<int64, EMiaIASignalHealthVisualState> neurons;
+    TMap<int64, EMiaIASignalHealthVisualState> connections;
+    const MiaIA::Studio::StudioSignalHealthState state =
+        FMiaIAInstanceService::SignalHealthState(MiaIAInstance);
+
+    const auto matchingNeuronState = [&state](
+        const MiaIA::Core::SignalHealthNeuronSnapshot& neuron,
+        EMiaIASignalHealthVisualState& visualState)
+    {
+        int32 findingCount = 0;
+        if (neuron.ConsistentlyInactive &&
+            (state.Filter == MiaIA::Studio::StudioSignalHealthFilter::AllFindings ||
+             state.Filter == MiaIA::Studio::StudioSignalHealthFilter::Inactive))
+        {
+            visualState = EMiaIASignalHealthVisualState::Inactive;
+            ++findingCount;
+        }
+        if (neuron.ConsistentlySaturated &&
+            (state.Filter == MiaIA::Studio::StudioSignalHealthFilter::AllFindings ||
+             state.Filter == MiaIA::Studio::StudioSignalHealthFilter::Saturated))
+        {
+            visualState = EMiaIASignalHealthVisualState::Saturated;
+            ++findingCount;
+        }
+        if (neuron.VanishingGradient &&
+            (state.Filter == MiaIA::Studio::StudioSignalHealthFilter::AllFindings ||
+             state.Filter == MiaIA::Studio::StudioSignalHealthFilter::VanishingGradient))
+        {
+            visualState = EMiaIASignalHealthVisualState::VanishingGradient;
+            ++findingCount;
+        }
+        if (neuron.ExplodingGradient &&
+            (state.Filter == MiaIA::Studio::StudioSignalHealthFilter::AllFindings ||
+             state.Filter == MiaIA::Studio::StudioSignalHealthFilter::ExplodingGradient))
+        {
+            visualState = EMiaIASignalHealthVisualState::ExplodingGradient;
+            ++findingCount;
+        }
+        if (findingCount > 1)
+        {
+            visualState = EMiaIASignalHealthVisualState::Mixed;
+        }
+        return findingCount > 0;
+    };
+
+    if (state.Active)
+    {
+        for (const auto& neuron : state.Snapshot.Neurons)
+        {
+            EMiaIASignalHealthVisualState visualState{};
+            if (matchingNeuronState(neuron, visualState))
+            {
+                neurons.Add(static_cast<int64>(neuron.Id), visualState);
+            }
+        }
+
+        for (const auto& connection : state.Snapshot.Connections)
+        {
+            EMiaIASignalHealthVisualState visualState{};
+            bool matches = false;
+            if (connection.VanishingGradient &&
+                (state.Filter == MiaIA::Studio::StudioSignalHealthFilter::AllFindings ||
+                 state.Filter == MiaIA::Studio::StudioSignalHealthFilter::VanishingGradient))
+            {
+                visualState = EMiaIASignalHealthVisualState::VanishingGradient;
+                matches = true;
+            }
+            if (connection.ExplodingGradient &&
+                (state.Filter == MiaIA::Studio::StudioSignalHealthFilter::AllFindings ||
+                 state.Filter == MiaIA::Studio::StudioSignalHealthFilter::ExplodingGradient))
+            {
+                visualState = matches
+                    ? EMiaIASignalHealthVisualState::Mixed
+                    : EMiaIASignalHealthVisualState::ExplodingGradient;
+                matches = true;
+            }
+            if (matches)
+            {
+                connections.Add(
+                    static_cast<int64>(connection.Id),
+                    visualState);
+            }
+        }
+    }
+
+    if (NetworkView.IsValid())
+    {
+        NetworkView->SetSignalHealthOverlay(
+            neurons,
+            connections,
+            state.Active);
+    }
+    if (Network3DView.IsValid())
+    {
+        Network3DView->SetSignalHealthOverlay(
+            neurons,
+            connections,
+            state.Active);
+    }
+}
+
 void SMiaIAEditorPanel::RebuildForwardTrace()
 {
     if (!ForwardTraceContent.IsValid())
@@ -3582,6 +3948,134 @@ void SMiaIAEditorPanel::RebuildBackwardTrace()
             "Select a neuron or connection to inspect activation, pre-activation, bias, weight, and propagated-source gradients."))
         .AutoWrapText(true)
     ];
+}
+
+void SMiaIAEditorPanel::RebuildSignalHealth()
+{
+    if (!SignalHealthContent.IsValid())
+    {
+        return;
+    }
+
+    SignalHealthContent->ClearChildren();
+    const MiaIA::Studio::StudioSignalHealthState state =
+        FMiaIAInstanceService::SignalHealthState(MiaIAInstance);
+
+    if (!state.Active)
+    {
+        SignalHealthContent->AddSlot().AutoHeight().Padding(3.0f)
+        [
+            SNew(STextBlock)
+            .Text(LOCTEXT(
+                "SignalHealthInactiveHelp",
+                "Load a compatible dataset and analyze the fixed network. No weights, biases, or public activations are changed."))
+            .AutoWrapText(true)
+        ];
+        return;
+    }
+
+    std::size_t visibleFindings{};
+    for (const auto& neuron : state.Snapshot.Neurons)
+    {
+        const bool visible = state.Filter ==
+                MiaIA::Studio::StudioSignalHealthFilter::AllFindings
+            ? neuron.ConsistentlyInactive || neuron.ConsistentlySaturated ||
+                neuron.VanishingGradient || neuron.ExplodingGradient
+            : state.Filter == MiaIA::Studio::StudioSignalHealthFilter::Inactive
+                ? neuron.ConsistentlyInactive
+            : state.Filter == MiaIA::Studio::StudioSignalHealthFilter::Saturated
+                ? neuron.ConsistentlySaturated
+            : state.Filter == MiaIA::Studio::StudioSignalHealthFilter::VanishingGradient
+                ? neuron.VanishingGradient
+                : neuron.ExplodingGradient;
+        if (!visible)
+        {
+            continue;
+        }
+
+        ++visibleFindings;
+        const int64 neuronId = static_cast<int64>(neuron.Id);
+        FString flags;
+        if (neuron.ConsistentlyInactive) flags += TEXT(" inactive");
+        if (neuron.ConsistentlySaturated) flags += TEXT(" saturated");
+        if (neuron.VanishingGradient) flags += TEXT(" vanishing");
+        if (neuron.ExplodingGradient) flags += TEXT(" exploding");
+
+        SignalHealthContent->AddSlot().AutoHeight().Padding(3.0f, 1.0f)
+        [
+            SNew(SButton)
+            .ButtonStyle(&ExplorerButtonStyle)
+            .OnClicked_Lambda([this, neuronId]()
+            {
+                SelectNeuron(neuronId);
+                if (NetworkView.IsValid()) NetworkView->RevealNeuron(neuronId);
+                if (Network3DView.IsValid()) Network3DView->RevealNeuron(neuronId);
+                return FReply::Handled();
+            })
+            [
+                SNew(STextBlock)
+                .Text(FText::FromString(FString::Printf(
+                    TEXT("Neuron #%lld | mean |a| %.5g | mean |g| %.5g | max |g| %.5g |%s"),
+                    neuronId,
+                    neuron.MeanAbsoluteActivation,
+                    neuron.MeanAbsoluteGradient,
+                    neuron.MaximumAbsoluteGradient,
+                    *flags)))
+            ]
+        ];
+    }
+
+    for (const auto& connection : state.Snapshot.Connections)
+    {
+        const bool visible = state.Filter ==
+                MiaIA::Studio::StudioSignalHealthFilter::AllFindings
+            ? connection.VanishingGradient || connection.ExplodingGradient
+            : state.Filter == MiaIA::Studio::StudioSignalHealthFilter::VanishingGradient
+                ? connection.VanishingGradient
+            : state.Filter == MiaIA::Studio::StudioSignalHealthFilter::ExplodingGradient
+                ? connection.ExplodingGradient
+                : false;
+        if (!visible)
+        {
+            continue;
+        }
+
+        ++visibleFindings;
+        const int64 connectionId = static_cast<int64>(connection.Id);
+        SignalHealthContent->AddSlot().AutoHeight().Padding(3.0f, 1.0f)
+        [
+            SNew(SButton)
+            .ButtonStyle(&ExplorerButtonStyle)
+            .OnClicked_Lambda([this, connectionId]()
+            {
+                SelectConnection(connectionId);
+                return FReply::Handled();
+            })
+            [
+                SNew(STextBlock)
+                .Text(FText::FromString(FString::Printf(
+                    TEXT("Connection #%lld | #%llu -> #%llu | mean |g| %.5g | max |g| %.5g | %s%s"),
+                    connectionId,
+                    static_cast<uint64>(connection.FromNeuron),
+                    static_cast<uint64>(connection.ToNeuron),
+                    connection.MeanAbsoluteGradient,
+                    connection.MaximumAbsoluteGradient,
+                    connection.VanishingGradient ? TEXT("vanishing ") : TEXT(""),
+                    connection.ExplodingGradient ? TEXT("exploding") : TEXT(""))))
+            ]
+        ];
+    }
+
+    if (visibleFindings == 0)
+    {
+        SignalHealthContent->AddSlot().AutoHeight().Padding(3.0f)
+        [
+            SNew(STextBlock)
+            .Text(LOCTEXT(
+                "SignalHealthNoFilteredFindings",
+                "No findings match the current filter."))
+        ];
+    }
 }
 
 void SMiaIAEditorPanel::RebuildTrainingTimeline()
@@ -5528,6 +6022,79 @@ FReply SMiaIAEditorPanel::SelectBottomTab(int32 TabIndex)
     return FReply::Handled();
 }
 
+FReply SMiaIAEditorPanel::HandleRunSignalHealthDiagnostics()
+{
+    if (!FMiaIAInstanceService::RunSignalHealthDiagnostics(
+        MiaIAInstance,
+        SignalHealthConfiguration))
+    {
+        ShowDialog(
+            LOCTEXT("SignalHealthFailedTitle", "Diagnostics not started"),
+            LOCTEXT(
+                "SignalHealthFailed",
+                "Check that a compatible dataset and network are loaded and that every threshold is valid."));
+        return FReply::Handled();
+    }
+
+    RebuildForwardTrace();
+    RebuildBackwardTrace();
+    RebuildSignalHealth();
+    ApplyForwardTraceOverlay();
+    ApplyBackwardTraceOverlay();
+    ApplySignalHealthOverlay();
+    return FReply::Handled();
+}
+
+FReply SMiaIAEditorPanel::HandleClearSignalHealthDiagnostics()
+{
+    FMiaIAInstanceService::ClearSignalHealthDiagnostics(MiaIAInstance);
+    RebuildSignalHealth();
+    ApplySignalHealthOverlay();
+    return FReply::Handled();
+}
+
+TSharedRef<SWidget> SMiaIAEditorPanel::BuildSignalHealthFilterMenu()
+{
+    const auto makeButton = [this](
+        const FText& label,
+        MiaIA::Studio::StudioSignalHealthFilter filter)
+    {
+        return SNew(SButton)
+            .ButtonStyle(&ButtonStyle)
+            .Text(label)
+            .OnClicked(
+                this,
+                &SMiaIAEditorPanel::SelectSignalHealthFilter,
+                filter);
+    };
+
+    return SNew(SVerticalBox)
+        + SVerticalBox::Slot().AutoHeight()
+        [ makeButton(LOCTEXT("SignalHealthAll", "All findings"),
+            MiaIA::Studio::StudioSignalHealthFilter::AllFindings) ]
+        + SVerticalBox::Slot().AutoHeight()
+        [ makeButton(LOCTEXT("SignalHealthInactive", "Inactive"),
+            MiaIA::Studio::StudioSignalHealthFilter::Inactive) ]
+        + SVerticalBox::Slot().AutoHeight()
+        [ makeButton(LOCTEXT("SignalHealthSaturated", "Saturated"),
+            MiaIA::Studio::StudioSignalHealthFilter::Saturated) ]
+        + SVerticalBox::Slot().AutoHeight()
+        [ makeButton(LOCTEXT("SignalHealthVanishing", "Vanishing gradient"),
+            MiaIA::Studio::StudioSignalHealthFilter::VanishingGradient) ]
+        + SVerticalBox::Slot().AutoHeight()
+        [ makeButton(LOCTEXT("SignalHealthExploding", "Exploding gradient"),
+            MiaIA::Studio::StudioSignalHealthFilter::ExplodingGradient) ];
+}
+
+FReply SMiaIAEditorPanel::SelectSignalHealthFilter(
+    MiaIA::Studio::StudioSignalHealthFilter Filter)
+{
+    FMiaIAInstanceService::SetSignalHealthFilter(MiaIAInstance, Filter);
+    RebuildSignalHealth();
+    ApplySignalHealthOverlay();
+    return FReply::Handled();
+}
+
 FReply SMiaIAEditorPanel::HandleRunForwardTrace()
 {
     if (!ForwardTraceInput.IsValid())
@@ -5575,8 +6142,10 @@ FReply SMiaIAEditorPanel::HandleRunForwardTrace()
 
     RebuildForwardTrace();
     RebuildBackwardTrace();
+    RebuildSignalHealth();
     ApplyForwardTraceOverlay();
     ApplyBackwardTraceOverlay();
+    ApplySignalHealthOverlay();
     return FReply::Handled();
 }
 
@@ -5790,8 +6359,10 @@ FReply SMiaIAEditorPanel::HandleRunBackwardTrace()
 
     RebuildForwardTrace();
     RebuildBackwardTrace();
+    RebuildSignalHealth();
     ApplyForwardTraceOverlay();
     ApplyBackwardTraceOverlay();
+    ApplySignalHealthOverlay();
     return FReply::Handled();
 }
 
@@ -6308,7 +6879,11 @@ TSharedRef<SWidget> SMiaIAEditorPanel::BuildColorsMenu()
         EMiaIAVisualizationColorRole::PositiveContribution,
         EMiaIAVisualizationColorRole::NegativeContribution,
         EMiaIAVisualizationColorRole::Selection,
-        EMiaIAVisualizationColorRole::Debug
+        EMiaIAVisualizationColorRole::Debug,
+        EMiaIAVisualizationColorRole::DiagnosticInactive,
+        EMiaIAVisualizationColorRole::DiagnosticSaturated,
+        EMiaIAVisualizationColorRole::DiagnosticVanishing,
+        EMiaIAVisualizationColorRole::DiagnosticExploding
     };
 
     for (const EMiaIAVisualizationColorRole role : roles)
@@ -6425,6 +7000,18 @@ void SMiaIAEditorPanel::HandleVisualizationColorCommitted(
     case EMiaIAVisualizationColorRole::Selection:
         CustomVisualizationPalette.Selection = InColor;
         break;
+    case EMiaIAVisualizationColorRole::DiagnosticInactive:
+        CustomVisualizationPalette.DiagnosticInactive = InColor;
+        break;
+    case EMiaIAVisualizationColorRole::DiagnosticSaturated:
+        CustomVisualizationPalette.DiagnosticSaturated = InColor;
+        break;
+    case EMiaIAVisualizationColorRole::DiagnosticVanishing:
+        CustomVisualizationPalette.DiagnosticVanishing = InColor;
+        break;
+    case EMiaIAVisualizationColorRole::DiagnosticExploding:
+        CustomVisualizationPalette.DiagnosticExploding = InColor;
+        break;
     case EMiaIAVisualizationColorRole::Debug:
     default:
         CustomVisualizationPalette.Debug = InColor;
@@ -6455,6 +7042,14 @@ FLinearColor SMiaIAEditorPanel::CustomVisualizationColor(
         return CustomVisualizationPalette.NegativeWeight;
     case EMiaIAVisualizationColorRole::Selection:
         return CustomVisualizationPalette.Selection;
+    case EMiaIAVisualizationColorRole::DiagnosticInactive:
+        return CustomVisualizationPalette.DiagnosticInactive;
+    case EMiaIAVisualizationColorRole::DiagnosticSaturated:
+        return CustomVisualizationPalette.DiagnosticSaturated;
+    case EMiaIAVisualizationColorRole::DiagnosticVanishing:
+        return CustomVisualizationPalette.DiagnosticVanishing;
+    case EMiaIAVisualizationColorRole::DiagnosticExploding:
+        return CustomVisualizationPalette.DiagnosticExploding;
     case EMiaIAVisualizationColorRole::Debug:
     default:
         return CustomVisualizationPalette.Debug;
@@ -6478,6 +7073,7 @@ void SMiaIAEditorPanel::ApplyVisualizationPalette()
     }
 
     RebuildTrainingTimeline();
+    ApplySignalHealthOverlay();
     Invalidate(EInvalidateWidgetReason::PaintAndVolatility);
 }
 
@@ -7955,6 +8551,121 @@ FText SMiaIAEditorPanel::BackwardTraceSpeedText() const
     return FText::FromString(FString::Printf(
         TEXT("Speed %gx"),
         DefaultForwardTraceFrameDurationSeconds / duration));
+}
+
+FText SMiaIAEditorPanel::SignalHealthSummaryText() const
+{
+    const MiaIA::Studio::StudioSignalHealthState state =
+        FMiaIAInstanceService::SignalHealthState(MiaIAInstance);
+    if (!state.Active)
+    {
+        return LOCTEXT(
+            "SignalHealthSummaryInactive",
+            "No dataset-wide signal-health snapshot.");
+    }
+
+    const auto& snapshot = state.Snapshot;
+    return FText::FromString(FString::Printf(
+        TEXT("Samples %llu/%llu | Neurons: healthy %llu, inactive %llu, saturated %llu, vanishing %llu, exploding %llu | Connections: healthy %llu, vanishing %llu, exploding %llu"),
+        static_cast<uint64>(snapshot.AnalyzedSampleCount),
+        static_cast<uint64>(snapshot.DatasetSampleCount),
+        static_cast<uint64>(snapshot.HealthyNeuronCount),
+        static_cast<uint64>(snapshot.InactiveNeuronCount),
+        static_cast<uint64>(snapshot.SaturatedNeuronCount),
+        static_cast<uint64>(snapshot.VanishingGradientNeuronCount),
+        static_cast<uint64>(snapshot.ExplodingGradientNeuronCount),
+        static_cast<uint64>(snapshot.HealthyConnectionCount),
+        static_cast<uint64>(snapshot.VanishingGradientConnectionCount),
+        static_cast<uint64>(snapshot.ExplodingGradientConnectionCount)));
+}
+
+FText SMiaIAEditorPanel::SignalHealthFilterText() const
+{
+    const auto filter =
+        FMiaIAInstanceService::SignalHealthState(MiaIAInstance).Filter;
+    switch (filter)
+    {
+    case MiaIA::Studio::StudioSignalHealthFilter::Inactive:
+        return LOCTEXT("SignalHealthFilterInactive", "Inactive");
+    case MiaIA::Studio::StudioSignalHealthFilter::Saturated:
+        return LOCTEXT("SignalHealthFilterSaturated", "Saturated");
+    case MiaIA::Studio::StudioSignalHealthFilter::VanishingGradient:
+        return LOCTEXT("SignalHealthFilterVanishing", "Vanishing gradient");
+    case MiaIA::Studio::StudioSignalHealthFilter::ExplodingGradient:
+        return LOCTEXT("SignalHealthFilterExploding", "Exploding gradient");
+    case MiaIA::Studio::StudioSignalHealthFilter::AllFindings:
+    default:
+        return LOCTEXT("SignalHealthFilterAll", "All findings");
+    }
+}
+
+FText SMiaIAEditorPanel::SignalHealthSelectionText() const
+{
+    const MiaIA::Studio::StudioSignalHealthState state =
+        FMiaIAInstanceService::SignalHealthState(MiaIAInstance);
+    if (!state.Active)
+    {
+        return FText::GetEmpty();
+    }
+
+    if (SelectedNeuronIds.Num() == 1 && SelectedNeuronId >= 0)
+    {
+        for (const auto& neuron : state.Snapshot.Neurons)
+        {
+            if (neuron.Id != static_cast<uint64>(SelectedNeuronId))
+            {
+                continue;
+            }
+
+            FString flags;
+            if (neuron.ConsistentlyInactive) flags += TEXT("inactive ");
+            if (neuron.ConsistentlySaturated) flags += TEXT("saturated ");
+            if (neuron.VanishingGradient) flags += TEXT("vanishing-gradient ");
+            if (neuron.ExplodingGradient) flags += TEXT("exploding-gradient");
+            if (flags.IsEmpty()) flags = TEXT("healthy under current thresholds");
+
+            return FText::FromString(FString::Printf(
+                TEXT("Signal health\nMean activation: %.9g\nMean |activation|: %.9g\nActivation range: %.9g to %.9g\nMean |gradient|: %.9g\nMaximum |gradient|: %.9g\nInactive: %.2f%% | Saturated: %.2f%%\nVanishing: %.2f%% | Exploding: %.2f%%\nClassification: %s"),
+                neuron.MeanActivation,
+                neuron.MeanAbsoluteActivation,
+                neuron.MinimumActivation,
+                neuron.MaximumActivation,
+                neuron.MeanAbsoluteGradient,
+                neuron.MaximumAbsoluteGradient,
+                neuron.InactiveSampleRatio * 100.0,
+                neuron.SaturatedSampleRatio * 100.0,
+                neuron.VanishingGradientSampleRatio * 100.0,
+                neuron.ExplodingGradientSampleRatio * 100.0,
+                *flags));
+        }
+    }
+
+    if (SelectedConnectionId >= 0)
+    {
+        for (const auto& connection : state.Snapshot.Connections)
+        {
+            if (connection.Id != static_cast<uint64>(SelectedConnectionId))
+            {
+                continue;
+            }
+
+            FString flags;
+            if (connection.VanishingGradient) flags += TEXT("vanishing-gradient ");
+            if (connection.ExplodingGradient) flags += TEXT("exploding-gradient");
+            if (flags.IsEmpty()) flags = TEXT("healthy under current thresholds");
+            return FText::FromString(FString::Printf(
+                TEXT("Signal health\nMean |weight gradient|: %.9g\nMaximum |weight gradient|: %.9g\nVanishing: %.2f%% | Exploding: %.2f%%\nClassification: %s"),
+                connection.MeanAbsoluteGradient,
+                connection.MaximumAbsoluteGradient,
+                connection.VanishingGradientSampleRatio * 100.0,
+                connection.ExplodingGradientSampleRatio * 100.0,
+                *flags));
+        }
+    }
+
+    return LOCTEXT(
+        "SignalHealthSelectFinding",
+        "Signal health active. Select a detailed neuron or connection for its aggregated evidence.");
 }
 
 FText SMiaIAEditorPanel::TrainingTimelineSummaryText() const

@@ -216,6 +216,7 @@ bool MiaIA::Studio::StudioController::RunForwardTrace(
     }
 
     ClearBackwardTrace();
+    ClearSignalHealthDiagnostics();
     CurrentState.ForwardTrace = std::move(next);
     BuildForwardTracePlaybackFrames();
 
@@ -466,6 +467,7 @@ bool MiaIA::Studio::StudioController::RunBackwardTrace(
     }
 
     ClearForwardTrace();
+    ClearSignalHealthDiagnostics();
     CurrentState.BackwardTrace = std::move(next);
     BuildBackwardTracePlaybackFrames();
     return true;
@@ -646,6 +648,44 @@ bool MiaIA::Studio::StudioController::SetBackwardTraceFrameDuration(
         durationSeconds;
     CurrentState.BackwardTrace.PlaybackFrameElapsedSeconds = 0.0;
     return true;
+}
+
+bool MiaIA::Studio::StudioController::RunSignalHealthDiagnostics(
+    const Core::SignalHealthConfiguration& configuration)
+{
+    Core::SignalHealthSnapshot snapshot;
+
+    if (!SDK::MiaIAClient::DiagnoseDataset(
+        Core::LossType::MeanSquaredError,
+        configuration,
+        snapshot))
+    {
+        return false;
+    }
+
+    const StudioSignalHealthFilter filter =
+        CurrentState.SignalHealth.Filter;
+    CurrentState.SignalHealth = {};
+    CurrentState.SignalHealth.Active = true;
+    CurrentState.SignalHealth.Filter = filter;
+    CurrentState.SignalHealth.Snapshot = std::move(snapshot);
+    ClearForwardTrace();
+    ClearBackwardTrace();
+    return true;
+}
+
+void MiaIA::Studio::StudioController::ClearSignalHealthDiagnostics()
+{
+    const StudioSignalHealthFilter filter =
+        CurrentState.SignalHealth.Filter;
+    CurrentState.SignalHealth = {};
+    CurrentState.SignalHealth.Filter = filter;
+}
+
+void MiaIA::Studio::StudioController::SetSignalHealthFilter(
+    StudioSignalHealthFilter filter)
+{
+    CurrentState.SignalHealth.Filter = filter;
 }
 
 void MiaIA::Studio::StudioController::RefreshTrainingTimeline()
