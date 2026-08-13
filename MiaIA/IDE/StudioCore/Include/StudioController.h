@@ -2,6 +2,7 @@
 
 #include "StudioTopology.h"
 #include "../../../Core/Public/ConnectionInspectionSnapshot.h"
+#include "../../../Core/Public/ForwardTraceSnapshot.h"
 #include "../../../Core/Public/NeuronInspectionSnapshot.h"
 
 #include <cstddef>
@@ -38,6 +39,16 @@ namespace MiaIA::Studio
         std::string Description;
     };
 
+    struct StudioForwardTraceState
+    {
+        bool Active{};
+        Core::ForwardTraceSnapshot Trace;
+        std::uint64_t FocusedNeuronId{};
+        Core::ForwardTraceContributionPageRequest ContributionRequest;
+        bool HasContributionPage{};
+        Core::ForwardTraceContributionPageSnapshot ContributionPage;
+    };
+
     struct StudioState
     {
         Core::NetworkOverviewSnapshot Overview;
@@ -48,6 +59,7 @@ namespace MiaIA::Studio
         Core::NeuronInspectionSnapshot NeuronInspection;
         bool HasConnectionInspection{};
         Core::ConnectionInspectionSnapshot ConnectionInspection;
+        StudioForwardTraceState ForwardTrace;
     };
 
     class StudioController
@@ -75,6 +87,12 @@ namespace MiaIA::Studio
         bool SelectConnection(std::uint64_t connectionId);
         void ClearSelection();
 
+        bool RunForwardTrace(const std::vector<double>& inputs);
+        void ClearForwardTrace();
+        bool FocusForwardTraceNeuron(std::uint64_t neuronId);
+        bool SetForwardTraceContributionRequest(
+            const Core::ForwardTraceContributionPageRequest& request);
+
         [[nodiscard]] const StudioState& State() const;
 
     private:
@@ -84,6 +102,8 @@ namespace MiaIA::Studio
         bool ContainsConnection(std::uint64_t id) const;
         void ValidateSelection();
         void RefreshSelectionInspection();
+        bool ContainsForwardTraceNeuron(std::uint64_t neuronId) const;
+        bool RefreshForwardTraceContributions();
 
         std::string WorkingDirectory;
         StudioViewMode ViewMode{ StudioViewMode::TwoDimensional };

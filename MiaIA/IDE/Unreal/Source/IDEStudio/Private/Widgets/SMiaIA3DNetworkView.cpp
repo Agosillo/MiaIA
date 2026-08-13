@@ -532,6 +532,25 @@ void SMiaIA3DNetworkView::SetDebugSnapshot(
     bSceneDirty = true;
 }
 
+void SMiaIA3DNetworkView::SetForwardTraceOverlay(
+    const TMap<int64, double>& InActivations,
+    const TMap<int64, double>& InContributions)
+{
+    ForwardTraceActivations = InActivations;
+    ForwardTraceContributions = InContributions;
+    MaximumForwardTraceContribution = UE_DOUBLE_SMALL_NUMBER;
+
+    for (const TPair<int64, double>& contribution :
+        ForwardTraceContributions)
+    {
+        MaximumForwardTraceContribution = FMath::Max(
+            MaximumForwardTraceContribution,
+            FMath::Abs(contribution.Value));
+    }
+
+    bSceneDirty = true;
+}
+
 void SMiaIA3DNetworkView::SetSelectedNeurons(
     const TSet<int64>& InNeuronIds,
     int64 InPrimaryNeuronId)
@@ -1553,13 +1572,17 @@ void SMiaIA3DNetworkView::RebuildDetailedScene()
                     (DebugPhase ==
                         EMiaIATrainingDebugPhase::UpdateComplete &&
                         telemetry->bHasUpdate));
+            const double* traceActivation =
+                ForwardTraceActivations.Find(neuron.Id);
             const FLinearColor color = displaysTelemetry
                 ? SignedNeuronColor(
                     NeuronMetric(*telemetry),
                     MaximumNeuronMetric)
-                : ActivationColor(telemetry
-                    ? telemetry->CandidateActivation
-                    : neuron.Activation);
+                : ActivationColor(traceActivation
+                    ? *traceActivation
+                    : telemetry
+                        ? telemetry->CandidateActivation
+                        : neuron.Activation);
 
             ViewportClient->AddSphere(
                 position,
@@ -1588,9 +1611,13 @@ void SMiaIA3DNetworkView::RebuildDetailedScene()
 
         const FMiaIADebugConnectionTelemetry* telemetry =
             ConnectionTelemetry.Find(connection.Id);
-        const double displayedValue = telemetry
-            ? ConnectionMetric(*telemetry)
-            : connection.Weight;
+        const double* traceContribution =
+            ForwardTraceContributions.Find(connection.Id);
+        const double displayedValue = traceContribution
+            ? *traceContribution
+            : telemetry
+                ? ConnectionMetric(*telemetry)
+                : connection.Weight;
         const bool displaysTelemetry = telemetry &&
             ((DebugPhase ==
                 EMiaIATrainingDebugPhase::BackwardComplete &&
@@ -1599,7 +1626,10 @@ void SMiaIA3DNetworkView::RebuildDetailedScene()
                     EMiaIATrainingDebugPhase::UpdateComplete &&
                     telemetry->bHasUpdate));
         const float strength = FMath::Clamp(
-            static_cast<float>(displaysTelemetry
+            static_cast<float>(traceContribution
+                ? FMath::Abs(displayedValue) /
+                    MaximumForwardTraceContribution
+                : displaysTelemetry
                 ? FMath::Abs(displayedValue) /
                     MaximumConnectionMetric
                 : FMath::Abs(displayedValue)),
@@ -1609,7 +1639,13 @@ void SMiaIA3DNetworkView::RebuildDetailedScene()
             connection.Id == SelectedConnectionId;
         const FLinearColor color = selected
             ? palette.Selection
-            : displaysTelemetry
+            : traceContribution
+                ? SignedConnectionColor(
+                    displayedValue,
+                    MaximumForwardTraceContribution)
+                : !ForwardTraceActivations.IsEmpty()
+                    ? palette.SubduedText.CopyWithNewOpacity(0.12f)
+                : displaysTelemetry
                 ? SignedConnectionColor(
                     displayedValue,
                     MaximumConnectionMetric)

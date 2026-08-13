@@ -150,6 +150,10 @@ bool MiaIA::Studio::StudioController::SelectNeuron(std::uint64_t neuronId)
 
     CurrentState.Selection = { StudioSelectionKind::Neuron, neuronId };
     RefreshSelectionInspection();
+    if (CurrentState.ForwardTrace.Active)
+    {
+        FocusForwardTraceNeuron(neuronId);
+    }
     return true;
 }
 
@@ -176,6 +180,88 @@ void MiaIA::Studio::StudioController::ClearSelection()
     CurrentState.NeuronInspection = {};
     CurrentState.HasConnectionInspection = false;
     CurrentState.ConnectionInspection = {};
+    CurrentState.ForwardTrace.FocusedNeuronId = 0;
+    CurrentState.ForwardTrace.HasContributionPage = false;
+    CurrentState.ForwardTrace.ContributionPage = {};
+}
+
+bool MiaIA::Studio::StudioController::RunForwardTrace(
+    const std::vector<double>& inputs)
+{
+    Core::ForwardTraceSnapshot trace;
+
+    if (!SDK::MiaIAClient::TraceForward(inputs, trace))
+    {
+        return false;
+    }
+
+    StudioForwardTraceState next;
+    next.Active = true;
+    next.Trace = std::move(trace);
+    next.ContributionRequest =
+        CurrentState.ForwardTrace.ContributionRequest;
+
+    if (CurrentState.Selection.Kind == StudioSelectionKind::Neuron)
+    {
+        next.FocusedNeuronId = CurrentState.Selection.Id;
+    }
+
+    CurrentState.ForwardTrace = std::move(next);
+
+    if (CurrentState.ForwardTrace.FocusedNeuronId != 0)
+    {
+        RefreshForwardTraceContributions();
+    }
+
+    return true;
+}
+
+void MiaIA::Studio::StudioController::ClearForwardTrace()
+{
+    CurrentState.ForwardTrace = {};
+}
+
+bool MiaIA::Studio::StudioController::FocusForwardTraceNeuron(
+    std::uint64_t neuronId)
+{
+    if (!CurrentState.ForwardTrace.Active ||
+        !ContainsForwardTraceNeuron(neuronId))
+    {
+        return false;
+    }
+
+    const StudioForwardTraceState previous = CurrentState.ForwardTrace;
+    CurrentState.ForwardTrace.FocusedNeuronId = neuronId;
+    CurrentState.ForwardTrace.ContributionRequest.Offset = 0;
+
+    if (!RefreshForwardTraceContributions())
+    {
+        CurrentState.ForwardTrace = previous;
+        return false;
+    }
+
+    return true;
+}
+
+bool MiaIA::Studio::StudioController::SetForwardTraceContributionRequest(
+    const Core::ForwardTraceContributionPageRequest& request)
+{
+    if (!CurrentState.ForwardTrace.Active ||
+        CurrentState.ForwardTrace.FocusedNeuronId == 0)
+    {
+        return false;
+    }
+
+    const StudioForwardTraceState previous = CurrentState.ForwardTrace;
+    CurrentState.ForwardTrace.ContributionRequest = request;
+
+    if (!RefreshForwardTraceContributions())
+    {
+        CurrentState.ForwardTrace = previous;
+        return false;
+    }
+
+    return true;
 }
 
 const MiaIA::Studio::StudioState&
@@ -271,4 +357,44 @@ void MiaIA::Studio::StudioController::RefreshSelectionInspection()
                 CurrentState.Selection.Id,
                 CurrentState.ConnectionInspection);
     }
+}
+
+bool MiaIA::Studio::StudioController::ContainsForwardTraceNeuron(
+    std::uint64_t neuronId) const
+{
+    for (const Core::ForwardTraceLayerSnapshot& layer :
+        CurrentState.ForwardTrace.Trace.Layers)
+    {
+        for (const Core::ForwardTraceNeuronSnapshot& neuron : layer.Neurons)
+        {
+            if (neuron.Id == neuronId)
+            {
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
+bool MiaIA::Studio::StudioController::RefreshForwardTraceContributions()
+{
+    Core::ForwardTraceContributionPageSnapshot page;
+    const bool succeeded =
+        SDK::MiaIAClient::TryGetForwardTraceContributions(
+            CurrentState.ForwardTrace.Trace.Inputs,
+            CurrentState.ForwardTrace.FocusedNeuronId,
+            CurrentState.ForwardTrace.ContributionRequest,
+            page);
+
+    if (!succeeded)
+    {
+        CurrentState.ForwardTrace.HasContributionPage = false;
+        CurrentState.ForwardTrace.ContributionPage = {};
+        return false;
+    }
+
+    CurrentState.ForwardTrace.HasContributionPage = true;
+    CurrentState.ForwardTrace.ContributionPage = std::move(page);
+    return true;
 }

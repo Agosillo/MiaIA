@@ -41,6 +41,9 @@ public:
         bool bInCompactMode,
         bool bInNetworkAggregateMode);
     void SetDebugSnapshot(const FMiaIATrainingDebugSnapshot& InDebug);
+    void SetForwardTraceOverlay(
+        const TMap<int64, double>& InActivations,
+        const TMap<int64, double>& InContributions);
     void SetSelectedNeurons(
         const TSet<int64>& InNeuronIds,
         int64 InPrimaryNeuronId);
@@ -149,6 +152,8 @@ private:
     EMiaIATrainingDebugPhase DebugPhase{EMiaIATrainingDebugPhase::Idle};
     TMap<int64, FMiaIADebugNeuronTelemetry> NeuronTelemetry;
     TMap<int64, FMiaIADebugConnectionTelemetry> ConnectionTelemetry;
+    TMap<int64, double> ForwardTraceActivations;
+    TMap<int64, double> ForwardTraceContributions;
     TMap<int64, FVector> ManualNodePositions;
     TArray<FNodeRenderData> RenderedNodes;
     TArray<FConnectionRenderData> RenderedConnections;
@@ -175,6 +180,7 @@ private:
     TSet<int64> SelectedNeuronIds;
     double MaximumNeuronMetric{1.0};
     double MaximumConnectionMetric{1.0};
+    double MaximumForwardTraceContribution{1.0};
     float CameraYaw{-90.0f};
     float CameraPitch{0.0f};
     float CameraDistance{1150.0f};

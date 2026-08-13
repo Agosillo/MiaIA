@@ -184,6 +184,14 @@ Forward propagation gained a renderer-neutral explanation contract without intro
 
 A focused contribution query pages one target neuron's incoming `source activation * weight` terms with deterministic sorting and absolute-magnitude filtering. `MiaIAClient`, `trace forward`, and `trace neuron` expose the complete and focused views. Exact numerical tests cover the full calculation, pagination, filtering, invalid-query result preservation, and unchanged public state. Graphical animation remains separate from this first Engine contract.
 
+### Graphical forward trace
+
+StudioCore now retains a renderer-neutral graphical trace session above the immutable Engine contract. It owns the captured trace, focused neuron, page request, and last valid contribution page. Invalid execution, focus, or paging operations do not replace the last valid state.
+
+The shared Unreal editor and standalone panel gained an `Execution trace` tab. One input vector produces captured outputs, per-neuron Inspector values, activation coloring in both detailed renderers, and exact signed highlighting for the visible contribution page while unrelated links are subdued. Previous and Next keep dense incoming sets bounded, contribution rows open normal connection inspection, and Clear removes the overlay without mutating the model. Temporal signal animation remains a separate later visualization step.
+
+The trace integration also introduced the first explicit Unreal instance boundary. An opaque handle identifies the initial `default` instance, while a runtime service in `IDE.dll` owns and invokes its `StudioController`. The Slate module therefore shares the exact process-local SDK state used by Blueprint and the integrated CLI instead of acquiring a second static-library copy. True simultaneous model contexts remain future native SDK work behind this boundary.
+
 ## Current position
 
 MiaIA can now create dense networks with explicit initialization choices, reconfigure existing parameters transactionally, represent, execute, interchange, persist a `.mai` v1 project, inspect individual network relationships, evaluate, differentiate, debug one training step phase by phase, train through controlled foreground or background sessions, and navigate or compare the complete history of successful steps. It cannot yet persist visualization layouts or training history inside that project, retain complete hidden-neuron activations for every step, or deliver the planned complete graphical debugging experience.

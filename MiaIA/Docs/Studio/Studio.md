@@ -36,6 +36,7 @@ Core / Engine
 - two-dimensional and three-dimensional view selection;
 - layer, neuron, connection, and multi-neuron selection, with arrow-key traversal between neurons and layers;
 - focused neuron and connection relationship state with paged, filtered, and ordered traversal;
+- immutable forward-trace state with one focused neuron and bounded incoming-contribution pages;
 - automatic invalidation of a selection that no longer exists;
 - detailed snapshots for manageable networks;
 - lightweight compact scenes for large networks.
@@ -47,6 +48,10 @@ Every non-empty network first opens on one whole-network preview, independently 
 For a single selected neuron, the Inspector retains its layer context and exact incoming and outgoing connection counts. Its Relationship Explorer queries one bounded page at a time, independently selects Incoming or Outgoing direction, orders by connection ID, signed weight, or absolute weight, and filters by a minimum absolute weight. Each row can select the connection or navigate to the neuron at its opposite endpoint. In a compact large network that navigation atomically opens the endpoint layer instead of requesting the complete graph. A selected connection retains contextual snapshots of both endpoint neurons and exposes explicit navigation to its source or destination, so inspecting an edge never interrupts relationship traversal. The persistent per-direction limit is reused as page size, changing the amount displayed without changing reported totals.
 
 The Unreal-hosted Inspector also provides focused parameter controls. One selected hidden or output neuron can apply a finite bias, and one selected connection can apply a finite weight. Input neurons display an explanatory non-editable state. These controls call the public Blueprint adapter, which forwards to `MiaIAClient`; training/debug ownership and all mathematical validation remain below the frontend.
+
+The lower `Execution trace` tab accepts one value per input neuron and captures the existing Engine forward explanation without changing public activations. It reports the captured inputs and outputs, colors detailed neurons from the recorded activations, dims unrelated links, and colors the current bounded page of incoming connections by their exact signed contribution. Selecting a neuron adds weighted input, bias, pre-activation, and final activation to the Inspector and refreshes the contribution page. Previous and Next navigate dense incoming sets, while selecting a contribution row opens the ordinary connection Inspector. `Clear` removes only the graphical overlay and retained trace state.
+
+In the Unreal host, the panel addresses this state through an opaque `FMiaIAInstanceHandle`. `FMiaIAInstanceService` owns the corresponding controller in the runtime `IDE` module and performs every stateful call there, so Blueprint, the integrated CLI, and `IDEStudio` observe one SDK state even though Unreal builds them across multiple DLL modules. Only the `default` instance exists today. The handle is the frontend seam for future independent project contexts; it is not yet a claim that the process-global SDK can host several networks simultaneously.
 
 ## Layout conventions
 

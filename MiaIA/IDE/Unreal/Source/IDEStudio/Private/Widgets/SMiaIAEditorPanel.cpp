@@ -537,6 +537,7 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
 {
     const auto panelBorder = FAppStyle::GetBrush(TEXT("WhiteBrush"));
     bStandaloneMode = InArgs._StandaloneMode;
+    MiaIAInstance = FMiaIAInstanceService::DefaultInstance();
     Theme = FMiaIAEditorTheme::Load();
     DataRefreshMode = LoadDataRefreshMode();
     VisualizationSettings = LoadVisualizationSettings();
@@ -1189,6 +1190,21 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
                         ]
                         + SVerticalBox::Slot()
                         .AutoHeight()
+                        .Padding(0.0f, 5.0f)
+                        [
+                            SNew(STextBlock)
+                            .Text(
+                                this,
+                                &SMiaIAEditorPanel::ForwardTraceSelectionText)
+                            .AutoWrapText(true)
+                            .ColorAndOpacity_Lambda([this]()
+                            {
+                                return FSlateColor(
+                                    FMiaIAEditorTheme::Palette(Theme).Debug);
+                            })
+                        ]
+                        + SVerticalBox::Slot()
+                        .AutoHeight()
                         .Padding(0.0f, 7.0f, 0.0f, 3.0f)
                         [
                             SNew(SHorizontalBox)
@@ -1589,6 +1605,20 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
                                 &SMiaIAEditorPanel::SelectBottomTab,
                                 2)
                         ]
+                        + SHorizontalBox::Slot()
+                        .AutoWidth()
+                        .Padding(2.0f)
+                        [
+                            SNew(SButton)
+                            .ButtonStyle(&ButtonStyle)
+                            .Text(LOCTEXT(
+                                "ForwardTraceTab",
+                                "Execution trace"))
+                            .OnClicked(
+                                this,
+                                &SMiaIAEditorPanel::SelectBottomTab,
+                                3)
+                        ]
                     ]
                     + SVerticalBox::Slot()
                     .FillHeight(1.0f)
@@ -1900,6 +1930,113 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
                                 ]
                             ]
                         ]
+                        + SWidgetSwitcher::Slot()
+                        [
+                            SNew(SVerticalBox)
+                            + SVerticalBox::Slot()
+                            .AutoHeight()
+                            .Padding(2.0f, 2.0f, 2.0f, 6.0f)
+                            [
+                                SNew(SHorizontalBox)
+                                + SHorizontalBox::Slot()
+                                .FillWidth(1.0f)
+                                [
+                                    SAssignNew(
+                                        ForwardTraceInput,
+                                        SEditableTextBox)
+                                    .Style(&InputStyle)
+                                    .HintText(LOCTEXT(
+                                        "ForwardTraceInputHint",
+                                        "Input vector, for example: 1 1"))
+                                ]
+                                + SHorizontalBox::Slot()
+                                .AutoWidth()
+                                .Padding(6.0f, 0.0f, 0.0f, 0.0f)
+                                [
+                                    SNew(SButton)
+                                    .ButtonStyle(&ButtonStyle)
+                                    .Text(LOCTEXT(
+                                        "RunForwardTrace",
+                                        "Run trace"))
+                                    .OnClicked(
+                                        this,
+                                        &SMiaIAEditorPanel::
+                                            HandleRunForwardTrace)
+                                ]
+                                + SHorizontalBox::Slot()
+                                .AutoWidth()
+                                .Padding(4.0f, 0.0f, 0.0f, 0.0f)
+                                [
+                                    SNew(SButton)
+                                    .ButtonStyle(&ButtonStyle)
+                                    .Text(LOCTEXT(
+                                        "ClearForwardTrace",
+                                        "Clear"))
+                                    .OnClicked(
+                                        this,
+                                        &SMiaIAEditorPanel::
+                                            HandleClearForwardTrace)
+                                ]
+                            ]
+                            + SVerticalBox::Slot()
+                            .AutoHeight()
+                            .Padding(4.0f, 0.0f, 4.0f, 6.0f)
+                            [
+                                SNew(STextBlock)
+                                .Text(
+                                    this,
+                                    &SMiaIAEditorPanel::
+                                        ForwardTraceSummaryText)
+                                .AutoWrapText(true)
+                            ]
+                            + SVerticalBox::Slot()
+                            .FillHeight(1.0f)
+                            [
+                                SNew(SScrollBox)
+                                .ScrollBarStyle(&ScrollBarStyle)
+                                + SScrollBox::Slot()
+                                [
+                                    SAssignNew(
+                                        ForwardTraceContent,
+                                        SVerticalBox)
+                                ]
+                            ]
+                            + SVerticalBox::Slot()
+                            .AutoHeight()
+                            .HAlign(HAlign_Right)
+                            .Padding(2.0f, 5.0f, 2.0f, 0.0f)
+                            [
+                                SNew(SHorizontalBox)
+                                + SHorizontalBox::Slot()
+                                .AutoWidth()
+                                .Padding(2.0f)
+                                [
+                                    SNew(SButton)
+                                    .ButtonStyle(&ButtonStyle)
+                                    .Text(LOCTEXT(
+                                        "PreviousForwardTracePage",
+                                        "Previous"))
+                                    .OnClicked(
+                                        this,
+                                        &SMiaIAEditorPanel::
+                                            HandlePreviousForwardTracePage)
+                                ]
+                                + SHorizontalBox::Slot()
+                                .AutoWidth()
+                                .Padding(2.0f)
+                                [
+                                    SNew(SButton)
+                                    .ButtonStyle(&ButtonStyle)
+                                    .Text(LOCTEXT(
+                                        "NextForwardTracePage",
+                                        "Next"))
+                                    .OnClicked(
+                                        this,
+                                        &SMiaIAEditorPanel::
+                                            HandleNextForwardTracePage)
+                                ]
+                            ]
+                        ]
                     ]
                 ]
             ]
@@ -2073,6 +2210,7 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
     Network3DView->SetVisualizationSettings(VisualizationSettings);
     RebuildConsoleSuggestions(FString());
     RefreshData();
+    RebuildForwardTrace();
     RegisterActiveTimer(
         0.1f,
         FWidgetActiveTimerDelegate::CreateSP(
@@ -2251,6 +2389,20 @@ void SMiaIAEditorPanel::RefreshData()
             SelectedConnectionId,
             ConnectionInspection);
 
+    bool forwardTraceFocusChanged = false;
+    const MiaIA::Studio::StudioForwardTraceState forwardTrace =
+        FMiaIAInstanceService::ForwardTraceState(MiaIAInstance);
+    if (forwardTrace.Active && SelectedNeuronIds.Num() == 1 &&
+        SelectedNeuronId >= 0 &&
+        forwardTrace.FocusedNeuronId !=
+            static_cast<uint64>(SelectedNeuronId))
+    {
+        forwardTraceFocusChanged =
+            FMiaIAInstanceService::FocusForwardTraceNeuron(
+                MiaIAInstance,
+                static_cast<uint64>(SelectedNeuronId));
+    }
+
     RelationshipPage = {};
     bHasRelationshipPage = bHasNeuronInspection &&
         UMiaIABlueprintLibrary::GetNeuronRelationshipPage(
@@ -2394,6 +2546,8 @@ void SMiaIAEditorPanel::RefreshData()
         Network3DView->SetSelectedLayer(SelectedLayerId);
     }
 
+    ApplyForwardTraceOverlay();
+
     if (topologyChanged)
     {
         RebuildExplorer();
@@ -2407,6 +2561,147 @@ void SMiaIAEditorPanel::RefreshData()
     if (relationshipsChanged)
     {
         RebuildRelationshipExplorer();
+    }
+
+    if (forwardTraceFocusChanged)
+    {
+        RebuildForwardTrace();
+    }
+}
+
+void SMiaIAEditorPanel::ApplyForwardTraceOverlay()
+{
+    TMap<int64, double> activations;
+    TMap<int64, double> contributions;
+    const MiaIA::Studio::StudioForwardTraceState state =
+        FMiaIAInstanceService::ForwardTraceState(MiaIAInstance);
+
+    if (state.Active)
+    {
+        for (const MiaIA::Core::ForwardTraceLayerSnapshot& layer :
+            state.Trace.Layers)
+        {
+            for (const MiaIA::Core::ForwardTraceNeuronSnapshot& neuron :
+                layer.Neurons)
+            {
+                activations.Add(
+                    static_cast<int64>(neuron.Id),
+                    neuron.Activation);
+            }
+        }
+
+        if (state.HasContributionPage)
+        {
+            for (const auto& contribution :
+                state.ContributionPage.Contributions)
+            {
+                contributions.Add(
+                    static_cast<int64>(contribution.ConnectionId),
+                    contribution.Contribution);
+            }
+        }
+    }
+
+    if (NetworkView.IsValid())
+    {
+        NetworkView->SetForwardTraceOverlay(
+            activations,
+            contributions);
+    }
+
+    if (Network3DView.IsValid())
+    {
+        Network3DView->SetForwardTraceOverlay(
+            activations,
+            contributions);
+    }
+}
+
+void SMiaIAEditorPanel::RebuildForwardTrace()
+{
+    if (!ForwardTraceContent.IsValid())
+    {
+        return;
+    }
+
+    ForwardTraceContent->ClearChildren();
+    const MiaIA::Studio::StudioForwardTraceState state =
+        FMiaIAInstanceService::ForwardTraceState(MiaIAInstance);
+
+    if (!state.Active)
+    {
+        ForwardTraceContent->AddSlot()
+        .AutoHeight()
+        .Padding(3.0f)
+        [
+            SNew(STextBlock)
+            .Text(LOCTEXT(
+                "ForwardTraceInactive",
+                "Enter one value per input neuron, then run an immutable forward trace."))
+            .AutoWrapText(true)
+        ];
+        return;
+    }
+
+    if (!state.HasContributionPage)
+    {
+        ForwardTraceContent->AddSlot()
+        .AutoHeight()
+        .Padding(3.0f)
+        [
+            SNew(STextBlock)
+            .Text(LOCTEXT(
+                "ForwardTraceSelectNeuron",
+                "Select one neuron to inspect its exact incoming contributions."))
+            .AutoWrapText(true)
+        ];
+        return;
+    }
+
+    ForwardTraceContent->AddSlot()
+    .AutoHeight()
+    .Padding(3.0f, 2.0f, 3.0f, 6.0f)
+    [
+        SNew(STextBlock)
+        .Text(FText::FromString(FString::Printf(
+            TEXT("Neuron #%lld | contributions %lld-%lld of %lld"),
+            static_cast<int64>(state.FocusedNeuronId),
+            static_cast<int64>(state.ContributionPage.Offset +
+                (state.ContributionPage.Contributions.empty() ? 0 : 1)),
+            static_cast<int64>(state.ContributionPage.Offset +
+                state.ContributionPage.Contributions.size()),
+            static_cast<int64>(
+                state.ContributionPage.FilteredContributionCount))))
+        .Font(FAppStyle::GetFontStyle(TEXT("SmallFontBold")))
+    ];
+
+    for (const auto& contribution : state.ContributionPage.Contributions)
+    {
+        const int64 connectionId =
+            static_cast<int64>(contribution.ConnectionId);
+        ForwardTraceContent->AddSlot()
+        .AutoHeight()
+        .Padding(3.0f, 1.0f)
+        [
+            SNew(SButton)
+            .ButtonStyle(&ExplorerButtonStyle)
+            .OnClicked_Lambda([this, connectionId]()
+            {
+                SelectConnection(connectionId);
+                return FReply::Handled();
+            })
+            [
+                SNew(STextBlock)
+                .Text(FText::FromString(FString::Printf(
+                    TEXT("#%lld  |  #%lld -> #%lld  |  %g x %g = %g"),
+                    connectionId,
+                    static_cast<int64>(contribution.FromNeuron),
+                    static_cast<int64>(contribution.ToNeuron),
+                    contribution.SourceActivation,
+                    contribution.Weight,
+                    contribution.Contribution)))
+            ]
+        ];
     }
 }
 
@@ -4155,6 +4450,107 @@ FReply SMiaIAEditorPanel::SelectBottomTab(int32 TabIndex)
     return FReply::Handled();
 }
 
+FReply SMiaIAEditorPanel::HandleRunForwardTrace()
+{
+    if (!ForwardTraceInput.IsValid())
+    {
+        return FReply::Handled();
+    }
+
+    TArray<FString> tokens;
+    ForwardTraceInput->GetText().ToString().ParseIntoArrayWS(tokens);
+    TArray<double> inputs;
+    inputs.Reserve(tokens.Num());
+
+    for (const FString& token : tokens)
+    {
+        if (!token.IsNumeric())
+        {
+            ShowDialog(
+                LOCTEXT("ForwardTraceInvalidTitle", "Trace not started"),
+                LOCTEXT(
+                    "ForwardTraceInvalidValue",
+                    "Enter a whitespace-separated list of finite numeric input values."));
+            return FReply::Handled();
+        }
+
+        inputs.Add(FCString::Atod(*token));
+    }
+
+    FMiaIAInstanceService::Refresh(MiaIAInstance);
+    if (!FMiaIAInstanceService::RunForwardTrace(MiaIAInstance, inputs))
+    {
+        ShowDialog(
+            LOCTEXT("ForwardTraceFailedTitle", "Trace not started"),
+            LOCTEXT(
+                "ForwardTraceFailed",
+                "The input count or values do not match the current valid network."));
+        return FReply::Handled();
+    }
+
+    if (SelectedNeuronIds.Num() == 1 && SelectedNeuronId >= 0)
+    {
+        FMiaIAInstanceService::FocusForwardTraceNeuron(
+            MiaIAInstance,
+            static_cast<uint64>(SelectedNeuronId));
+    }
+
+    RebuildForwardTrace();
+    ApplyForwardTraceOverlay();
+    return FReply::Handled();
+}
+
+FReply SMiaIAEditorPanel::HandleClearForwardTrace()
+{
+    FMiaIAInstanceService::ClearForwardTrace(MiaIAInstance);
+    RebuildForwardTrace();
+    ApplyForwardTraceOverlay();
+    return FReply::Handled();
+}
+
+FReply SMiaIAEditorPanel::HandlePreviousForwardTracePage()
+{
+    const MiaIA::Studio::StudioForwardTraceState state =
+        FMiaIAInstanceService::ForwardTraceState(MiaIAInstance);
+    if (!state.HasContributionPage ||
+        !state.ContributionPage.HasPrevious)
+    {
+        return FReply::Handled();
+    }
+
+    MiaIA::Core::ForwardTraceContributionPageRequest request =
+        state.ContributionRequest;
+    request.Offset = request.Offset > request.Limit
+        ? request.Offset - request.Limit
+        : 0;
+    FMiaIAInstanceService::SetForwardTraceContributionRequest(
+        MiaIAInstance,
+        request);
+    RebuildForwardTrace();
+    ApplyForwardTraceOverlay();
+    return FReply::Handled();
+}
+
+FReply SMiaIAEditorPanel::HandleNextForwardTracePage()
+{
+    const MiaIA::Studio::StudioForwardTraceState state =
+        FMiaIAInstanceService::ForwardTraceState(MiaIAInstance);
+    if (!state.HasContributionPage || !state.ContributionPage.HasNext)
+    {
+        return FReply::Handled();
+    }
+
+    MiaIA::Core::ForwardTraceContributionPageRequest request =
+        state.ContributionRequest;
+    request.Offset += request.Limit;
+    FMiaIAInstanceService::SetForwardTraceContributionRequest(
+        MiaIAInstance,
+        request);
+    RebuildForwardTrace();
+    ApplyForwardTraceOverlay();
+    return FReply::Handled();
+}
+
 TSharedRef<SWidget> SMiaIAEditorPanel::BuildBreakpointKindMenu()
 {
     TSharedRef<SVerticalBox> menu = SNew(SVerticalBox);
@@ -5177,6 +5573,9 @@ FReply SMiaIAEditorPanel::HandleQuickHelp()
             "INSPECTION AND DEBUG\n"
             "The Inspector follows the current element or group. For one neuron, choose Incoming or Outgoing relationships, page them, order by ID or weight, filter by minimum absolute weight, and open either the connection or its opposite neuron. Use Start debug and Step phase to inspect forward, backward, update, verify, and commit states.\n\n"
 
+            "EXECUTION TRACE\n"
+            "Open Execution trace, enter one whitespace-separated value per input neuron, and choose Run trace. Select a neuron to inspect its weighted input, bias, pre-activation, activation, and paged incoming contributions. Clear removes the captured overlay without changing the model.\n\n"
+
             "BREAKPOINTS\n"
             "Open the Breakpoints tab to stop controlled training on a phase, neuron activation, neuron gradient, or connection update. Automatic training stops after the triggering sample commits, before the next sample begins.\n\n"
 
@@ -5655,6 +6054,13 @@ EVisibility SMiaIAEditorPanel::LayerDetailVisibility() const
 
 FText SMiaIAEditorPanel::PositiveMetricLegendText() const
 {
+    if (FMiaIAInstanceService::ForwardTraceState(MiaIAInstance).Active)
+    {
+        return LOCTEXT(
+            "PositiveContributionLegend",
+            "Positive contribution");
+    }
+
     switch (Debug.Phase)
     {
     case EMiaIATrainingDebugPhase::BackwardComplete:
@@ -5668,6 +6074,13 @@ FText SMiaIAEditorPanel::PositiveMetricLegendText() const
 
 FText SMiaIAEditorPanel::NegativeMetricLegendText() const
 {
+    if (FMiaIAInstanceService::ForwardTraceState(MiaIAInstance).Active)
+    {
+        return LOCTEXT(
+            "NegativeContributionLegend",
+            "Negative contribution");
+    }
+
     switch (Debug.Phase)
     {
     case EMiaIATrainingDebugPhase::BackwardComplete:
@@ -5682,6 +6095,81 @@ FText SMiaIAEditorPanel::NegativeMetricLegendText() const
 FText SMiaIAEditorPanel::ConsoleText() const
 {
     return FText::FromString(ConsoleHistory);
+}
+
+FText SMiaIAEditorPanel::ForwardTraceSummaryText() const
+{
+    const MiaIA::Studio::StudioForwardTraceState state =
+        FMiaIAInstanceService::ForwardTraceState(MiaIAInstance);
+    if (!state.Active)
+    {
+        return LOCTEXT(
+            "ForwardTraceSummaryInactive",
+            "No captured execution trace.");
+    }
+
+    FString inputText;
+    for (const double value : state.Trace.Inputs)
+    {
+        if (!inputText.IsEmpty())
+        {
+            inputText += TEXT(", ");
+        }
+        inputText += FString::SanitizeFloat(value);
+    }
+
+    FString outputText;
+    for (const double value : state.Trace.Outputs)
+    {
+        if (!outputText.IsEmpty())
+        {
+            outputText += TEXT(", ");
+        }
+        outputText += FString::SanitizeFloat(value);
+    }
+
+    return FText::FromString(FString::Printf(
+        TEXT("Captured snapshot | Inputs: [%s] | Outputs: [%s]"),
+        *inputText,
+        *outputText));
+}
+
+FText SMiaIAEditorPanel::ForwardTraceSelectionText() const
+{
+    const MiaIA::Studio::StudioForwardTraceState state =
+        FMiaIAInstanceService::ForwardTraceState(MiaIAInstance);
+    if (!state.Active || SelectedNeuronIds.Num() != 1 ||
+        SelectedNeuronId < 0)
+    {
+        return FText::GetEmpty();
+    }
+
+    for (const MiaIA::Core::ForwardTraceLayerSnapshot& layer :
+        state.Trace.Layers)
+    {
+        for (const MiaIA::Core::ForwardTraceNeuronSnapshot& neuron :
+            layer.Neurons)
+        {
+            if (neuron.Id != static_cast<uint64>(SelectedNeuronId))
+            {
+                continue;
+            }
+
+            return FText::FromString(FString::Printf(
+                TEXT(
+                    "Execution trace\n"
+                    "Weighted input: %g\n"
+                    "Bias: %g\n"
+                    "Pre-activation: %g\n"
+                    "Activation: %g"),
+                neuron.WeightedInputSum,
+                neuron.Bias,
+                neuron.PreActivation,
+                neuron.Activation));
+        }
+    }
+
+    return FText::GetEmpty();
 }
 
 FText SMiaIAEditorPanel::SelectionTitle() const

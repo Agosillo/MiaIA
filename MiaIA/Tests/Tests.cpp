@@ -279,6 +279,34 @@ int main()
         assert(controller.State().ConnectionInspection.ToNeuron.Neuron.Id ==
             1003);
 
+        assert(controller.SelectNeuron(1003));
+        assert(controller.RunForwardTrace({ 1.0, 1.0 }));
+        assert(controller.State().ForwardTrace.Active);
+        assert(controller.State().ForwardTrace.Trace.Inputs.size() == 2);
+        assert(controller.State().ForwardTrace.Trace.Outputs.size() == 1);
+        assert(controller.State().ForwardTrace.FocusedNeuronId == 1003);
+        assert(controller.State().ForwardTrace.HasContributionPage);
+        assert(controller.State().ForwardTrace.ContributionPage.
+            TotalContributionCount == 2);
+
+        MiaIA::Core::ForwardTraceContributionPageRequest traceRequest;
+        traceRequest.Offset = 1;
+        traceRequest.Limit = 1;
+        traceRequest.Sort = MiaIA::Core::ForwardTraceContributionSort::
+            AbsoluteContribution;
+        traceRequest.Descending = true;
+        assert(controller.SetForwardTraceContributionRequest(traceRequest));
+        assert(controller.State().ForwardTrace.ContributionPage.Offset == 1);
+        assert(controller.State().ForwardTrace.ContributionPage.
+            Contributions.size() == 1);
+
+        const auto preservedTrace = controller.State().ForwardTrace.Trace;
+        assert(!controller.RunForwardTrace({ 1.0 }));
+        assert(controller.State().ForwardTrace.Trace.Outputs ==
+            preservedTrace.Outputs);
+        controller.ClearForwardTrace();
+        assert(!controller.State().ForwardTrace.Active);
+
         const auto suggestions = controller.GetSuggestions("pred");
         assert(suggestions.size() == 1);
         assert(suggestions[0].Completion == "predict");

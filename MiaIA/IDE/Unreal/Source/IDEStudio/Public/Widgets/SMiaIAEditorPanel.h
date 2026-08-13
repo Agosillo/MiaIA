@@ -2,6 +2,7 @@
 
 #include "Containers/Set.h"
 #include "MiaIABlueprintTypes.h"
+#include "MiaIAInstanceService.h"
 #include "Styling/MiaIAEditorTheme.h"
 #include "Widgets/SCompoundWidget.h"
 #include "Widgets/MiaIAVisualizationSettings.h"
@@ -56,6 +57,8 @@ private:
     void RebuildExplorer();
     void RebuildRelationshipExplorer();
     void RebuildBreakpoints();
+    void RebuildForwardTrace();
+    void ApplyForwardTraceOverlay();
     bool ExpandExplorerForNeuron(int64 NeuronId);
     bool ExpandExplorerForNeurons(const TSet<int64>& NeuronIds);
     FReply HandleToggleExplorerLayer(int64 LayerId);
@@ -157,6 +160,10 @@ private:
     FReply HandleToggleBreakpoint(int64 BreakpointId, bool bEnabled);
     FReply HandleRemoveBreakpoint(int64 BreakpointId);
     FReply HandleClearBreakpoints();
+    FReply HandleRunForwardTrace();
+    FReply HandleClearForwardTrace();
+    FReply HandlePreviousForwardTracePage();
+    FReply HandleNextForwardTracePage();
     void ShowDialog(const FText& Title, const FText& Content);
     void ShowProjectPathDialog(EMiaIAProjectPathAction Action);
     EVisibility DialogVisibility() const;
@@ -200,6 +207,8 @@ private:
     FText SelectionGradientText() const;
     FText SelectionUpdateText() const;
     FText SelectionRelationshipsText() const;
+    FText ForwardTraceSummaryText() const;
+    FText ForwardTraceSelectionText() const;
     FText SelectedConnectionEndpointText(bool bToNeuron) const;
     FText RelationshipSortText() const;
     EVisibility RelationshipExplorerVisibility() const;
@@ -302,11 +311,13 @@ private:
     bool bDialogVisible{};
     bool bRelationshipSortDescending{};
     double PeriodicRefreshElapsedSeconds{};
+    FMiaIAInstanceHandle MiaIAInstance;
 
     TSharedPtr<SVerticalBox> ExplorerContent;
     TSharedPtr<SVerticalBox> RelationshipContent;
     TSharedPtr<SVerticalBox> ConsoleSuggestionsContent;
     TSharedPtr<SVerticalBox> BreakpointContent;
+    TSharedPtr<SVerticalBox> ForwardTraceContent;
     TSharedPtr<SMiaIANetworkView> NetworkView;
     TSharedPtr<SMiaIA3DNetworkView> Network3DView;
     TSharedPtr<SWidgetSwitcher> TopologySwitcher;
@@ -317,4 +328,5 @@ private:
     TSharedPtr<SEditableTextBox> BreakpointTargetInput;
     TSharedPtr<SEditableTextBox> BreakpointThresholdInput;
     TSharedPtr<SEditableTextBox> ProjectPathInput;
+    TSharedPtr<SEditableTextBox> ForwardTraceInput;
 };
