@@ -175,6 +175,105 @@ bool FMiaIAInstanceService::SetForwardTraceFrameDuration(
         controller->SetForwardTraceFrameDuration(DurationSeconds);
 }
 
+bool FMiaIAInstanceService::RunBackwardTrace(
+    FMiaIAInstanceHandle Instance,
+    const TArray<double>& Inputs,
+    const TArray<double>& Targets)
+{
+    MiaIA::Studio::StudioController* controller = Resolve(Instance);
+
+    if (controller == nullptr)
+    {
+        return false;
+    }
+
+    std::vector<double> nativeInputs;
+    nativeInputs.reserve(Inputs.Num());
+    for (const double input : Inputs)
+    {
+        nativeInputs.push_back(input);
+    }
+
+    std::vector<double> nativeTargets;
+    nativeTargets.reserve(Targets.Num());
+    for (const double target : Targets)
+    {
+        nativeTargets.push_back(target);
+    }
+
+    return controller->RunBackwardTrace(nativeInputs, nativeTargets);
+}
+
+void FMiaIAInstanceService::ClearBackwardTrace(
+    FMiaIAInstanceHandle Instance)
+{
+    if (MiaIA::Studio::StudioController* controller = Resolve(Instance))
+    {
+        controller->ClearBackwardTrace();
+    }
+}
+
+bool FMiaIAInstanceService::FocusBackwardTraceNeuron(
+    FMiaIAInstanceHandle Instance,
+    uint64 NeuronId)
+{
+    MiaIA::Studio::StudioController* controller = Resolve(Instance);
+    return controller && controller->FocusBackwardTraceNeuron(NeuronId);
+}
+
+bool FMiaIAInstanceService::PlayBackwardTrace(
+    FMiaIAInstanceHandle Instance)
+{
+    MiaIA::Studio::StudioController* controller = Resolve(Instance);
+    return controller && controller->PlayBackwardTrace();
+}
+
+bool FMiaIAInstanceService::PauseBackwardTrace(
+    FMiaIAInstanceHandle Instance)
+{
+    MiaIA::Studio::StudioController* controller = Resolve(Instance);
+    return controller && controller->PauseBackwardTrace();
+}
+
+bool FMiaIAInstanceService::RestartBackwardTrace(
+    FMiaIAInstanceHandle Instance)
+{
+    MiaIA::Studio::StudioController* controller = Resolve(Instance);
+    return controller && controller->RestartBackwardTrace();
+}
+
+bool FMiaIAInstanceService::StepBackwardTraceForward(
+    FMiaIAInstanceHandle Instance)
+{
+    MiaIA::Studio::StudioController* controller = Resolve(Instance);
+    return controller && controller->StepBackwardTraceForward();
+}
+
+bool FMiaIAInstanceService::StepBackwardTraceBackward(
+    FMiaIAInstanceHandle Instance)
+{
+    MiaIA::Studio::StudioController* controller = Resolve(Instance);
+    return controller && controller->StepBackwardTraceBackward();
+}
+
+bool FMiaIAInstanceService::AdvanceBackwardTracePlayback(
+    FMiaIAInstanceHandle Instance,
+    double ElapsedSeconds)
+{
+    MiaIA::Studio::StudioController* controller = Resolve(Instance);
+    return controller &&
+        controller->AdvanceBackwardTracePlayback(ElapsedSeconds);
+}
+
+bool FMiaIAInstanceService::SetBackwardTraceFrameDuration(
+    FMiaIAInstanceHandle Instance,
+    double DurationSeconds)
+{
+    MiaIA::Studio::StudioController* controller = Resolve(Instance);
+    return controller &&
+        controller->SetBackwardTraceFrameDuration(DurationSeconds);
+}
+
 void FMiaIAInstanceService::RefreshTrainingTimeline(
     FMiaIAInstanceHandle Instance)
 {
@@ -209,6 +308,15 @@ FMiaIAInstanceService::ForwardTraceState(FMiaIAInstanceHandle Instance)
     return controller
         ? controller->State().ForwardTrace
         : MiaIA::Studio::StudioForwardTraceState{};
+}
+
+MiaIA::Studio::StudioBackwardTraceState
+FMiaIAInstanceService::BackwardTraceState(FMiaIAInstanceHandle Instance)
+{
+    const MiaIA::Studio::StudioController* controller = Resolve(Instance);
+    return controller
+        ? controller->State().BackwardTrace
+        : MiaIA::Studio::StudioBackwardTraceState{};
 }
 
 MiaIA::Studio::StudioTrainingTimelineState

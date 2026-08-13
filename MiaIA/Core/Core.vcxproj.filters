@@ -66,6 +66,9 @@
     <ClInclude Include="Public\DenseNetworkConfiguration.h">
       <Filter>File di intestazione</Filter>
     </ClInclude>
+    <ClInclude Include="Public\BackwardTraceSnapshot.h">
+      <Filter>File di intestazione</Filter>
+    </ClInclude>
     <ClInclude Include="Public\ForwardTraceSnapshot.h">
       <Filter>File di intestazione</Filter>
     </ClInclude>

@@ -1,4 +1,6 @@
 #include "NetworkInspector.h"
+#include "../Differentiation/BackwardEngine.h"
+#include "../Evaluation/LossEvaluator.h"
 #include "../Execution/ForwardEngine.h"
 #include "../Input/NetworkInput.h"
 #include "../Topology/NetworkTopology.h"
@@ -445,6 +447,164 @@ namespace MiaIA::Engine
         }
 
         result = std::move(snapshot);
+        return true;
+    }
+
+    bool NetworkInspector::TraceBackward(
+        const Core::Network& network,
+        const std::vector<double>& inputs,
+        const std::vector<double>& targets,
+        Core::LossType loss,
+        Core::BackwardTraceSnapshot& result)
+    {
+        Core::Network candidate = network;
+
+        if (!NetworkInput::SetValues(candidate, inputs))
+        {
+            return false;
+        }
+
+        Core::ForwardTraceSnapshot forwardTrace;
+
+        if (!ForwardEngine::Run(candidate, forwardTrace))
+        {
+            return false;
+        }
+
+        Core::SampleEvaluationSnapshot evaluation;
+        evaluation.Type = loss;
+        evaluation.Targets = targets;
+        evaluation.Predictions = forwardTrace.Outputs;
+
+        if (!LossEvaluator::Evaluate(
+            evaluation.Predictions,
+            evaluation.Targets,
+            evaluation.Type,
+            evaluation.Errors,
+            evaluation.Loss))
+        {
+            return false;
+        }
+
+        Core::SampleGradientSnapshot gradients;
+
+        if (!BackwardEngine::Run(candidate, evaluation, gradients))
+        {
+            return false;
+        }
+
+        std::unordered_map<
+            std::uint64_t,
+            const Core::NeuronGradientSnapshot*> gradientsByNeuron;
+        gradientsByNeuron.reserve(gradients.Neurons.size());
+
+        for (const Core::NeuronGradientSnapshot& gradient :
+            gradients.Neurons)
+        {
+            gradientsByNeuron.emplace(gradient.Id, &gradient);
+        }
+
+        Core::BackwardTraceSnapshot trace;
+        trace.Inputs = inputs;
+        trace.Targets = targets;
+        trace.Predictions = evaluation.Predictions;
+        trace.Errors = evaluation.Errors;
+        trace.Loss = loss;
+        trace.LossValue = evaluation.Loss;
+        trace.Layers.reserve(forwardTrace.Layers.size());
+
+        for (std::size_t layerIndex = 0;
+            layerIndex < forwardTrace.Layers.size();
+            ++layerIndex)
+        {
+            const Core::ForwardTraceLayerSnapshot& forwardLayer =
+                forwardTrace.Layers[layerIndex];
+            Core::BackwardTraceLayerSnapshot layer;
+            layer.Id = forwardLayer.Id;
+            layer.Name = forwardLayer.Name;
+            layer.Order = forwardLayer.Order;
+            layer.Activation = forwardLayer.Activation;
+            layer.Neurons.reserve(forwardLayer.Neurons.size());
+
+            for (const Core::ForwardTraceNeuronSnapshot& forwardNeuron :
+                forwardLayer.Neurons)
+            {
+                const auto gradient = gradientsByNeuron.find(
+                    forwardNeuron.Id);
+
+                if (gradient == gradientsByNeuron.end())
+                {
+                    return false;
+                }
+
+                layer.Neurons.push_back({
+                    forwardNeuron.Id,
+                    forwardNeuron.Activation,
+                    gradient->second->ActivationGradient,
+                    gradient->second->PreActivationGradient,
+                    gradient->second->BiasGradient,
+                    layerIndex == 0,
+                    layerIndex + 1 == forwardTrace.Layers.size()
+                });
+            }
+
+            trace.Layers.push_back(std::move(layer));
+        }
+
+        std::unordered_map<std::uint64_t, double>
+            preActivationGradients;
+        preActivationGradients.reserve(gradients.Neurons.size());
+
+        for (const Core::NeuronGradientSnapshot& gradient :
+            gradients.Neurons)
+        {
+            preActivationGradients.emplace(
+                gradient.Id,
+                gradient.PreActivationGradient);
+        }
+
+        std::unordered_map<std::uint64_t, double> weightGradients;
+        weightGradients.reserve(gradients.Connections.size());
+
+        for (const Core::ConnectionGradientSnapshot& gradient :
+            gradients.Connections)
+        {
+            weightGradients.emplace(gradient.Id, gradient.WeightGradient);
+        }
+
+        trace.Connections.reserve(candidate.Connections.size());
+
+        for (const Core::Connection& connection : candidate.Connections)
+        {
+            const auto targetGradient = preActivationGradients.find(
+                connection.ToNeuron);
+            const auto weightGradient = weightGradients.find(connection.Id);
+
+            if (targetGradient == preActivationGradients.end() ||
+                weightGradient == weightGradients.end())
+            {
+                return false;
+            }
+
+            const double sourceContribution =
+                connection.Weight * targetGradient->second;
+
+            if (!std::isfinite(sourceContribution))
+            {
+                return false;
+            }
+
+            trace.Connections.push_back({
+                connection.Id,
+                connection.FromNeuron,
+                connection.ToNeuron,
+                connection.Weight,
+                weightGradient->second,
+                sourceContribution
+            });
+        }
+
+        result = std::move(trace);
         return true;
     }
 

@@ -7,6 +7,7 @@
 
 #include "../../Core/Public/NetworkSnapshot.h"
 #include "../../Core/Public/NetworkParameterUpdate.h"
+#include "../../Core/Public/BackwardTraceSnapshot.h"
 #include "../../Core/Public/ConnectionInspectionSnapshot.h"
 #include "../../Core/Public/NeuronInspectionSnapshot.h"
 #include "../../Core/Public/DatasetSummary.h"
@@ -66,6 +67,11 @@ namespace MiaIA::SDK
         static bool TraceForward(
             const std::vector<double>& inputs,
             Core::ForwardTraceSnapshot& result);
+        static bool TraceBackward(
+            const std::vector<double>& inputs,
+            const std::vector<double>& targets,
+            Core::LossType loss,
+            Core::BackwardTraceSnapshot& result);
         static bool TryGetForwardTraceContributions(
             const std::vector<double>& inputs,
             std::uint64_t neuronId,

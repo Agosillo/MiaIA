@@ -58,8 +58,10 @@ private:
     void RebuildRelationshipExplorer();
     void RebuildBreakpoints();
     void RebuildForwardTrace();
+    void RebuildBackwardTrace();
     void RebuildTrainingTimeline();
     void ApplyForwardTraceOverlay();
+    void ApplyBackwardTraceOverlay();
     bool ExpandExplorerForNeuron(int64 NeuronId);
     bool ExpandExplorerForNeurons(const TSet<int64>& NeuronIds);
     FReply HandleToggleExplorerLayer(int64 LayerId);
@@ -183,6 +185,14 @@ private:
     FReply SelectForwardTraceSpeed(double SpeedMultiplier);
     FReply HandlePreviousForwardTracePage();
     FReply HandleNextForwardTracePage();
+    FReply HandleRunBackwardTrace();
+    FReply HandleClearBackwardTrace();
+    FReply HandleRestartBackwardTrace();
+    FReply HandlePreviousBackwardTraceFrame();
+    FReply HandleToggleBackwardTracePlayback();
+    FReply HandleNextBackwardTraceFrame();
+    TSharedRef<SWidget> BuildBackwardTraceSpeedMenu();
+    FReply SelectBackwardTraceSpeed(double SpeedMultiplier);
     FReply HandleSelectTrainingTimelineStep(uint64 StepIndex);
     FReply HandleClearTrainingTimelineView();
     void ShowDialog(const FText& Title, const FText& Content);
@@ -233,6 +243,10 @@ private:
     FText ForwardTraceSelectionText() const;
     FText ForwardTracePlayPauseText() const;
     FText ForwardTraceSpeedText() const;
+    FText BackwardTraceSummaryText() const;
+    FText BackwardTraceSelectionText() const;
+    FText BackwardTracePlayPauseText() const;
+    FText BackwardTraceSpeedText() const;
     FText TrainingTimelineSummaryText() const;
     FText TrainingTimelineDetailText() const;
     FText SelectedConnectionEndpointText(bool bToNeuron) const;
@@ -354,6 +368,7 @@ private:
     TSharedPtr<SVerticalBox> ConsoleSuggestionsContent;
     TSharedPtr<SVerticalBox> BreakpointContent;
     TSharedPtr<SVerticalBox> ForwardTraceContent;
+    TSharedPtr<SVerticalBox> BackwardTraceContent;
     TSharedPtr<SVerticalBox> TrainingTimelineContent;
     TSharedPtr<SMiaIANetworkView> NetworkView;
     TSharedPtr<SMiaIA3DNetworkView> Network3DView;
@@ -366,4 +381,6 @@ private:
     TSharedPtr<SEditableTextBox> BreakpointThresholdInput;
     TSharedPtr<SEditableTextBox> ProjectPathInput;
     TSharedPtr<SEditableTextBox> ForwardTraceInput;
+    TSharedPtr<SEditableTextBox> BackwardTraceInput;
+    TSharedPtr<SEditableTextBox> BackwardTraceTarget;
 };

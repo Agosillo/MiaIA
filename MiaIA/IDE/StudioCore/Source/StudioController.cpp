@@ -156,6 +156,10 @@ bool MiaIA::Studio::StudioController::SelectNeuron(std::uint64_t neuronId)
     {
         FocusForwardTraceNeuron(neuronId);
     }
+    if (CurrentState.BackwardTrace.Active)
+    {
+        FocusBackwardTraceNeuron(neuronId);
+    }
     return true;
 }
 
@@ -185,6 +189,7 @@ void MiaIA::Studio::StudioController::ClearSelection()
     CurrentState.ForwardTrace.FocusedNeuronId = 0;
     CurrentState.ForwardTrace.HasContributionPage = false;
     CurrentState.ForwardTrace.ContributionPage = {};
+    CurrentState.BackwardTrace.FocusedNeuronId = 0;
 }
 
 bool MiaIA::Studio::StudioController::RunForwardTrace(
@@ -210,6 +215,7 @@ bool MiaIA::Studio::StudioController::RunForwardTrace(
         next.FocusedNeuronId = CurrentState.Selection.Id;
     }
 
+    ClearBackwardTrace();
     CurrentState.ForwardTrace = std::move(next);
     BuildForwardTracePlaybackFrames();
 
@@ -433,6 +439,215 @@ bool MiaIA::Studio::StudioController::SetForwardTraceFrameDuration(
     return true;
 }
 
+bool MiaIA::Studio::StudioController::RunBackwardTrace(
+    const std::vector<double>& inputs,
+    const std::vector<double>& targets)
+{
+    Core::BackwardTraceSnapshot trace;
+
+    if (!SDK::MiaIAClient::TraceBackward(
+        inputs,
+        targets,
+        Core::LossType::MeanSquaredError,
+        trace))
+    {
+        return false;
+    }
+
+    StudioBackwardTraceState next;
+    next.Active = true;
+    next.Trace = std::move(trace);
+    next.PlaybackFrameDurationSeconds =
+        BackwardTraceFrameDurationSeconds;
+
+    if (CurrentState.Selection.Kind == StudioSelectionKind::Neuron)
+    {
+        next.FocusedNeuronId = CurrentState.Selection.Id;
+    }
+
+    ClearForwardTrace();
+    CurrentState.BackwardTrace = std::move(next);
+    BuildBackwardTracePlaybackFrames();
+    return true;
+}
+
+void MiaIA::Studio::StudioController::ClearBackwardTrace()
+{
+    CurrentState.BackwardTrace = {};
+    CurrentState.BackwardTrace.PlaybackFrameDurationSeconds =
+        BackwardTraceFrameDurationSeconds;
+}
+
+bool MiaIA::Studio::StudioController::FocusBackwardTraceNeuron(
+    std::uint64_t neuronId)
+{
+    if (!CurrentState.BackwardTrace.Active ||
+        !ContainsBackwardTraceNeuron(neuronId))
+    {
+        return false;
+    }
+
+    CurrentState.BackwardTrace.FocusedNeuronId = neuronId;
+    return true;
+}
+
+bool MiaIA::Studio::StudioController::PlayBackwardTrace()
+{
+    StudioBackwardTraceState& state = CurrentState.BackwardTrace;
+
+    if (!state.Active || state.PlaybackFrames.empty() ||
+        state.PlaybackStatus == StudioForwardTracePlaybackStatus::Playing)
+    {
+        return false;
+    }
+
+    if (state.PlaybackStatus == StudioForwardTracePlaybackStatus::Completed)
+    {
+        state.PlaybackFrameIndex = 0;
+        state.PlaybackFrameElapsedSeconds = 0.0;
+    }
+
+    state.PlaybackStatus = StudioForwardTracePlaybackStatus::Playing;
+    return true;
+}
+
+bool MiaIA::Studio::StudioController::PauseBackwardTrace()
+{
+    StudioBackwardTraceState& state = CurrentState.BackwardTrace;
+
+    if (!state.Active || state.PlaybackStatus !=
+        StudioForwardTracePlaybackStatus::Playing)
+    {
+        return false;
+    }
+
+    state.PlaybackStatus = StudioForwardTracePlaybackStatus::Paused;
+    return true;
+}
+
+bool MiaIA::Studio::StudioController::RestartBackwardTrace()
+{
+    StudioBackwardTraceState& state = CurrentState.BackwardTrace;
+
+    if (!state.Active || state.PlaybackFrames.empty())
+    {
+        return false;
+    }
+
+    state.PlaybackFrameIndex = 0;
+    state.PlaybackFrameElapsedSeconds = 0.0;
+    state.PlaybackStatus = StudioForwardTracePlaybackStatus::Paused;
+    return true;
+}
+
+bool MiaIA::Studio::StudioController::StepBackwardTraceForward()
+{
+    StudioBackwardTraceState& state = CurrentState.BackwardTrace;
+
+    if (!state.Active || state.PlaybackFrames.empty())
+    {
+        return false;
+    }
+
+    state.PlaybackFrameElapsedSeconds = 0.0;
+
+    if (state.PlaybackStatus == StudioForwardTracePlaybackStatus::Completed)
+    {
+        return false;
+    }
+
+    state.PlaybackStatus = StudioForwardTracePlaybackStatus::Paused;
+
+    if (state.PlaybackFrameIndex + 1 < state.PlaybackFrames.size())
+    {
+        ++state.PlaybackFrameIndex;
+        return true;
+    }
+
+    state.PlaybackStatus = StudioForwardTracePlaybackStatus::Completed;
+    return true;
+}
+
+bool MiaIA::Studio::StudioController::StepBackwardTraceBackward()
+{
+    StudioBackwardTraceState& state = CurrentState.BackwardTrace;
+
+    if (!state.Active || state.PlaybackFrames.empty())
+    {
+        return false;
+    }
+
+    state.PlaybackFrameElapsedSeconds = 0.0;
+
+    if (state.PlaybackStatus == StudioForwardTracePlaybackStatus::Completed)
+    {
+        state.PlaybackStatus = StudioForwardTracePlaybackStatus::Paused;
+        return true;
+    }
+
+    state.PlaybackStatus = StudioForwardTracePlaybackStatus::Paused;
+
+    if (state.PlaybackFrameIndex == 0)
+    {
+        return false;
+    }
+
+    --state.PlaybackFrameIndex;
+    return true;
+}
+
+bool MiaIA::Studio::StudioController::AdvanceBackwardTracePlayback(
+    double elapsedSeconds)
+{
+    StudioBackwardTraceState& state = CurrentState.BackwardTrace;
+
+    if (!state.Active || state.PlaybackFrames.empty() ||
+        state.PlaybackStatus != StudioForwardTracePlaybackStatus::Playing ||
+        !std::isfinite(elapsedSeconds) || elapsedSeconds < 0.0)
+    {
+        return false;
+    }
+
+    state.PlaybackFrameElapsedSeconds += elapsedSeconds;
+    bool changed = false;
+
+    while (state.PlaybackFrameElapsedSeconds >=
+        state.PlaybackFrameDurationSeconds)
+    {
+        state.PlaybackFrameElapsedSeconds -=
+            state.PlaybackFrameDurationSeconds;
+
+        if (state.PlaybackFrameIndex + 1 < state.PlaybackFrames.size())
+        {
+            ++state.PlaybackFrameIndex;
+            changed = true;
+            continue;
+        }
+
+        state.PlaybackFrameElapsedSeconds = 0.0;
+        state.PlaybackStatus = StudioForwardTracePlaybackStatus::Completed;
+        changed = true;
+        break;
+    }
+
+    return changed;
+}
+
+bool MiaIA::Studio::StudioController::SetBackwardTraceFrameDuration(
+    double durationSeconds)
+{
+    if (!std::isfinite(durationSeconds) || durationSeconds <= 0.0)
+    {
+        return false;
+    }
+
+    BackwardTraceFrameDurationSeconds = durationSeconds;
+    CurrentState.BackwardTrace.PlaybackFrameDurationSeconds =
+        durationSeconds;
+    CurrentState.BackwardTrace.PlaybackFrameElapsedSeconds = 0.0;
+    return true;
+}
+
 void MiaIA::Studio::StudioController::RefreshTrainingTimeline()
 {
     StudioTrainingTimelineState& state = CurrentState.TrainingTimeline;
@@ -620,6 +835,24 @@ bool MiaIA::Studio::StudioController::ContainsForwardTraceNeuron(
     return false;
 }
 
+bool MiaIA::Studio::StudioController::ContainsBackwardTraceNeuron(
+    std::uint64_t neuronId) const
+{
+    for (const Core::BackwardTraceLayerSnapshot& layer :
+        CurrentState.BackwardTrace.Trace.Layers)
+    {
+        for (const Core::BackwardTraceNeuronSnapshot& neuron : layer.Neurons)
+        {
+            if (neuron.Id == neuronId)
+            {
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
 void MiaIA::Studio::StudioController::BuildForwardTracePlaybackFrames()
 {
     StudioForwardTraceState& state = CurrentState.ForwardTrace;
@@ -654,6 +887,44 @@ void MiaIA::Studio::StudioController::BuildForwardTracePlaybackFrames()
             StudioForwardTraceFrameKind::LayerActivations,
             layerIndex,
             layer.Id
+        });
+    }
+}
+
+void MiaIA::Studio::StudioController::BuildBackwardTracePlaybackFrames()
+{
+    StudioBackwardTraceState& state = CurrentState.BackwardTrace;
+    state.PlaybackFrames.clear();
+    state.PlaybackFrameIndex = 0;
+    state.PlaybackFrameElapsedSeconds = 0.0;
+    state.PlaybackStatus = StudioForwardTracePlaybackStatus::Paused;
+
+    if (state.Trace.Layers.empty())
+    {
+        return;
+    }
+
+    const std::size_t outputIndex = state.Trace.Layers.size() - 1;
+    state.PlaybackFrames.push_back({
+        StudioBackwardTraceFrameKind::OutputGradients,
+        outputIndex,
+        state.Trace.Layers[outputIndex].Id
+    });
+
+    for (std::size_t targetIndex = outputIndex;
+        targetIndex > 0;
+        --targetIndex)
+    {
+        state.PlaybackFrames.push_back({
+            StudioBackwardTraceFrameKind::ConnectionFlow,
+            targetIndex,
+            state.Trace.Layers[targetIndex].Id
+        });
+        const std::size_t sourceIndex = targetIndex - 1;
+        state.PlaybackFrames.push_back({
+            StudioBackwardTraceFrameKind::LayerGradients,
+            sourceIndex,
+            state.Trace.Layers[sourceIndex].Id
         });
     }
 }

@@ -113,11 +113,12 @@ Retained session steps can now be compared through one renderer-neutral Engine o
 
 Forward execution now also has an immutable renderer-neutral trace. Engine and SDK expose each neuron's weighted sum, bias, pre-activation, and activation plus paged incoming connection contributions, while the shared CLI provides complete and focused textual views. The trace evaluates a copy and therefore remains safe for inspection without publishing temporary activations. StudioCore retains the captured result and drives a deterministic input, incoming-signal, and layer-activation timeline without moving mathematical rules into Unreal.
 
+Backward differentiation now has the equivalent immutable gradient-flow trace. Engine and SDK expose captured predictions, errors and loss, neuron activation and pre-activation gradients, bias gradients, weight gradients, and signed per-connection propagation contributions. The shared CLI prints the output-to-input flow, while StudioCore drives deterministic output-gradient, connection-flow, and source-layer frames consumed identically by the Unreal 2D and 3D renderers.
+
 The debugging experience should next evolve toward:
 
 - extend retained history with an explicit bounded policy for hidden-neuron activations;
 - identify inactive or consistently saturated neurons;
-- add an equivalent backward gradient-flow trace;
 - preserve selected checkpoints for comparison;
 - provide structured diagnostics rather than only Boolean failure results.
 
@@ -145,7 +146,6 @@ The precise version 1 boundary is documented in the [MiaIA project format](../Pr
 - refine the IDE command console with persistent history and asynchronous long-running execution;
 - render paged cross-layer relationship results directly on compact topology scenes;
 - expand neuron coloring beyond activation and current debug state;
-- animate backward gradient flow with the same renderer-neutral playback model;
 - extend compact navigation with visual cross-layer relationship overlays;
 - compare snapshots and training checkpoints;
 - keep Unreal-specific rendering data outside the mathematical Core.

@@ -41,6 +41,25 @@ public:
     static bool SetForwardTraceFrameDuration(
         FMiaIAInstanceHandle Instance,
         double DurationSeconds);
+    static bool RunBackwardTrace(
+        FMiaIAInstanceHandle Instance,
+        const TArray<double>& Inputs,
+        const TArray<double>& Targets);
+    static void ClearBackwardTrace(FMiaIAInstanceHandle Instance);
+    static bool FocusBackwardTraceNeuron(
+        FMiaIAInstanceHandle Instance,
+        uint64 NeuronId);
+    static bool PlayBackwardTrace(FMiaIAInstanceHandle Instance);
+    static bool PauseBackwardTrace(FMiaIAInstanceHandle Instance);
+    static bool RestartBackwardTrace(FMiaIAInstanceHandle Instance);
+    static bool StepBackwardTraceForward(FMiaIAInstanceHandle Instance);
+    static bool StepBackwardTraceBackward(FMiaIAInstanceHandle Instance);
+    static bool AdvanceBackwardTracePlayback(
+        FMiaIAInstanceHandle Instance,
+        double ElapsedSeconds);
+    static bool SetBackwardTraceFrameDuration(
+        FMiaIAInstanceHandle Instance,
+        double DurationSeconds);
     static void RefreshTrainingTimeline(FMiaIAInstanceHandle Instance);
     static bool SelectTrainingTimelineStep(
         FMiaIAInstanceHandle Instance,
@@ -48,6 +67,8 @@ public:
     static void ClearTrainingTimelineSelection(
         FMiaIAInstanceHandle Instance);
     static MiaIA::Studio::StudioForwardTraceState ForwardTraceState(
+        FMiaIAInstanceHandle Instance);
+    static MiaIA::Studio::StudioBackwardTraceState BackwardTraceState(
         FMiaIAInstanceHandle Instance);
     static MiaIA::Studio::StudioTrainingTimelineState TrainingTimelineState(
         FMiaIAInstanceHandle Instance);

@@ -155,6 +155,38 @@ void SMiaIANetworkView::SetForwardTraceOverlay(
     Invalidate(EInvalidateWidgetReason::Paint);
 }
 
+void SMiaIANetworkView::SetBackwardTraceOverlay(
+    const TMap<int64, double>& InNeuronGradients,
+    const TMap<int64, double>& InConnectionGradients,
+    const TSet<int64>& InPlaybackConnections,
+    bool bInPlaybackActive)
+{
+    BackwardTraceNeuronGradients = InNeuronGradients;
+    BackwardTraceConnectionGradients = InConnectionGradients;
+    BackwardTracePlaybackConnections = InPlaybackConnections;
+    bBackwardTracePlaybackActive = bInPlaybackActive;
+    MaximumBackwardTraceNeuronGradient = UE_DOUBLE_SMALL_NUMBER;
+    MaximumBackwardTraceConnectionGradient = UE_DOUBLE_SMALL_NUMBER;
+
+    for (const TPair<int64, double>& gradient :
+        BackwardTraceNeuronGradients)
+    {
+        MaximumBackwardTraceNeuronGradient = FMath::Max(
+            MaximumBackwardTraceNeuronGradient,
+            FMath::Abs(gradient.Value));
+    }
+
+    for (const TPair<int64, double>& gradient :
+        BackwardTraceConnectionGradients)
+    {
+        MaximumBackwardTraceConnectionGradient = FMath::Max(
+            MaximumBackwardTraceConnectionGradient,
+            FMath::Abs(gradient.Value));
+    }
+
+    Invalidate(EInvalidateWidgetReason::Paint);
+}
+
 void SMiaIANetworkView::SetSelectedNeurons(
     const TSet<int64>& InNeuronIds,
     int64 InPrimaryNeuronId)
@@ -1048,7 +1080,13 @@ int32 SMiaIANetworkView::OnPaint(
             ForwardTraceContributions.Find(connection.Id);
         const bool playbackConnection =
             ForwardTracePlaybackConnections.Contains(connection.Id);
-        const double displayedValue = traceContribution
+        const double* backwardGradient =
+            BackwardTraceConnectionGradients.Find(connection.Id);
+        const bool backwardPlaybackConnection =
+            BackwardTracePlaybackConnections.Contains(connection.Id);
+        const double displayedValue = backwardGradient
+            ? *backwardGradient
+            : traceContribution
             ? *traceContribution
             : telemetry
                 ? ConnectionMetric(*telemetry)
@@ -1059,8 +1097,12 @@ int32 SMiaIANetworkView::OnPaint(
                 (DebugPhase == EMiaIATrainingDebugPhase::UpdateComplete &&
                     telemetry->bHasUpdate));
         const float weightStrength = FMath::Clamp(
-            static_cast<float>(playbackConnection
+            static_cast<float>(backwardPlaybackConnection ||
+                playbackConnection
                 ? 1.0
+                : backwardGradient
+                ? FMath::Abs(displayedValue) /
+                    MaximumBackwardTraceConnectionGradient
                 : traceContribution
                 ? FMath::Abs(displayedValue) /
                     MaximumForwardTraceContribution
@@ -1072,13 +1114,21 @@ int32 SMiaIANetworkView::OnPaint(
         const bool selected = connection.Id == SelectedConnectionId;
         const FLinearColor connectionColor = selected
             ? palette.Selection
+            : backwardGradient
+                ? SignedConnectionColor(
+                    displayedValue,
+                    MaximumBackwardTraceConnectionGradient)
+                : backwardPlaybackConnection
+                    ? palette.Debug
             : traceContribution
                 ? SignedConnectionColor(
                     displayedValue,
                     MaximumForwardTraceContribution)
                 : playbackConnection
                     ? palette.Debug
-                : bForwardTracePlaybackActive ||
+                : bBackwardTracePlaybackActive ||
+                    !BackwardTraceNeuronGradients.IsEmpty() ||
+                    bForwardTracePlaybackActive ||
                     !ForwardTraceActivations.IsEmpty()
                     ? palette.SubduedText.CopyWithNewOpacity(0.12f)
                 : displaysTelemetry
@@ -1171,7 +1221,15 @@ int32 SMiaIANetworkView::OnPaint(
                         telemetry->bHasUpdate));
             const double* traceActivation =
                 ForwardTraceActivations.Find(neuron.Id);
-            const FLinearColor neuronColor = displaysTelemetry
+            const double* backwardGradient =
+                BackwardTraceNeuronGradients.Find(neuron.Id);
+            const FLinearColor neuronColor = backwardGradient
+                ? SignedNeuronColor(
+                    *backwardGradient,
+                    MaximumBackwardTraceNeuronGradient)
+                : bBackwardTracePlaybackActive
+                    ? palette.InactiveNeuron.CopyWithNewOpacity(0.28f)
+                : displaysTelemetry
                 ? SignedNeuronColor(
                     NeuronMetric(*telemetry),
                     MaximumNeuronMetric)

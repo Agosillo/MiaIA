@@ -190,6 +190,12 @@ StudioCore now retains a renderer-neutral graphical trace session above the immu
 
 The shared Unreal editor and standalone panel gained an `Execution trace` tab. One input vector produces captured outputs, per-neuron Inspector values, activation coloring in both detailed renderers, and exact signed highlighting for the visible contribution page while unrelated links are subdued. Previous and Next keep dense incoming sets bounded, contribution rows open normal connection inspection, and Clear removes the overlay without mutating the model.
 
+### Immutable backward gradient-flow trace
+
+Backward differentiation gained a complete renderer-neutral trace above the existing `BackwardEngine`. One private network copy records inputs, targets, predictions, errors, loss, neuron activation and pre-activation gradients, bias gradients, weight gradients, and each connection's signed contribution to its source activation gradient. `MiaIAClient` and `trace backward` expose the snapshot without applying an optimizer or publishing temporary activations.
+
+StudioCore drives a deterministic output-to-input player whose frames reveal output gradients, connection propagation, and source-layer gradients. The shared Unreal `Gradient trace` tab uses the same state in 2D and 3D, maps sign through the semantic palette and magnitude through normalized intensity, and synchronizes neuron or connection selection with exact Inspector values. Forward and backward traces are mutually exclusive presentation modes, while a failed replacement preserves the active snapshot.
+
 The retained trace now also owns a deterministic renderer-neutral playback timeline: inputs activate first, then every non-input layer receives an incoming-signal frame and an activation frame. Manual previous/next stepping, restart, play/pause, completion, and configurable speed are shared by the editor and standalone 2D/3D hosts. Playback consumes the immutable snapshot and never reruns or mutates the network.
 
 ### Shared visualization palettes

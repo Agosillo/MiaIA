@@ -33,7 +33,7 @@ Core contains the stable representation of data:
 - `Network`, `Layer`, `Neuron`, and `Connection`;
 - `Dataset` and `Sample`;
 - activation primitives;
-- public snapshots for networks, focused element relationships, forward traces, datasets, evaluations, and gradients.
+- public snapshots for networks, focused element relationships, forward and backward traces, datasets, evaluations, and gradients.
 
 Core structures describe state. They do not import files, run training commands, or manage a user interface.
 
@@ -56,7 +56,7 @@ Engine owns operations and mathematical behavior. Its current responsibilities a
 | `Interchange` | Import and export the supported ONNX subset |
 | `Data` | Import, inspect, and apply CSV dataset samples |
 | `Evaluation` | Calculate predictions, errors, loss, and loss derivatives |
-| `Differentiation` | Run backward propagation and produce gradient snapshots |
+| `Differentiation` | Run backward propagation and produce gradient snapshots and immutable gradient-flow traces |
 | `Optimization` | Validate and apply explicit optimizer updates |
 | `Training` | Coordinate phased, atomic, epoch, and session training flows |
 
@@ -64,7 +64,7 @@ This separation allows a mathematical subsystem to evolve without requiring clie
 
 ### SDK
 
-`MiaIAClient` is the public facade used by clients. It exposes network creation and editing, complete and focused inspection snapshots, immutable forward execution traces, ONNX interchange, versioned `.mai` project persistence, datasets, forward execution, sample and full-dataset evaluation, gradient evaluation, atomic sample training, and an ordered dataset epoch.
+`MiaIAClient` is the public facade used by clients. It exposes network creation and editing, complete and focused inspection snapshots, immutable forward execution and backward gradient-flow traces, ONNX interchange, versioned `.mai` project persistence, datasets, forward execution, sample and full-dataset evaluation, gradient evaluation, atomic sample training, and an ordered dataset epoch.
 
 The current SDK owns one process-local network and one process-local dataset through its internal client state. This is sufficient for the present console and integration tests. Multiple sessions, explicit contexts, concurrency, and persisted workspace state are future concerns and should not be assumed to exist today.
 
@@ -143,11 +143,13 @@ For each non-input neuron, forward propagation computes the weighted sum of inco
 
 `ForwardTraceContributionPageRequest` provides the focused counterpart for one target neuron. Each returned record keeps the stable connection and endpoint IDs, source activation, weight, and exact `source activation * weight` contribution. Queries support a bounded page of at most `1000` records, deterministic ordering by connection ID or signed/absolute contribution, ascending or descending direction, and a non-negative absolute-contribution threshold. Exact and filtered totals plus previous/next flags let clients navigate dense neurons without requesting all incoming relationships.
 
-Both Engine operations construct a complete local result before publishing it. Invalid networks, input dimensions, non-finite inputs, neuron IDs, filters, or page limits leave the caller result unchanged. `MiaIAClient` serializes the operations through the normal state lock, while `trace forward` and `trace neuron` expose the renderer-neutral contract to the shared CLI. Unlike `predict`, a successful trace does not publish its temporary activations to the current network.
+All Engine trace operations construct a complete local result before publishing it. Invalid networks, input or target dimensions, non-finite values, neuron IDs, filters, or page limits leave the caller result unchanged. `MiaIAClient` serializes the operations through the normal state lock, while `trace forward`, `trace backward`, and `trace neuron` expose the renderer-neutral contracts to the shared CLI. Unlike `predict`, a successful trace does not publish its temporary activations to the current network, and a backward trace never applies its captured gradients.
 
 `StudioController` owns the graphical trace session above that SDK contract. It retains one immutable trace, one optional focused neuron, and one bounded contribution-page request without introducing renderer types. Changing the focused neuron resets its contribution offset, while invalid trace or paging requests preserve the last valid graphical state. Frontends render the stored activation values and exact contribution records; they do not recompute weighted sums or activation functions.
 
 The same controller derives a deterministic playback timeline from the captured layer order. The first frame publishes input activations; every later layer contributes one incoming-signal frame followed by one activation frame. Playback state owns its cursor, Playing/Paused/Completed status, frame duration, elapsed time, stepping, restart, and automatic advancement. Advancing the timeline never executes the network again and never changes the retained trace or public model. Frontends decide how to render the active layer and connection identities, while the existing focused page remains the source of exact signed contribution values.
+
+`StudioController` owns renderer-neutral playback for both immutable traces. Forward playback reveals inputs, incoming signals, and layer activations. Backward playback reveals output gradients, connection propagation, and source-layer gradients in reverse layer order. Both retain Engine-owned values, synchronize focused neuron selection, and expose deterministic manual or timed frames to any frontend. Starting one trace clears the other only after the replacement succeeds, so a failed request preserves the previously inspectable snapshot.
 
 `StudioController` also owns the renderer-neutral presentation state for the controlled-training timeline. Refreshing copies session configuration and progress, the current phase-debug snapshot, and lightweight `TrainingHistoryEntrySnapshot` values, but deliberately discards the duplicated full step vector from its session summary. A frontend selects a stable history index explicitly; only then does the controller request and retain the corresponding `TrainingStepSnapshot`. This keeps loss, prediction, error, gradient, and update values owned by Engine and SDK snapshots while allowing Unreal or a future native frontend to present the same selectable history.
 
@@ -201,6 +203,8 @@ Sample evaluation
 ```
 
 Backward propagation currently calculates gradients only. It deliberately does not apply them. This keeps observation separate from optimization and makes gradients available to Console, Unreal, Blueprint wrappers, and future debugging tools.
+
+`NetworkInspector::TraceBackward` evaluates a private network copy, delegates differentiation to `BackwardEngine`, and combines captured activations with neuron, bias, weight, and per-connection source-gradient contributions. It publishes the complete `BackwardTraceSnapshot` only after every lookup and finite-value check succeeds. The SDK lock provides one coherent source network, while `trace backward` and StudioCore expose the same renderer-neutral contract without applying an optimizer or publishing temporary activations.
 
 ### Atomic SGD training step
 

@@ -116,8 +116,9 @@ const std::vector<CommandCatalogEntry>& CommandCatalog()
         { "network set connection-weight", "network set connection-weight <connection-id> <value>", "Set one connection weight.", true },
         { "input", "input <value...>", "Assign values to the input layer.", true },
         { "predict", "predict <value...>", "Run inference for one input vector.", true },
-        { "trace", "trace <forward|neuron>", "Inspect immutable forward execution values.", false },
+        { "trace", "trace <forward|backward|neuron>", "Inspect immutable forward or backward execution values.", false },
         { "trace forward", "trace forward <value...>", "Trace every neuron for one input vector.", true },
+        { "trace backward", "trace backward <input...> -- <target...>", "Trace gradients from outputs back to inputs without updating parameters.", true },
         { "trace neuron", "trace neuron <neuron-id> [page] [page-size] [id|contribution|abs-contribution] [asc|desc] [minimum-absolute-contribution] -- <value...>", "Page one neuron's incoming forward contributions.", true },
         { "import", "import onnx <path>", "Import a model from a supported format.", false },
         { "import onnx", "import onnx <path>", "Import the supported dense ONNX subset.", true },
@@ -252,6 +253,9 @@ void PrintHelp()
 
         << "  trace forward <values>\n"
         << "      Calculate an immutable forward trace for every neuron\n\n"
+
+        << "  trace backward <input-values> -- <target-values>\n"
+        << "      Calculate an immutable gradient-flow trace without updates\n\n"
 
         << "  trace neuron <neuron-id> [page] [page-size]\n"
            "      [id|contribution|abs-contribution] [asc|desc]\n"
@@ -3643,6 +3647,28 @@ void PrintForwardTraceNeuron(
     std::cout << "\n";
 }
 
+void PrintBackwardTraceNeuron(
+    const MiaIA::Core::BackwardTraceNeuronSnapshot& neuron)
+{
+    std::cout
+        << "  Neuron " << neuron.Id
+        << " | activation " << neuron.Activation
+        << " | dL/da " << neuron.ActivationGradient
+        << " | dL/dz " << neuron.PreActivationGradient
+        << " | bias gradient " << neuron.BiasGradient;
+
+    if (neuron.IsInput)
+    {
+        std::cout << " | input";
+    }
+    if (neuron.IsOutput)
+    {
+        std::cout << " | output";
+    }
+
+    std::cout << "\n";
+}
+
 void HandleTraceCommand(const std::string& command)
 {
     using MiaIA::SDK::MiaIAClient;
@@ -3650,6 +3676,7 @@ void HandleTraceCommand(const std::string& command)
     const auto tokens = CommandTokens(command);
     constexpr const char* usage =
         "Usage: trace forward <value...>\n"
+        "       trace backward <input...> -- <target...>\n"
         "       trace neuron <neuron-id> [page] [page-size] "
         "[id|contribution|abs-contribution] [asc|desc] "
         "[minimum-absolute-contribution] -- <value...>\n";
@@ -3657,6 +3684,104 @@ void HandleTraceCommand(const std::string& command)
     if (tokens.size() < 3)
     {
         std::cout << usage;
+        return;
+    }
+
+    if (tokens[1] == "backward")
+    {
+        const auto delimiter = std::find(
+            tokens.begin() + 2,
+            tokens.end(),
+            "--");
+
+        if (delimiter == tokens.end())
+        {
+            std::cout << usage;
+            return;
+        }
+
+        const std::size_t delimiterIndex =
+            static_cast<std::size_t>(delimiter - tokens.begin());
+        std::vector<double> inputs;
+        std::vector<double> targets;
+
+        if (delimiterIndex <= 2 ||
+            delimiterIndex + 1 >= tokens.size())
+        {
+            std::cout << usage;
+            return;
+        }
+
+        inputs.reserve(delimiterIndex - 2);
+
+        for (std::size_t index = 2; index < delimiterIndex; ++index)
+        {
+            double value{};
+
+            if (!TryParseTraceDouble(tokens[index], value))
+            {
+                std::cout << usage;
+                return;
+            }
+
+            inputs.push_back(value);
+        }
+
+        if (!TryParseTraceInputs(tokens, delimiterIndex + 1, targets))
+        {
+            std::cout << usage;
+            return;
+        }
+
+        MiaIA::Core::BackwardTraceSnapshot trace;
+
+        if (!MiaIAClient::TraceBackward(
+            inputs,
+            targets,
+            MiaIA::Core::LossType::MeanSquaredError,
+            trace))
+        {
+            std::cout
+                << "Backward trace failed. Check the network, inputs, and targets.\n";
+            return;
+        }
+
+        std::cout << "\nBackward Gradient-Flow Trace\n\nInputs: ";
+        PrintValues(trace.Inputs);
+        std::cout << "\nTargets: ";
+        PrintValues(trace.Targets);
+        std::cout << "\nPredictions: ";
+        PrintValues(trace.Predictions);
+        std::cout << "\nLoss: " << trace.LossValue << "\n";
+
+        for (auto layer = trace.Layers.rbegin();
+            layer != trace.Layers.rend();
+            ++layer)
+        {
+            std::cout
+                << "\nLayer [" << layer->Order << "] " << layer->Name
+                << " (" << ActivationTypeName(layer->Activation) << ")\n";
+
+            for (const auto& neuron : layer->Neurons)
+            {
+                PrintBackwardTraceNeuron(neuron);
+            }
+        }
+
+        std::cout << "\nConnections\n";
+        for (const auto& connection : trace.Connections)
+        {
+            std::cout
+                << "  Connection " << connection.ConnectionId
+                << ": " << connection.FromNeuron
+                << " -> " << connection.ToNeuron
+                << " | weight gradient " << connection.WeightGradient
+                << " | source contribution "
+                << connection.SourceActivationGradientContribution
+                << "\n";
+        }
+
+        std::cout << "\n";
         return;
     }
 

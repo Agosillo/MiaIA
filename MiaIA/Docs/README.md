@@ -2,7 +2,7 @@
 
 MiaIA is an Interactive Development Environment for Artificial Intelligence. Its purpose is not to compete with large training frameworks on throughput. Its purpose is to make a neural network observable: users should be able to build a model, execute it, inspect its state, evaluate samples, follow gradients, and eventually control training step by step.
 
-The project is currently in its foundation stage. The C++ engine, public SDK facade, shared command processor, terminal and Unreal command consoles, test harness, ONNX interchange, CSV dataset pipeline, versioned `.mai` project persistence, fixed-model dataset evaluation, immutable forward execution tracing with a first graphical Studio overlay, non-mutating gradient inspection, phase-by-phase SGD debugging, controlled sessions, background pause/resume, navigable training history, interactive 2D and first runtime 3D topology views, renderer-neutral Studio application foundation, shared Unreal editor/standalone runtime UI, and verified Win64 packaging workflow are implemented. The complete production visualization experience remains planned work.
+The project is currently in its foundation stage. The C++ engine, public SDK facade, shared command processor, terminal and Unreal command consoles, test harness, ONNX interchange, CSV dataset pipeline, versioned `.mai` project persistence, fixed-model dataset evaluation, immutable forward execution and backward gradient-flow tracing with graphical Studio playback, non-mutating gradient inspection, phase-by-phase SGD debugging, controlled sessions, background pause/resume, navigable training history, interactive 2D and first runtime 3D topology views, renderer-neutral Studio application foundation, shared Unreal editor/standalone runtime UI, and verified Win64 packaging workflow are implemented. The complete production visualization experience remains planned work.
 
 ## Documentation map
 
@@ -26,7 +26,7 @@ The project is currently in its foundation stage. The C++ engine, public SDK fac
 | Creation and editing | Configurable dense initialization plus transactional existing-network parameter updates with backward-compatible defaults |
 | Execution | Input assignment and forward propagation |
 | Inference | Direct input-to-output prediction through SDK and Console |
-| Inspection | Network, forward-value/contribution trace, dataset, focused neuron/connection debug, gradient, session-history, and completed-step snapshots |
+| Inspection | Network, forward-value/contribution trace, backward gradient-flow trace, dataset, focused neuron/connection debug, gradient, session-history, and completed-step snapshots |
 | Interchange | Import and export of the currently supported dense ONNX subset |
 | Projects | Atomic `.mai` v1 save/open with embedded ONNX, dataset reference, training configuration, and breakpoints |
 | Datasets | Numeric CSV import with explicit input and target column counts |

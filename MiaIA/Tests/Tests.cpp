@@ -341,6 +341,51 @@ int main()
         assert(!controller.RunForwardTrace({ 1.0 }));
         assert(controller.State().ForwardTrace.Trace.Outputs ==
             preservedTrace.Outputs);
+
+        assert(controller.RunBackwardTrace({ 1.0, 1.0 }, { 1.0 }));
+        assert(!controller.State().ForwardTrace.Active);
+        assert(controller.State().BackwardTrace.Active);
+        assert(controller.State().BackwardTrace.Trace.Inputs.size() == 2);
+        assert(controller.State().BackwardTrace.Trace.Targets.size() == 1);
+        assert(controller.State().BackwardTrace.Trace.Predictions.size() == 1);
+        assert(controller.State().BackwardTrace.FocusedNeuronId == 1003);
+        assert(controller.State().BackwardTrace.PlaybackFrames.size() == 5);
+        assert(controller.State().BackwardTrace.PlaybackFrames[0].Kind ==
+            StudioBackwardTraceFrameKind::OutputGradients);
+        assert(controller.State().BackwardTrace.PlaybackFrames[1].Kind ==
+            StudioBackwardTraceFrameKind::ConnectionFlow);
+        assert(controller.State().BackwardTrace.PlaybackFrames[2].Kind ==
+            StudioBackwardTraceFrameKind::LayerGradients);
+        assert(controller.State().BackwardTrace.PlaybackFrames[2].LayerIndex ==
+            1);
+        assert(controller.State().BackwardTrace.PlaybackFrames[4].LayerIndex ==
+            0);
+        assert(controller.State().BackwardTrace.PlaybackStatus ==
+            StudioForwardTracePlaybackStatus::Paused);
+        assert(!controller.StepBackwardTraceBackward());
+        assert(controller.SetBackwardTraceFrameDuration(0.5));
+        assert(!controller.SetBackwardTraceFrameDuration(0.0));
+        assert(!controller.SetBackwardTraceFrameDuration(
+            std::numeric_limits<double>::infinity()));
+        assert(controller.PlayBackwardTrace());
+        assert(!controller.AdvanceBackwardTracePlayback(0.25));
+        assert(controller.AdvanceBackwardTracePlayback(0.25));
+        assert(controller.State().BackwardTrace.PlaybackFrameIndex == 1);
+        assert(controller.PauseBackwardTrace());
+        assert(controller.StepBackwardTraceForward());
+        assert(controller.State().BackwardTrace.PlaybackFrameIndex == 2);
+        assert(controller.StepBackwardTraceBackward());
+        assert(controller.State().BackwardTrace.PlaybackFrameIndex == 1);
+        assert(controller.RestartBackwardTrace());
+        assert(controller.State().BackwardTrace.PlaybackFrameIndex == 0);
+
+        const auto preservedBackwardTrace =
+            controller.State().BackwardTrace.Trace;
+        assert(!controller.RunBackwardTrace({ 1.0 }, { 1.0 }));
+        assert(controller.State().BackwardTrace.Trace.Predictions ==
+            preservedBackwardTrace.Predictions);
+        assert(controller.RunForwardTrace({ 1.0, 1.0 }));
+        assert(!controller.State().BackwardTrace.Active);
         controller.ClearForwardTrace();
         assert(!controller.State().ForwardTrace.Active);
 
@@ -922,6 +967,126 @@ int main()
         MiaIACommandProcessor::GetSuggestions("trace n");
     assert(traceSuggestions.size() == 1);
     assert(traceSuggestions[0].Completion == "trace neuron");
+
+    MiaIAClient::ClearNetwork();
+    });
+
+    runner.Run("Immutable backward gradient-flow trace", [&]()
+    {
+    using MiaIA::CLI::MiaIACommandProcessor;
+
+    MiaIAClient::ClearNetwork();
+
+    assert(MiaIAClient::AddLayer(30, "Output", 2));
+    assert(MiaIAClient::AddLayer(10, "Input", 0));
+    assert(MiaIAClient::AddLayer(20, "Hidden", 1));
+    assert(MiaIAClient::SetLayerActivation(
+        20,
+        MiaIA::Core::ActivationType::Linear));
+    assert(MiaIAClient::SetLayerActivation(
+        30,
+        MiaIA::Core::ActivationType::Linear));
+
+    assert(MiaIAClient::AddNeuron(10, 1001, 0.0, 9.0));
+    assert(MiaIAClient::AddNeuron(10, 1002, 0.0, 8.0));
+    assert(MiaIAClient::AddNeuron(20, 1003, 0.5, 7.0));
+    assert(MiaIAClient::AddNeuron(30, 1004, -1.0, 6.0));
+
+    assert(MiaIAClient::AddConnection(1, 1001, 1003, 2.0));
+    assert(MiaIAClient::AddConnection(2, 1002, 1003, -1.0));
+    assert(MiaIAClient::AddConnection(3, 1003, 1004, 0.25));
+
+    const auto before = MiaIAClient::GetSnapshot();
+    MiaIA::Core::BackwardTraceSnapshot trace;
+    assert(MiaIAClient::TraceBackward(
+        { 3.0, 4.0 },
+        { 1.0 },
+        MiaIA::Core::LossType::MeanSquaredError,
+        trace));
+    assert(trace.Inputs == std::vector<double>({ 3.0, 4.0 }));
+    assert(trace.Targets == std::vector<double>({ 1.0 }));
+    assert(trace.Predictions == std::vector<double>({ -0.375 }));
+    assert(trace.Errors == std::vector<double>({ -1.375 }));
+    assert(trace.LossValue == 1.890625);
+    assert(trace.Layers.size() == 3);
+    assert(trace.Connections.size() == 3);
+
+    assert(trace.Layers[0].Neurons[0].IsInput);
+    assert(trace.Layers[0].Neurons[0].ActivationGradient == -1.375);
+    assert(trace.Layers[0].Neurons[0].PreActivationGradient == -1.375);
+    assert(trace.Layers[0].Neurons[0].BiasGradient == 0.0);
+    assert(trace.Layers[0].Neurons[1].ActivationGradient == 0.6875);
+    assert(trace.Layers[1].Neurons[0].Activation == 2.5);
+    assert(trace.Layers[1].Neurons[0].ActivationGradient == -0.6875);
+    assert(trace.Layers[1].Neurons[0].PreActivationGradient == -0.6875);
+    assert(trace.Layers[1].Neurons[0].BiasGradient == -0.6875);
+    assert(trace.Layers[2].Neurons[0].IsOutput);
+    assert(trace.Layers[2].Neurons[0].ActivationGradient == -2.75);
+    assert(trace.Layers[2].Neurons[0].PreActivationGradient == -2.75);
+    assert(trace.Layers[2].Neurons[0].BiasGradient == -2.75);
+
+    assert(trace.Connections[0].ConnectionId == 1);
+    assert(trace.Connections[0].WeightGradient == -2.0625);
+    assert(trace.Connections[0].SourceActivationGradientContribution ==
+        -1.375);
+    assert(trace.Connections[1].ConnectionId == 2);
+    assert(trace.Connections[1].WeightGradient == -2.75);
+    assert(trace.Connections[1].SourceActivationGradientContribution ==
+        0.6875);
+    assert(trace.Connections[2].ConnectionId == 3);
+    assert(trace.Connections[2].WeightGradient == -6.875);
+    assert(trace.Connections[2].SourceActivationGradientContribution ==
+        -0.6875);
+
+    const auto after = MiaIAClient::GetSnapshot();
+    assert(after.Layers.size() == before.Layers.size());
+    assert(after.Connections.size() == before.Connections.size());
+
+    for (std::size_t layerIndex = 0;
+        layerIndex < before.Layers.size();
+        ++layerIndex)
+    {
+        for (std::size_t neuronIndex = 0;
+            neuronIndex < before.Layers[layerIndex].Neurons.size();
+            ++neuronIndex)
+        {
+            assert(after.Layers[layerIndex].Neurons[neuronIndex].Activation ==
+                before.Layers[layerIndex].Neurons[neuronIndex].Activation);
+            assert(after.Layers[layerIndex].Neurons[neuronIndex].Bias ==
+                before.Layers[layerIndex].Neurons[neuronIndex].Bias);
+        }
+    }
+
+    for (std::size_t index = 0; index < before.Connections.size(); ++index)
+    {
+        assert(after.Connections[index].Weight ==
+            before.Connections[index].Weight);
+    }
+
+    MiaIA::Core::BackwardTraceSnapshot preservedTrace;
+    preservedTrace.Predictions = { 777.0 };
+    assert(!MiaIAClient::TraceBackward(
+        { 3.0 },
+        { 1.0 },
+        MiaIA::Core::LossType::MeanSquaredError,
+        preservedTrace));
+    assert(preservedTrace.Predictions == std::vector<double>({ 777.0 }));
+
+    const auto cliTrace = MiaIACommandProcessor::Execute(
+        "trace backward 3 4 -- 1");
+    assert(cliTrace.Output.find("Backward Gradient-Flow Trace") !=
+        std::string::npos);
+    assert(cliTrace.Output.find("Loss: 1.890") != std::string::npos);
+    assert(cliTrace.Output.find("weight gradient -6.875") !=
+        std::string::npos);
+    assert(MiaIACommandProcessor::Execute(
+        "trace backward 3 -- 1").Output.find("failed") !=
+        std::string::npos);
+
+    const auto traceSuggestions =
+        MiaIACommandProcessor::GetSuggestions("trace b");
+    assert(traceSuggestions.size() == 1);
+    assert(traceSuggestions[0].Completion == "trace backward");
 
     MiaIAClient::ClearNetwork();
     });

@@ -63,6 +63,11 @@ public:
         const TMap<int64, double>& InContributions,
         const TSet<int64>& InPlaybackConnections,
         bool bInPlaybackActive);
+    void SetBackwardTraceOverlay(
+        const TMap<int64, double>& InNeuronGradients,
+        const TMap<int64, double>& InConnectionGradients,
+        const TSet<int64>& InPlaybackConnections,
+        bool bInPlaybackActive);
     void SetSelectedNeurons(
         const TSet<int64>& InNeuronIds,
         int64 InPrimaryNeuronId);
@@ -164,9 +169,14 @@ private:
     TMap<int64, double> ForwardTraceActivations;
     TMap<int64, double> ForwardTraceContributions;
     TSet<int64> ForwardTracePlaybackConnections;
+    TMap<int64, double> BackwardTraceNeuronGradients;
+    TMap<int64, double> BackwardTraceConnectionGradients;
+    TSet<int64> BackwardTracePlaybackConnections;
     double MaximumNeuronMetric{1.0};
     double MaximumConnectionMetric{1.0};
     double MaximumForwardTraceContribution{1.0};
+    double MaximumBackwardTraceNeuronGradient{1.0};
+    double MaximumBackwardTraceConnectionGradient{1.0};
     int64 SelectedNeuronId{-1};
     int64 SelectedConnectionId{-1};
     int64 SelectedLayerId{-1};
@@ -188,6 +198,7 @@ private:
     bool bCompactMode{};
     bool bNetworkAggregateMode{};
     bool bForwardTracePlaybackActive{};
+    bool bBackwardTracePlaybackActive{};
     bool bSelectionCursorVisible{true};
     bool bPanning{};
     bool bMarqueeSelecting{};

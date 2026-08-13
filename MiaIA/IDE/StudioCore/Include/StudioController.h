@@ -1,6 +1,7 @@
 #pragma once
 
 #include "StudioTopology.h"
+#include "../../../Core/Public/BackwardTraceSnapshot.h"
 #include "../../../Core/Public/ConnectionInspectionSnapshot.h"
 #include "../../../Core/Public/ForwardTraceSnapshot.h"
 #include "../../../Core/Public/NeuronInspectionSnapshot.h"
@@ -81,6 +82,34 @@ namespace MiaIA::Studio
         double PlaybackFrameElapsedSeconds{};
     };
 
+    enum class StudioBackwardTraceFrameKind
+    {
+        OutputGradients,
+        ConnectionFlow,
+        LayerGradients
+    };
+
+    struct StudioBackwardTraceFrame
+    {
+        StudioBackwardTraceFrameKind Kind{
+            StudioBackwardTraceFrameKind::OutputGradients };
+        std::size_t LayerIndex{};
+        std::uint64_t LayerId{};
+    };
+
+    struct StudioBackwardTraceState
+    {
+        bool Active{};
+        Core::BackwardTraceSnapshot Trace;
+        std::uint64_t FocusedNeuronId{};
+        std::vector<StudioBackwardTraceFrame> PlaybackFrames;
+        std::size_t PlaybackFrameIndex{};
+        StudioForwardTracePlaybackStatus PlaybackStatus{
+            StudioForwardTracePlaybackStatus::Paused };
+        double PlaybackFrameDurationSeconds{ 0.65 };
+        double PlaybackFrameElapsedSeconds{};
+    };
+
     struct StudioTrainingTimelineState
     {
         Core::TrainingSessionSnapshot Session;
@@ -102,6 +131,7 @@ namespace MiaIA::Studio
         bool HasConnectionInspection{};
         Core::ConnectionInspectionSnapshot ConnectionInspection;
         StudioForwardTraceState ForwardTrace;
+        StudioBackwardTraceState BackwardTrace;
         StudioTrainingTimelineState TrainingTimeline;
     };
 
@@ -142,6 +172,18 @@ namespace MiaIA::Studio
         bool StepForwardTraceBackward();
         bool AdvanceForwardTracePlayback(double elapsedSeconds);
         bool SetForwardTraceFrameDuration(double durationSeconds);
+        bool RunBackwardTrace(
+            const std::vector<double>& inputs,
+            const std::vector<double>& targets);
+        void ClearBackwardTrace();
+        bool FocusBackwardTraceNeuron(std::uint64_t neuronId);
+        bool PlayBackwardTrace();
+        bool PauseBackwardTrace();
+        bool RestartBackwardTrace();
+        bool StepBackwardTraceForward();
+        bool StepBackwardTraceBackward();
+        bool AdvanceBackwardTracePlayback(double elapsedSeconds);
+        bool SetBackwardTraceFrameDuration(double durationSeconds);
         void RefreshTrainingTimeline();
         bool SelectTrainingTimelineStep(std::size_t stepIndex);
         void ClearTrainingTimelineSelection();
@@ -158,11 +200,14 @@ namespace MiaIA::Studio
         bool ContainsForwardTraceNeuron(std::uint64_t neuronId) const;
         bool RefreshForwardTraceContributions();
         void BuildForwardTracePlaybackFrames();
+        bool ContainsBackwardTraceNeuron(std::uint64_t neuronId) const;
+        void BuildBackwardTracePlaybackFrames();
 
         std::string WorkingDirectory;
         StudioViewMode ViewMode{ StudioViewMode::TwoDimensional };
         std::size_t RelationshipLimit{ 10 };
         double ForwardTraceFrameDurationSeconds{ 0.65 };
+        double BackwardTraceFrameDurationSeconds{ 0.65 };
         StudioState CurrentState;
     };
 }

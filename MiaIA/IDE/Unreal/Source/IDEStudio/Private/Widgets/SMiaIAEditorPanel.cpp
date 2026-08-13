@@ -1350,6 +1350,23 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
                         ]
                         + SVerticalBox::Slot()
                         .AutoHeight()
+                        .Padding(0.0f, 5.0f)
+                        [
+                            SNew(STextBlock)
+                            .Text(
+                                this,
+                                &SMiaIAEditorPanel::
+                                    BackwardTraceSelectionText)
+                            .AutoWrapText(true)
+                            .ColorAndOpacity_Lambda([this]()
+                            {
+                                return FSlateColor(
+                                    FMiaIAEditorTheme::StudioPalette(Theme).
+                                        Debug);
+                            })
+                        ]
+                        + SVerticalBox::Slot()
+                        .AutoHeight()
                         .Padding(0.0f, 7.0f, 0.0f, 3.0f)
                         [
                             SNew(SHorizontalBox)
@@ -1763,6 +1780,20 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
                                 this,
                                 &SMiaIAEditorPanel::SelectBottomTab,
                                 3)
+                        ]
+                        + SHorizontalBox::Slot()
+                        .AutoWidth()
+                        .Padding(2.0f)
+                        [
+                            SNew(SButton)
+                            .ButtonStyle(&ButtonStyle)
+                            .Text(LOCTEXT(
+                                "BackwardTraceTab",
+                                "Gradient trace"))
+                            .OnClicked(
+                                this,
+                                &SMiaIAEditorPanel::SelectBottomTab,
+                                4)
                         ]
                     ]
                     + SVerticalBox::Slot()
@@ -2481,6 +2512,173 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
                                 ]
                             ]
                         ]
+                        + SWidgetSwitcher::Slot()
+                        [
+                            SNew(SVerticalBox)
+                            + SVerticalBox::Slot()
+                            .AutoHeight()
+                            .Padding(2.0f, 2.0f, 2.0f, 6.0f)
+                            [
+                                SNew(SHorizontalBox)
+                                + SHorizontalBox::Slot()
+                                .FillWidth(1.0f)
+                                [
+                                    SAssignNew(
+                                        BackwardTraceInput,
+                                        SEditableTextBox)
+                                    .Style(&InputStyle)
+                                    .HintText(LOCTEXT(
+                                        "BackwardTraceInputHint",
+                                        "Inputs, for example: 1 1"))
+                                ]
+                                + SHorizontalBox::Slot()
+                                .FillWidth(1.0f)
+                                .Padding(6.0f, 0.0f, 0.0f, 0.0f)
+                                [
+                                    SAssignNew(
+                                        BackwardTraceTarget,
+                                        SEditableTextBox)
+                                    .Style(&InputStyle)
+                                    .HintText(LOCTEXT(
+                                        "BackwardTraceTargetHint",
+                                        "Targets, for example: 1"))
+                                ]
+                                + SHorizontalBox::Slot()
+                                .AutoWidth()
+                                .Padding(6.0f, 0.0f, 0.0f, 0.0f)
+                                [
+                                    SNew(SButton)
+                                    .ButtonStyle(&ButtonStyle)
+                                    .Text(LOCTEXT(
+                                        "RunBackwardTrace",
+                                        "Run gradient trace"))
+                                    .OnClicked(
+                                        this,
+                                        &SMiaIAEditorPanel::
+                                            HandleRunBackwardTrace)
+                                ]
+                                + SHorizontalBox::Slot()
+                                .AutoWidth()
+                                .Padding(4.0f, 0.0f, 0.0f, 0.0f)
+                                [
+                                    SNew(SButton)
+                                    .ButtonStyle(&ButtonStyle)
+                                    .Text(LOCTEXT(
+                                        "ClearBackwardTrace",
+                                        "Clear"))
+                                    .OnClicked(
+                                        this,
+                                        &SMiaIAEditorPanel::
+                                            HandleClearBackwardTrace)
+                                ]
+                            ]
+                            + SVerticalBox::Slot()
+                            .AutoHeight()
+                            .Padding(2.0f, 0.0f, 2.0f, 5.0f)
+                            [
+                                SNew(SHorizontalBox)
+                                + SHorizontalBox::Slot()
+                                .AutoWidth()
+                                .Padding(2.0f)
+                                [
+                                    SNew(SButton)
+                                    .ButtonStyle(&ButtonStyle)
+                                    .Text(LOCTEXT(
+                                        "RestartBackwardTrace",
+                                        "Reset"))
+                                    .OnClicked(
+                                        this,
+                                        &SMiaIAEditorPanel::
+                                            HandleRestartBackwardTrace)
+                                ]
+                                + SHorizontalBox::Slot()
+                                .AutoWidth()
+                                .Padding(2.0f)
+                                [
+                                    SNew(SButton)
+                                    .ButtonStyle(&ButtonStyle)
+                                    .Text(LOCTEXT(
+                                        "PreviousBackwardTraceFrame",
+                                        "Previous frame"))
+                                    .OnClicked(
+                                        this,
+                                        &SMiaIAEditorPanel::
+                                            HandlePreviousBackwardTraceFrame)
+                                ]
+                                + SHorizontalBox::Slot()
+                                .AutoWidth()
+                                .Padding(2.0f)
+                                [
+                                    SNew(SButton)
+                                    .ButtonStyle(&ButtonStyle)
+                                    .Text(
+                                        this,
+                                        &SMiaIAEditorPanel::
+                                            BackwardTracePlayPauseText)
+                                    .OnClicked(
+                                        this,
+                                        &SMiaIAEditorPanel::
+                                            HandleToggleBackwardTracePlayback)
+                                ]
+                                + SHorizontalBox::Slot()
+                                .AutoWidth()
+                                .Padding(2.0f)
+                                [
+                                    SNew(SButton)
+                                    .ButtonStyle(&ButtonStyle)
+                                    .Text(LOCTEXT(
+                                        "NextBackwardTraceFrame",
+                                        "Next frame"))
+                                    .OnClicked(
+                                        this,
+                                        &SMiaIAEditorPanel::
+                                            HandleNextBackwardTraceFrame)
+                                ]
+                                + SHorizontalBox::Slot()
+                                .AutoWidth()
+                                .VAlign(VAlign_Center)
+                                .Padding(8.0f, 2.0f, 2.0f, 2.0f)
+                                [
+                                    SNew(SComboButton)
+                                    .ComboButtonStyle(&ComboButtonStyle)
+                                    .ButtonContent()
+                                    [
+                                        SNew(STextBlock)
+                                        .Text(
+                                            this,
+                                            &SMiaIAEditorPanel::
+                                                BackwardTraceSpeedText)
+                                    ]
+                                    .OnGetMenuContent(
+                                        this,
+                                        &SMiaIAEditorPanel::
+                                            BuildBackwardTraceSpeedMenu)
+                                ]
+                            ]
+                            + SVerticalBox::Slot()
+                            .AutoHeight()
+                            .Padding(4.0f, 0.0f, 4.0f, 6.0f)
+                            [
+                                SNew(STextBlock)
+                                .Text(
+                                    this,
+                                    &SMiaIAEditorPanel::
+                                        BackwardTraceSummaryText)
+                                .AutoWrapText(true)
+                            ]
+                            + SVerticalBox::Slot()
+                            .FillHeight(1.0f)
+                            [
+                                SNew(SScrollBox)
+                                .ScrollBarStyle(&ScrollBarStyle)
+                                + SScrollBox::Slot()
+                                [
+                                    SAssignNew(
+                                        BackwardTraceContent,
+                                        SVerticalBox)
+                                ]
+                            ]
+                        ]
                     ]
                 ]
             ]
@@ -2655,6 +2853,7 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
     RebuildConsoleSuggestions(FString());
     RefreshData();
     RebuildForwardTrace();
+    RebuildBackwardTrace();
     RegisterActiveTimer(
         0.1f,
         FWidgetActiveTimerDelegate::CreateSP(
@@ -3004,6 +3203,7 @@ void SMiaIAEditorPanel::RefreshData()
     }
 
     ApplyForwardTraceOverlay();
+    ApplyBackwardTraceOverlay();
 
     if (topologyChanged)
     {
@@ -3023,6 +3223,20 @@ void SMiaIAEditorPanel::RefreshData()
     if (forwardTraceFocusChanged)
     {
         RebuildForwardTrace();
+    }
+
+    const MiaIA::Studio::StudioBackwardTraceState backwardTrace =
+        FMiaIAInstanceService::BackwardTraceState(MiaIAInstance);
+    if (backwardTrace.Active && SelectedNeuronIds.Num() == 1 &&
+        SelectedNeuronId >= 0 && backwardTrace.FocusedNeuronId !=
+            static_cast<uint64>(SelectedNeuronId))
+    {
+        if (FMiaIAInstanceService::FocusBackwardTraceNeuron(
+            MiaIAInstance,
+            static_cast<uint64>(SelectedNeuronId)))
+        {
+            RebuildBackwardTrace();
+        }
     }
 
     if (trainingTimelineChanged)
@@ -3133,6 +3347,117 @@ void SMiaIAEditorPanel::ApplyForwardTraceOverlay()
     }
 }
 
+void SMiaIAEditorPanel::ApplyBackwardTraceOverlay()
+{
+    TMap<int64, double> neuronGradients;
+    TMap<int64, double> connectionGradients;
+    TSet<int64> playbackConnections;
+    bool playbackActive = false;
+    const MiaIA::Studio::StudioBackwardTraceState state =
+        FMiaIAInstanceService::BackwardTraceState(MiaIAInstance);
+
+    if (state.Active)
+    {
+        const bool playbackComplete = state.PlaybackStatus ==
+            MiaIA::Studio::StudioForwardTracePlaybackStatus::Completed;
+        const bool hasFrame = !state.PlaybackFrames.empty() &&
+            state.PlaybackFrameIndex < state.PlaybackFrames.size();
+
+        if (playbackComplete)
+        {
+            for (const auto& layer : state.Trace.Layers)
+            {
+                for (const auto& neuron : layer.Neurons)
+                {
+                    neuronGradients.Add(
+                        static_cast<int64>(neuron.Id),
+                        neuron.ActivationGradient);
+                }
+            }
+
+            for (const auto& connection : state.Trace.Connections)
+            {
+                connectionGradients.Add(
+                    static_cast<int64>(connection.ConnectionId),
+                    connection.SourceActivationGradientContribution);
+            }
+        }
+        else if (hasFrame)
+        {
+            playbackActive = true;
+
+            for (std::size_t frameIndex = 0;
+                frameIndex <= state.PlaybackFrameIndex;
+                ++frameIndex)
+            {
+                const MiaIA::Studio::StudioBackwardTraceFrame& frame =
+                    state.PlaybackFrames[frameIndex];
+
+                if (frame.Kind == MiaIA::Studio::
+                    StudioBackwardTraceFrameKind::ConnectionFlow)
+                {
+                    if (frame.LayerIndex >= state.Trace.Layers.size())
+                    {
+                        continue;
+                    }
+
+                    TSet<int64> targetNeurons;
+                    for (const auto& neuron :
+                        state.Trace.Layers[frame.LayerIndex].Neurons)
+                    {
+                        targetNeurons.Add(static_cast<int64>(neuron.Id));
+                    }
+
+                    for (const auto& connection : state.Trace.Connections)
+                    {
+                        if (targetNeurons.Contains(
+                            static_cast<int64>(connection.ToNeuron)))
+                        {
+                            const int64 connectionId = static_cast<int64>(
+                                connection.ConnectionId);
+                            connectionGradients.Add(
+                                connectionId,
+                                connection.
+                                    SourceActivationGradientContribution);
+                            playbackConnections.Add(connectionId);
+                        }
+                    }
+                    continue;
+                }
+
+                if (frame.LayerIndex < state.Trace.Layers.size())
+                {
+                    for (const auto& neuron :
+                        state.Trace.Layers[frame.LayerIndex].Neurons)
+                    {
+                        neuronGradients.Add(
+                            static_cast<int64>(neuron.Id),
+                            neuron.ActivationGradient);
+                    }
+                }
+            }
+        }
+    }
+
+    if (NetworkView.IsValid())
+    {
+        NetworkView->SetBackwardTraceOverlay(
+            neuronGradients,
+            connectionGradients,
+            playbackConnections,
+            playbackActive);
+    }
+
+    if (Network3DView.IsValid())
+    {
+        Network3DView->SetBackwardTraceOverlay(
+            neuronGradients,
+            connectionGradients,
+            playbackConnections,
+            playbackActive);
+    }
+}
+
 void SMiaIAEditorPanel::RebuildForwardTrace()
 {
     if (!ForwardTraceContent.IsValid())
@@ -3219,6 +3544,44 @@ void SMiaIAEditorPanel::RebuildForwardTrace()
             ]
         ];
     }
+}
+
+void SMiaIAEditorPanel::RebuildBackwardTrace()
+{
+    if (!BackwardTraceContent.IsValid())
+    {
+        return;
+    }
+
+    BackwardTraceContent->ClearChildren();
+    const MiaIA::Studio::StudioBackwardTraceState state =
+        FMiaIAInstanceService::BackwardTraceState(MiaIAInstance);
+
+    if (!state.Active)
+    {
+        BackwardTraceContent->AddSlot()
+        .AutoHeight()
+        .Padding(3.0f)
+        [
+            SNew(STextBlock)
+            .Text(LOCTEXT(
+                "BackwardTraceInactive",
+                "Enter one value per input and output target, then run an immutable backward gradient trace."))
+            .AutoWrapText(true)
+        ];
+        return;
+    }
+
+    BackwardTraceContent->AddSlot()
+    .AutoHeight()
+    .Padding(3.0f)
+    [
+        SNew(STextBlock)
+        .Text(LOCTEXT(
+            "BackwardTraceSelectionHelp",
+            "Select a neuron or connection to inspect activation, pre-activation, bias, weight, and propagated-source gradients."))
+        .AutoWrapText(true)
+    ];
 }
 
 void SMiaIAEditorPanel::RebuildTrainingTimeline()
@@ -4527,6 +4890,14 @@ EActiveTimerReturnType SMiaIAEditorPanel::HandleRefreshTimer(
         ApplyForwardTraceOverlay();
     }
 
+    if (FMiaIAInstanceService::AdvanceBackwardTracePlayback(
+        MiaIAInstance,
+        DeltaTime))
+    {
+        RebuildBackwardTrace();
+        ApplyBackwardTraceOverlay();
+    }
+
     PeriodicRefreshElapsedSeconds += DeltaTime;
 
     if (PeriodicRefreshElapsedSeconds >= DataRefreshInterval())
@@ -5203,7 +5574,9 @@ FReply SMiaIAEditorPanel::HandleRunForwardTrace()
     }
 
     RebuildForwardTrace();
+    RebuildBackwardTrace();
     ApplyForwardTraceOverlay();
+    ApplyBackwardTraceOverlay();
     return FReply::Handled();
 }
 
@@ -5346,6 +5719,172 @@ FReply SMiaIAEditorPanel::HandleNextForwardTracePage()
         request);
     RebuildForwardTrace();
     ApplyForwardTraceOverlay();
+    return FReply::Handled();
+}
+
+FReply SMiaIAEditorPanel::HandleRunBackwardTrace()
+{
+    if (!BackwardTraceInput.IsValid() || !BackwardTraceTarget.IsValid())
+    {
+        return FReply::Handled();
+    }
+
+    const auto parseValues = [](const FText& text, TArray<double>& values)
+    {
+        TArray<FString> tokens;
+        text.ToString().ParseIntoArrayWS(tokens);
+        values.Reserve(tokens.Num());
+
+        for (const FString& token : tokens)
+        {
+            if (!token.IsNumeric())
+            {
+                return false;
+            }
+
+            const double value = FCString::Atod(*token);
+            if (!FMath::IsFinite(value))
+            {
+                return false;
+            }
+            values.Add(value);
+        }
+
+        return !values.IsEmpty();
+    };
+
+    TArray<double> inputs;
+    TArray<double> targets;
+
+    if (!parseValues(BackwardTraceInput->GetText(), inputs) ||
+        !parseValues(BackwardTraceTarget->GetText(), targets))
+    {
+        ShowDialog(
+            LOCTEXT("BackwardTraceInvalidTitle", "Trace not started"),
+            LOCTEXT(
+                "BackwardTraceInvalidValue",
+                "Enter finite whitespace-separated input and target values."));
+        return FReply::Handled();
+    }
+
+    FMiaIAInstanceService::Refresh(MiaIAInstance);
+    if (!FMiaIAInstanceService::RunBackwardTrace(
+        MiaIAInstance,
+        inputs,
+        targets))
+    {
+        ShowDialog(
+            LOCTEXT("BackwardTraceFailedTitle", "Trace not started"),
+            LOCTEXT(
+                "BackwardTraceFailed",
+                "The inputs or targets do not match the current valid network."));
+        return FReply::Handled();
+    }
+
+    if (SelectedNeuronIds.Num() == 1 && SelectedNeuronId >= 0)
+    {
+        FMiaIAInstanceService::FocusBackwardTraceNeuron(
+            MiaIAInstance,
+            static_cast<uint64>(SelectedNeuronId));
+    }
+
+    RebuildForwardTrace();
+    RebuildBackwardTrace();
+    ApplyForwardTraceOverlay();
+    ApplyBackwardTraceOverlay();
+    return FReply::Handled();
+}
+
+FReply SMiaIAEditorPanel::HandleClearBackwardTrace()
+{
+    FMiaIAInstanceService::ClearBackwardTrace(MiaIAInstance);
+    RebuildBackwardTrace();
+    ApplyBackwardTraceOverlay();
+    return FReply::Handled();
+}
+
+FReply SMiaIAEditorPanel::HandleRestartBackwardTrace()
+{
+    if (FMiaIAInstanceService::RestartBackwardTrace(MiaIAInstance))
+    {
+        RebuildBackwardTrace();
+        ApplyBackwardTraceOverlay();
+    }
+    return FReply::Handled();
+}
+
+FReply SMiaIAEditorPanel::HandlePreviousBackwardTraceFrame()
+{
+    if (FMiaIAInstanceService::StepBackwardTraceBackward(MiaIAInstance))
+    {
+        RebuildBackwardTrace();
+        ApplyBackwardTraceOverlay();
+    }
+    return FReply::Handled();
+}
+
+FReply SMiaIAEditorPanel::HandleToggleBackwardTracePlayback()
+{
+    const MiaIA::Studio::StudioBackwardTraceState state =
+        FMiaIAInstanceService::BackwardTraceState(MiaIAInstance);
+    const bool changed = state.PlaybackStatus ==
+        MiaIA::Studio::StudioForwardTracePlaybackStatus::Playing
+        ? FMiaIAInstanceService::PauseBackwardTrace(MiaIAInstance)
+        : FMiaIAInstanceService::PlayBackwardTrace(MiaIAInstance);
+
+    if (changed)
+    {
+        RebuildBackwardTrace();
+        ApplyBackwardTraceOverlay();
+    }
+    return FReply::Handled();
+}
+
+FReply SMiaIAEditorPanel::HandleNextBackwardTraceFrame()
+{
+    if (FMiaIAInstanceService::StepBackwardTraceForward(MiaIAInstance))
+    {
+        RebuildBackwardTrace();
+        ApplyBackwardTraceOverlay();
+    }
+    return FReply::Handled();
+}
+
+TSharedRef<SWidget> SMiaIAEditorPanel::BuildBackwardTraceSpeedMenu()
+{
+    TSharedRef<SVerticalBox> menu = SNew(SVerticalBox);
+    constexpr double speeds[] = { 0.25, 0.5, 1.0, 2.0, 4.0 };
+
+    for (const double speed : speeds)
+    {
+        menu->AddSlot()
+        .AutoHeight()
+        [
+            SNew(SButton)
+            .ButtonStyle(&ButtonStyle)
+            .Text(FText::FromString(FString::Printf(TEXT("%gx"), speed)))
+            .OnClicked(
+                this,
+                &SMiaIAEditorPanel::SelectBackwardTraceSpeed,
+                speed)
+        ];
+    }
+
+    return menu;
+}
+
+FReply SMiaIAEditorPanel::SelectBackwardTraceSpeed(
+    double SpeedMultiplier)
+{
+    if (SpeedMultiplier > 0.0)
+    {
+        FMiaIAInstanceService::SetBackwardTraceFrameDuration(
+            MiaIAInstance,
+            DefaultForwardTraceFrameDurationSeconds / SpeedMultiplier);
+        RebuildBackwardTrace();
+    }
+
+    FSlateApplication::Get().DismissAllMenus();
     return FReply::Handled();
 }
 
@@ -7173,6 +7712,13 @@ EVisibility SMiaIAEditorPanel::LayerDetailVisibility() const
 
 FText SMiaIAEditorPanel::PositiveMetricLegendText() const
 {
+    if (FMiaIAInstanceService::BackwardTraceState(MiaIAInstance).Active)
+    {
+        return LOCTEXT(
+            "PositiveBackwardGradientLegend",
+            "Positive gradient flow");
+    }
+
     if (FMiaIAInstanceService::ForwardTraceState(MiaIAInstance).Active)
     {
         return LOCTEXT(
@@ -7193,6 +7739,13 @@ FText SMiaIAEditorPanel::PositiveMetricLegendText() const
 
 FText SMiaIAEditorPanel::NegativeMetricLegendText() const
 {
+    if (FMiaIAInstanceService::BackwardTraceState(MiaIAInstance).Active)
+    {
+        return LOCTEXT(
+            "NegativeBackwardGradientLegend",
+            "Negative gradient flow");
+    }
+
     if (FMiaIAInstanceService::ForwardTraceState(MiaIAInstance).Active)
     {
         return LOCTEXT(
@@ -7312,6 +7865,90 @@ FText SMiaIAEditorPanel::ForwardTraceSpeedText() const
 {
     const MiaIA::Studio::StudioForwardTraceState state =
         FMiaIAInstanceService::ForwardTraceState(MiaIAInstance);
+    const double duration = state.PlaybackFrameDurationSeconds > 0.0
+        ? state.PlaybackFrameDurationSeconds
+        : DefaultForwardTraceFrameDurationSeconds;
+    return FText::FromString(FString::Printf(
+        TEXT("Speed %gx"),
+        DefaultForwardTraceFrameDurationSeconds / duration));
+}
+
+FText SMiaIAEditorPanel::BackwardTraceSummaryText() const
+{
+    const MiaIA::Studio::StudioBackwardTraceState state =
+        FMiaIAInstanceService::BackwardTraceState(MiaIAInstance);
+    if (!state.Active)
+    {
+        return LOCTEXT(
+            "BackwardTraceSummaryInactive",
+            "No captured backward gradient trace.");
+    }
+
+    FString playbackText = TEXT("Complete");
+
+    if (state.PlaybackStatus !=
+        MiaIA::Studio::StudioForwardTracePlaybackStatus::Completed &&
+        state.PlaybackFrameIndex < state.PlaybackFrames.size())
+    {
+        const MiaIA::Studio::StudioBackwardTraceFrame& frame =
+            state.PlaybackFrames[state.PlaybackFrameIndex];
+        const TCHAR* phase = TEXT("Output gradients");
+
+        if (frame.Kind == MiaIA::Studio::
+            StudioBackwardTraceFrameKind::ConnectionFlow)
+        {
+            phase = TEXT("Connection gradient flow");
+        }
+        else if (frame.Kind == MiaIA::Studio::
+            StudioBackwardTraceFrameKind::LayerGradients)
+        {
+            phase = TEXT("Layer gradients");
+        }
+
+        FString layerName = FString::Printf(
+            TEXT("Layer %llu"),
+            static_cast<uint64>(frame.LayerIndex));
+        if (frame.LayerIndex < state.Trace.Layers.size())
+        {
+            layerName = UTF8_TO_TCHAR(
+                state.Trace.Layers[frame.LayerIndex].Name.c_str());
+        }
+
+        const TCHAR* status = state.PlaybackStatus ==
+            MiaIA::Studio::StudioForwardTracePlaybackStatus::Playing
+            ? TEXT("Playing")
+            : TEXT("Paused");
+        playbackText = FString::Printf(
+            TEXT("Frame %llu/%llu | %s | %s | %s"),
+            static_cast<uint64>(state.PlaybackFrameIndex + 1),
+            static_cast<uint64>(state.PlaybackFrames.size()),
+            *layerName,
+            phase,
+            status);
+    }
+
+    return FText::FromString(FString::Printf(
+        TEXT("Immutable MSE snapshot | Loss: %.9g | Inputs: %llu | Targets: %llu\n%s"),
+        state.Trace.LossValue,
+        static_cast<uint64>(state.Trace.Inputs.size()),
+        static_cast<uint64>(state.Trace.Targets.size()),
+        *playbackText));
+}
+
+FText SMiaIAEditorPanel::BackwardTracePlayPauseText() const
+{
+    const MiaIA::Studio::StudioBackwardTraceState state =
+        FMiaIAInstanceService::BackwardTraceState(MiaIAInstance);
+    return state.PlaybackStatus ==
+        MiaIA::Studio::StudioForwardTracePlaybackStatus::Playing
+        ? LOCTEXT("PauseBackwardTracePlayback", "Pause")
+        : LOCTEXT("PlayBackwardTracePlayback", "Play");
+}
+
+FText SMiaIAEditorPanel::BackwardTraceSpeedText() const
+{
+    const MiaIA::Studio::StudioBackwardTraceState state =
+        FMiaIAInstanceService::BackwardTraceState(MiaIAInstance);
     const double duration = state.PlaybackFrameDurationSeconds > 0.0
         ? state.PlaybackFrameDurationSeconds
         : DefaultForwardTraceFrameDurationSeconds;
@@ -7461,6 +8098,66 @@ FText SMiaIAEditorPanel::ForwardTraceSelectionText() const
                 neuron.Bias,
                 neuron.PreActivation,
                 neuron.Activation));
+        }
+    }
+
+    return FText::GetEmpty();
+}
+
+FText SMiaIAEditorPanel::BackwardTraceSelectionText() const
+{
+    const MiaIA::Studio::StudioBackwardTraceState state =
+        FMiaIAInstanceService::BackwardTraceState(MiaIAInstance);
+    if (!state.Active)
+    {
+        return FText::GetEmpty();
+    }
+
+    if (SelectedNeuronIds.Num() == 1 && SelectedNeuronId >= 0)
+    {
+        for (const auto& layer : state.Trace.Layers)
+        {
+            for (const auto& neuron : layer.Neurons)
+            {
+                if (neuron.Id != static_cast<uint64>(SelectedNeuronId))
+                {
+                    continue;
+                }
+
+                return FText::FromString(FString::Printf(
+                    TEXT(
+                        "Backward gradient trace\n"
+                        "Activation: %g\n"
+                        "dL/da: %g\n"
+                        "dL/dz: %g\n"
+                        "Bias gradient: %g"),
+                    neuron.Activation,
+                    neuron.ActivationGradient,
+                    neuron.PreActivationGradient,
+                    neuron.BiasGradient));
+            }
+        }
+    }
+
+    if (SelectedConnectionId >= 0)
+    {
+        for (const auto& connection : state.Trace.Connections)
+        {
+            if (connection.ConnectionId !=
+                static_cast<uint64>(SelectedConnectionId))
+            {
+                continue;
+            }
+
+            return FText::FromString(FString::Printf(
+                TEXT(
+                    "Backward gradient trace\n"
+                    "Weight: %g\n"
+                    "Weight gradient: %g\n"
+                    "Source gradient contribution: %g"),
+                connection.Weight,
+                connection.WeightGradient,
+                connection.SourceActivationGradientContribution));
         }
     }
 

@@ -292,6 +292,21 @@ namespace MiaIA::SDK
             result);
     }
 
+    bool MiaIAClient::TraceBackward(
+        const std::vector<double>& inputs,
+        const std::vector<double>& targets,
+        Core::LossType loss,
+        Core::BackwardTraceSnapshot& result)
+    {
+        const std::scoped_lock lock(Detail::ClientMutex());
+        return Engine::NetworkInspector::TraceBackward(
+            Detail::ClientNetwork(),
+            inputs,
+            targets,
+            loss,
+            result);
+    }
+
     bool MiaIAClient::TryGetForwardTraceContributions(
         const std::vector<double>& inputs,
         std::uint64_t neuronId,

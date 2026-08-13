@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../../Core/Model/Network.h"
+#include "../../Core/Public/BackwardTraceSnapshot.h"
 #include "../../Core/Public/ConnectionInspectionSnapshot.h"
 #include "../../Core/Public/ForwardTraceSnapshot.h"
 #include "../../Core/Public/NetworkSnapshot.h"
@@ -51,6 +52,13 @@ namespace MiaIA::Engine
             const Core::Network& network,
             const std::vector<double>& inputs,
             Core::ForwardTraceSnapshot& result);
+
+        static bool TraceBackward(
+            const Core::Network& network,
+            const std::vector<double>& inputs,
+            const std::vector<double>& targets,
+            Core::LossType loss,
+            Core::BackwardTraceSnapshot& result);
 
         static bool TryGetForwardTraceContributions(
             const Core::Network& network,

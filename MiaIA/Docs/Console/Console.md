@@ -277,6 +277,22 @@ trace forward 1 1
 
 The operation evaluates a private network copy. It does not replace current activations, reorder public layers, or modify weights and biases. This differs intentionally from a successful `predict`, which leaves its calculated activations available as current runtime state.
 
+### `trace backward`
+
+```text
+trace backward <input...> -- <target...>
+```
+
+Calculates a read-only backward gradient-flow trace for one input and target pair. The `--` delimiter separates the input vector from the target vector. The current implementation uses mean squared error and prints the captured predictions, signed errors, loss, and every layer in reverse order from outputs to inputs.
+
+Each neuron record contains its captured activation, `dL/da`, `dL/dz`, and bias gradient. Each connection contains its weight gradient and its signed contribution to the source neuron's activation gradient: `weight * target dL/dz`.
+
+```text
+trace backward 1 1 -- 1
+```
+
+The operation runs forward evaluation and differentiation on a private network copy. It does not apply an optimizer, publish temporary activations, or change any weight or bias. Input or target dimension errors, non-finite values, an invalid network, or an unsupported loss leave both the public network and caller-owned SDK result unchanged.
+
 ### `trace neuron`
 
 ```text
