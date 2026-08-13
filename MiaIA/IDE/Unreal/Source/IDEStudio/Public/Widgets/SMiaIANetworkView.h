@@ -187,4 +187,5 @@ private:
     FOnMiaIALayerFocusExitRequested OnLayerFocusExitRequested;
     FSlateRoundedBoxBrush NeuronBrush;
     FSlateRoundedBoxBrush SelectionBrush;
+    FSlateRoundedBoxBrush NeuronLabelBrush;
 };

@@ -11,6 +11,7 @@
 #include "Misc/Paths.h"
 #include "Styling/AppStyle.h"
 #include "Widgets/Input/SButton.h"
+#include "Widgets/Input/SCheckBox.h"
 #include "Widgets/Input/SComboButton.h"
 #include "Widgets/Input/SEditableTextBox.h"
 #include "Widgets/Input/SSpinBox.h"
@@ -50,6 +51,8 @@ namespace
         TEXT("ConnectionDisplay");
     constexpr TCHAR NeuronScaleSettingsKey[] = TEXT("NeuronScale");
     constexpr TCHAR ConnectionScaleSettingsKey[] = TEXT("ConnectionScale");
+    constexpr TCHAR ShowNeuronLabelsSettingsKey[] =
+        TEXT("ShowNeuronLabels");
     constexpr TCHAR NeuronGapSettingsKey[] = TEXT("NeuronGap");
     constexpr TCHAR LayerGapSettingsKey[] = TEXT("LayerGap");
     constexpr int32 MinimumTopologyLimit = 1;
@@ -257,6 +260,11 @@ namespace
             LayerGapSettingsKey,
             settings.Layout.LayerGap,
             GGameUserSettingsIni);
+        GConfig->GetBool(
+            DataRefreshSettingsSection,
+            ShowNeuronLabelsSettingsKey,
+            settings.bShowNeuronLabels,
+            GGameUserSettingsIni);
         settings.NeuronScale = FMath::Clamp(
             settings.NeuronScale,
             0.25f,
@@ -343,6 +351,11 @@ namespace
             DataRefreshSettingsSection,
             LayerGapSettingsKey,
             Settings.Layout.LayerGap,
+            GGameUserSettingsIni);
+        GConfig->SetBool(
+            DataRefreshSettingsSection,
+            ShowNeuronLabelsSettingsKey,
+            Settings.bShowNeuronLabels,
             GGameUserSettingsIni);
         GConfig->Flush(false, GGameUserSettingsIni);
     }
@@ -1294,6 +1307,56 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
                             .Text(this, &SMiaIAEditorPanel::SelectionUpdateText)
                         ]
                         + SVerticalBox::Slot()
+                        .AutoHeight()
+                        .Padding(0.0f, 7.0f, 0.0f, 3.0f)
+                        [
+                            SNew(SHorizontalBox)
+                            .Visibility(
+                                this,
+                                &SMiaIAEditorPanel::
+                                    ConnectionWeightEditorVisibility)
+                            + SHorizontalBox::Slot()
+                            .FillWidth(1.0f)
+                            .Padding(0.0f, 0.0f, 2.0f, 0.0f)
+                            [
+                                SNew(SButton)
+                                .ButtonStyle(&ButtonStyle)
+                                .Text_Lambda([this]()
+                                {
+                                    return SelectedConnectionEndpointText(
+                                        false);
+                                })
+                                .ToolTipText(LOCTEXT(
+                                    "NavigateFromEndpointTooltip",
+                                    "Select the source neuron of this connection."))
+                                .OnClicked(
+                                    this,
+                                    &SMiaIAEditorPanel::
+                                        HandleNavigateSelectedConnectionEndpoint,
+                                    false)
+                            ]
+                            + SHorizontalBox::Slot()
+                            .FillWidth(1.0f)
+                            .Padding(2.0f, 0.0f, 0.0f, 0.0f)
+                            [
+                                SNew(SButton)
+                                .ButtonStyle(&ButtonStyle)
+                                .Text_Lambda([this]()
+                                {
+                                    return SelectedConnectionEndpointText(
+                                        true);
+                                })
+                                .ToolTipText(LOCTEXT(
+                                    "NavigateToEndpointTooltip",
+                                    "Select the destination neuron of this connection."))
+                                .OnClicked(
+                                    this,
+                                    &SMiaIAEditorPanel::
+                                        HandleNavigateSelectedConnectionEndpoint,
+                                    true)
+                            ]
+                        ]
+                        + SVerticalBox::Slot()
                         .FillHeight(1.0f)
                         .Padding(0.0f, 8.0f, 0.0f, 0.0f)
                         [
@@ -1301,12 +1364,171 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
                             .ScrollBarStyle(&ScrollBarStyle)
                             + SScrollBox::Slot()
                             [
-                                SNew(STextBlock)
-                                .Text(
-                                    this,
-                                    &SMiaIAEditorPanel::
-                                        SelectionRelationshipsText)
-                                .AutoWrapText(true)
+                                SNew(SVerticalBox)
+                                + SVerticalBox::Slot()
+                                .AutoHeight()
+                                [
+                                    SNew(STextBlock)
+                                    .Text(
+                                        this,
+                                        &SMiaIAEditorPanel::
+                                            SelectionRelationshipsText)
+                                    .AutoWrapText(true)
+                                ]
+                                + SVerticalBox::Slot()
+                                .AutoHeight()
+                                .Padding(0.0f, 8.0f, 0.0f, 4.0f)
+                                [
+                                    SNew(SHorizontalBox)
+                                    .Visibility(
+                                        this,
+                                        &SMiaIAEditorPanel::
+                                            RelationshipExplorerVisibility)
+                                    + SHorizontalBox::Slot()
+                                    .FillWidth(1.0f)
+                                    .Padding(0.0f, 0.0f, 2.0f, 0.0f)
+                                    [
+                                        SNew(SButton)
+                                        .ButtonStyle(&ButtonStyle)
+                                        .Text_Lambda([this]()
+                                        {
+                                            return RelationshipDirection ==
+                                                EMiaIANeuronRelationshipDirection::
+                                                    Incoming
+                                                ? LOCTEXT(
+                                                    "IncomingRelationshipsActive",
+                                                    "[Incoming]")
+                                                : LOCTEXT(
+                                                    "IncomingRelationships",
+                                                    "Incoming");
+                                        })
+                                        .OnClicked(
+                                            this,
+                                            &SMiaIAEditorPanel::
+                                                SelectRelationshipDirection,
+                                            EMiaIANeuronRelationshipDirection::
+                                                Incoming)
+                                    ]
+                                    + SHorizontalBox::Slot()
+                                    .FillWidth(1.0f)
+                                    .Padding(2.0f, 0.0f, 0.0f, 0.0f)
+                                    [
+                                        SNew(SButton)
+                                        .ButtonStyle(&ButtonStyle)
+                                        .Text_Lambda([this]()
+                                        {
+                                            return RelationshipDirection ==
+                                                EMiaIANeuronRelationshipDirection::
+                                                    Outgoing
+                                                ? LOCTEXT(
+                                                    "OutgoingRelationshipsActive",
+                                                    "[Outgoing]")
+                                                : LOCTEXT(
+                                                    "OutgoingRelationships",
+                                                    "Outgoing");
+                                        })
+                                        .OnClicked(
+                                            this,
+                                            &SMiaIAEditorPanel::
+                                                SelectRelationshipDirection,
+                                            EMiaIANeuronRelationshipDirection::
+                                                Outgoing)
+                                    ]
+                                ]
+                                + SVerticalBox::Slot()
+                                .AutoHeight()
+                                .Padding(0.0f, 2.0f)
+                                [
+                                    SNew(SHorizontalBox)
+                                    .Visibility(
+                                        this,
+                                        &SMiaIAEditorPanel::
+                                            RelationshipExplorerVisibility)
+                                    + SHorizontalBox::Slot()
+                                    .FillWidth(1.0f)
+                                    [
+                                        SNew(SComboButton)
+                                        .ComboButtonStyle(&ComboButtonStyle)
+                                        .OnGetMenuContent(
+                                            this,
+                                            &SMiaIAEditorPanel::
+                                                BuildRelationshipSortMenu)
+                                        .ButtonContent()
+                                        [
+                                            SNew(STextBlock)
+                                            .Text(
+                                                this,
+                                                &SMiaIAEditorPanel::
+                                                    RelationshipSortText)
+                                        ]
+                                    ]
+                                    + SHorizontalBox::Slot()
+                                    .AutoWidth()
+                                    .Padding(4.0f, 0.0f, 0.0f, 0.0f)
+                                    [
+                                        SNew(SButton)
+                                        .ButtonStyle(&ButtonStyle)
+                                        .Text_Lambda([this]()
+                                        {
+                                            return bRelationshipSortDescending
+                                                ? LOCTEXT(
+                                                    "RelationshipDescending",
+                                                    "Desc")
+                                                : LOCTEXT(
+                                                    "RelationshipAscending",
+                                                    "Asc");
+                                        })
+                                        .OnClicked(
+                                            this,
+                                            &SMiaIAEditorPanel::
+                                                ToggleRelationshipSortDirection)
+                                    ]
+                                ]
+                                + SVerticalBox::Slot()
+                                .AutoHeight()
+                                .Padding(0.0f, 2.0f)
+                                [
+                                    SNew(SVerticalBox)
+                                    .Visibility(
+                                        this,
+                                        &SMiaIAEditorPanel::
+                                            RelationshipExplorerVisibility)
+                                    + SVerticalBox::Slot()
+                                    .AutoHeight()
+                                    [
+                                        SNew(STextBlock)
+                                        .Text(LOCTEXT(
+                                            "RelationshipWeightFilterLabel",
+                                            "Minimum |weight|"))
+                                    ]
+                                    + SVerticalBox::Slot()
+                                    .AutoHeight()
+                                    [
+                                        SNew(SSpinBox<double>)
+                                        .MinValue(0.0)
+                                        .MinSliderValue(0.0)
+                                        .MaxSliderValue(1.0)
+                                        .Delta(0.01)
+                                        .Value_Lambda([this]()
+                                        {
+                                            return RelationshipMinimumAbsoluteWeight;
+                                        })
+                                        .OnValueCommitted(
+                                            this,
+                                            &SMiaIAEditorPanel::
+                                                HandleRelationshipMinimumWeightCommitted)
+                                        .ToolTipText(LOCTEXT(
+                                            "RelationshipWeightFilterTooltip",
+                                            "Show only connections whose absolute weight is at least this value."))
+                                    ]
+                                ]
+                                + SVerticalBox::Slot()
+                                .AutoHeight()
+                                [
+                                    SAssignNew(
+                                        RelationshipContent,
+                                        SVerticalBox)
+                                ]
                             ]
                         ]
                     ]
@@ -1879,11 +2101,13 @@ void SMiaIAEditorPanel::RefreshData()
     {
         FocusedLayerId = -1;
         bNetworkPreview = false;
+        RelationshipOffset = 0;
     }
     else if (!previouslyHadNetwork || networkDefinitionChanged)
     {
         FocusedLayerId = -1;
         bNetworkPreview = true;
+        RelationshipOffset = 0;
     }
     else if (!bNetworkRequiresCompactTopology && FocusedLayerId >= 0)
     {
@@ -1957,7 +2181,12 @@ void SMiaIAEditorPanel::RefreshData()
         SelectedLayerId = -1;
     }
 
-    if (!FindConnection(SelectedConnectionId))
+    FMiaIAConnectionInspection selectedConnectionProbe;
+    if (SelectedConnectionId >= 0 &&
+        !FindConnection(SelectedConnectionId) &&
+        !UMiaIABlueprintLibrary::InspectConnection(
+            SelectedConnectionId,
+            selectedConnectionProbe))
     {
         SelectedConnectionId = -1;
     }
@@ -2021,6 +2250,63 @@ void SMiaIAEditorPanel::RefreshData()
         UMiaIABlueprintLibrary::InspectConnection(
             SelectedConnectionId,
             ConnectionInspection);
+
+    RelationshipPage = {};
+    bHasRelationshipPage = bHasNeuronInspection &&
+        UMiaIABlueprintLibrary::GetNeuronRelationshipPage(
+            SelectedNeuronId,
+            RelationshipDirection,
+            RelationshipOffset,
+            FMath::Max(1, InspectorConnectionLimit),
+            RelationshipSort,
+            bRelationshipSortDescending,
+            RelationshipMinimumAbsoluteWeight,
+            RelationshipPage);
+
+    if (bHasRelationshipPage &&
+        RelationshipPage.FilteredConnectionCount > 0 &&
+        RelationshipOffset >= RelationshipPage.FilteredConnectionCount)
+    {
+        const int64 pageSize = FMath::Max(1, InspectorConnectionLimit);
+        RelationshipOffset =
+            ((RelationshipPage.FilteredConnectionCount - 1) / pageSize) *
+            pageSize;
+        bHasRelationshipPage =
+            UMiaIABlueprintLibrary::GetNeuronRelationshipPage(
+                SelectedNeuronId,
+                RelationshipDirection,
+                RelationshipOffset,
+                static_cast<int32>(pageSize),
+                RelationshipSort,
+                bRelationshipSortDescending,
+                RelationshipMinimumAbsoluteWeight,
+                RelationshipPage);
+    }
+
+    FString newRelationshipKey = bHasRelationshipPage
+        ? FString::Printf(
+            TEXT("%lld:%d:%lld:%d:%d:%.17g:%lld:%lld"),
+            SelectedNeuronId,
+            static_cast<int32>(RelationshipDirection),
+            RelationshipPage.Offset,
+            RelationshipPage.Limit,
+            static_cast<int32>(RelationshipSort) * 2 +
+                (bRelationshipSortDescending ? 1 : 0),
+            RelationshipMinimumAbsoluteWeight,
+            RelationshipPage.TotalConnectionCount,
+            RelationshipPage.FilteredConnectionCount)
+        : TEXT("None");
+    for (const FMiaIAConnectionSnapshot& connection :
+        RelationshipPage.Connections)
+    {
+        newRelationshipKey += FString::Printf(
+            TEXT(":%lld:%.17g"),
+            connection.Id,
+            connection.Weight);
+    }
+    const bool relationshipsChanged =
+        newRelationshipKey != RelationshipKey;
+    RelationshipKey = MoveTemp(newRelationshipKey);
 
     if (bHasNeuronInspection)
     {
@@ -2117,6 +2403,11 @@ void SMiaIAEditorPanel::RefreshData()
     {
         RebuildBreakpoints();
     }
+
+    if (relationshipsChanged)
+    {
+        RebuildRelationshipExplorer();
+    }
 }
 
 void SMiaIAEditorPanel::RebuildBreakpoints()
@@ -2211,6 +2502,165 @@ void SMiaIAEditorPanel::RebuildBreakpoints()
             ]
         ];
     }
+}
+
+void SMiaIAEditorPanel::RebuildRelationshipExplorer()
+{
+    if (!RelationshipContent.IsValid())
+    {
+        return;
+    }
+
+    RelationshipContent->ClearChildren();
+
+    if (!bHasNeuronInspection)
+    {
+        return;
+    }
+
+    if (!bHasRelationshipPage)
+    {
+        RelationshipContent->AddSlot()
+        .AutoHeight()
+        .Padding(2.0f)
+        [
+            SNew(STextBlock)
+            .Text(LOCTEXT(
+                "RelationshipPageUnavailable",
+                "The relationship page is unavailable."))
+            .AutoWrapText(true)
+        ];
+        return;
+    }
+
+    const int64 pageNumber = RelationshipPage.Limit > 0
+        ? RelationshipPage.Offset / RelationshipPage.Limit + 1
+        : 1;
+    const int64 pageCount = RelationshipPage.Limit > 0 &&
+        RelationshipPage.FilteredConnectionCount > 0
+        ? (RelationshipPage.FilteredConnectionCount +
+            RelationshipPage.Limit - 1) / RelationshipPage.Limit
+        : 1;
+
+    RelationshipContent->AddSlot()
+    .AutoHeight()
+    .Padding(0.0f, 3.0f, 0.0f, 5.0f)
+    [
+        SNew(STextBlock)
+        .Text(FText::Format(
+            LOCTEXT(
+                "RelationshipPageSummary",
+                "{0} | Page {1} of {2} | {3} filtered of {4}"),
+            RelationshipDirection ==
+                EMiaIANeuronRelationshipDirection::Incoming
+                ? LOCTEXT("IncomingRelationshipSummary", "Incoming")
+                : LOCTEXT("OutgoingRelationshipSummary", "Outgoing"),
+            FText::AsNumber(pageNumber),
+            FText::AsNumber(pageCount),
+            FText::AsNumber(RelationshipPage.FilteredConnectionCount),
+            FText::AsNumber(RelationshipPage.TotalConnectionCount)))
+    ];
+
+    for (const FMiaIAConnectionSnapshot& connection :
+        RelationshipPage.Connections)
+    {
+        const int64 connectionId = connection.Id;
+        const int64 relatedNeuronId = RelationshipDirection ==
+            EMiaIANeuronRelationshipDirection::Incoming
+            ? connection.FromNeuron
+            : connection.ToNeuron;
+
+        RelationshipContent->AddSlot()
+        .AutoHeight()
+        .Padding(0.0f, 1.0f)
+        [
+            SNew(SHorizontalBox)
+            + SHorizontalBox::Slot()
+            .FillWidth(1.0f)
+            [
+                SNew(SButton)
+                .ButtonStyle(&ButtonStyle)
+                .Text(FText::Format(
+                    LOCTEXT(
+                        "RelationshipConnectionEntry",
+                        "#{0}: #{1} -> #{2} | {3}"),
+                    FText::AsNumber(connection.Id),
+                    FText::AsNumber(connection.FromNeuron),
+                    FText::AsNumber(connection.ToNeuron),
+                    FText::AsNumber(connection.Weight)))
+                .ToolTipText(LOCTEXT(
+                    "SelectRelationshipConnectionTooltip",
+                    "Select this connection for Inspector details. Its geometry is highlighted when the connection is loaded in the current topology."))
+                .OnClicked(
+                    this,
+                    &SMiaIAEditorPanel::
+                        HandleSelectRelationshipConnection,
+                    connectionId)
+            ]
+            + SHorizontalBox::Slot()
+            .AutoWidth()
+            .Padding(3.0f, 0.0f, 0.0f, 0.0f)
+            [
+                SNew(SButton)
+                .ButtonStyle(&ButtonStyle)
+                .Text(FText::Format(
+                    LOCTEXT("OpenRelatedNeuron", "Neuron #{0}"),
+                    FText::AsNumber(relatedNeuronId)))
+                .ToolTipText(LOCTEXT(
+                    "OpenRelatedNeuronTooltip",
+                    "Navigate to the neuron at the other end of this connection."))
+                .OnClicked(
+                    this,
+                    &SMiaIAEditorPanel::HandleNavigateRelationshipNeuron,
+                    relatedNeuronId)
+            ]
+        ];
+    }
+
+    if (RelationshipPage.Connections.IsEmpty())
+    {
+        RelationshipContent->AddSlot()
+        .AutoHeight()
+        .Padding(2.0f, 4.0f)
+        [
+            SNew(STextBlock)
+            .Text(LOCTEXT(
+                "NoFilteredRelationships",
+                "No connections match the current direction and filter."))
+            .AutoWrapText(true)
+        ];
+    }
+
+    RelationshipContent->AddSlot()
+    .AutoHeight()
+    .Padding(0.0f, 5.0f, 0.0f, 0.0f)
+    [
+        SNew(SHorizontalBox)
+        + SHorizontalBox::Slot()
+        .FillWidth(1.0f)
+        .Padding(0.0f, 0.0f, 2.0f, 0.0f)
+        [
+            SNew(SButton)
+            .ButtonStyle(&ButtonStyle)
+            .IsEnabled(RelationshipPage.bHasPrevious)
+            .Text(LOCTEXT("PreviousRelationshipPage", "Previous"))
+            .OnClicked(
+                this,
+                &SMiaIAEditorPanel::HandlePreviousRelationshipPage)
+        ]
+        + SHorizontalBox::Slot()
+        .FillWidth(1.0f)
+        .Padding(2.0f, 0.0f, 0.0f, 0.0f)
+        [
+            SNew(SButton)
+            .ButtonStyle(&ButtonStyle)
+            .IsEnabled(RelationshipPage.bHasNext)
+            .Text(LOCTEXT("NextRelationshipPage", "Next"))
+            .OnClicked(
+                this,
+                &SMiaIAEditorPanel::HandleNextRelationshipPage)
+        ]
+    ];
 }
 
 void SMiaIAEditorPanel::RebuildExplorer()
@@ -2597,6 +3047,11 @@ FReply SMiaIAEditorPanel::HandleCollapseAllExplorer()
 
 void SMiaIAEditorPanel::SelectNeuron(int64 NeuronId)
 {
+    if (SelectedNeuronId != NeuronId)
+    {
+        RelationshipOffset = 0;
+    }
+
     SelectedLayerId = -1;
     SelectedNeuronId = NeuronId;
     SelectedNeuronIds.Reset();
@@ -2621,6 +3076,13 @@ void SMiaIAEditorPanel::SelectNeurons(
     const TSet<int64>& NeuronIds,
     int64 PrimaryNeuronId)
 {
+    if (SelectedNeuronIds.Num() != 1 ||
+        !SelectedNeuronIds.Contains(PrimaryNeuronId) ||
+        SelectedNeuronId != PrimaryNeuronId)
+    {
+        RelationshipOffset = 0;
+    }
+
     SelectedLayerId = -1;
     SelectedNeuronIds = NeuronIds;
     SelectedNeuronId = SelectedNeuronIds.Contains(PrimaryNeuronId)
@@ -2796,6 +3258,162 @@ void SMiaIAEditorPanel::SelectLayer(int64 LayerId)
     RefreshData();
 }
 
+FReply SMiaIAEditorPanel::SelectRelationshipDirection(
+    EMiaIANeuronRelationshipDirection InDirection)
+{
+    RelationshipDirection = InDirection;
+    RelationshipOffset = 0;
+    RefreshData();
+    return FReply::Handled();
+}
+
+TSharedRef<SWidget> SMiaIAEditorPanel::BuildRelationshipSortMenu()
+{
+    return SNew(SVerticalBox)
+        + SVerticalBox::Slot()
+        .AutoHeight()
+        [
+            SNew(SButton)
+            .ButtonStyle(&ButtonStyle)
+            .Text(LOCTEXT("RelationshipSortId", "Connection ID"))
+            .OnClicked(
+                this,
+                &SMiaIAEditorPanel::SelectRelationshipSort,
+                EMiaIANeuronRelationshipSort::ConnectionId)
+        ]
+        + SVerticalBox::Slot()
+        .AutoHeight()
+        [
+            SNew(SButton)
+            .ButtonStyle(&ButtonStyle)
+            .Text(LOCTEXT("RelationshipSortWeight", "Weight"))
+            .OnClicked(
+                this,
+                &SMiaIAEditorPanel::SelectRelationshipSort,
+                EMiaIANeuronRelationshipSort::Weight)
+        ]
+        + SVerticalBox::Slot()
+        .AutoHeight()
+        [
+            SNew(SButton)
+            .ButtonStyle(&ButtonStyle)
+            .Text(LOCTEXT(
+                "RelationshipSortAbsoluteWeight",
+                "Absolute weight"))
+            .OnClicked(
+                this,
+                &SMiaIAEditorPanel::SelectRelationshipSort,
+                EMiaIANeuronRelationshipSort::AbsoluteWeight)
+        ];
+}
+
+FReply SMiaIAEditorPanel::SelectRelationshipSort(
+    EMiaIANeuronRelationshipSort InSort)
+{
+    RelationshipSort = InSort;
+    RelationshipOffset = 0;
+    FSlateApplication::Get().DismissAllMenus();
+    RefreshData();
+    return FReply::Handled();
+}
+
+FReply SMiaIAEditorPanel::ToggleRelationshipSortDirection()
+{
+    bRelationshipSortDescending = !bRelationshipSortDescending;
+    RelationshipOffset = 0;
+    RefreshData();
+    return FReply::Handled();
+}
+
+void SMiaIAEditorPanel::HandleRelationshipMinimumWeightCommitted(
+    double InValue,
+    ETextCommit::Type CommitType)
+{
+    if (CommitType == ETextCommit::OnCleared ||
+        !FMath::IsFinite(InValue))
+    {
+        return;
+    }
+
+    RelationshipMinimumAbsoluteWeight = FMath::Max(0.0, InValue);
+    RelationshipOffset = 0;
+    RefreshData();
+}
+
+FReply SMiaIAEditorPanel::HandlePreviousRelationshipPage()
+{
+    RelationshipOffset = FMath::Max<int64>(
+        0,
+        RelationshipOffset - FMath::Max(1, InspectorConnectionLimit));
+    RefreshData();
+    return FReply::Handled();
+}
+
+FReply SMiaIAEditorPanel::HandleNextRelationshipPage()
+{
+    if (bHasRelationshipPage && RelationshipPage.bHasNext)
+    {
+        RelationshipOffset += FMath::Max(1, InspectorConnectionLimit);
+        RefreshData();
+    }
+
+    return FReply::Handled();
+}
+
+FReply SMiaIAEditorPanel::HandleSelectRelationshipConnection(
+    int64 ConnectionId)
+{
+    SelectConnection(ConnectionId);
+    return FReply::Handled();
+}
+
+FReply SMiaIAEditorPanel::HandleNavigateRelationshipNeuron(int64 NeuronId)
+{
+    if (!FindNeuron(NeuronId) && bNetworkRequiresCompactTopology)
+    {
+        FMiaIANeuronInspection target;
+        if (!UMiaIABlueprintLibrary::InspectNeuron(NeuronId, 0, target))
+        {
+            return FReply::Handled();
+        }
+
+        FocusedLayerId = target.Context.LayerId;
+        bNetworkPreview = false;
+        RefreshData();
+    }
+
+    if (FindNeuron(NeuronId))
+    {
+        SelectNeuron(NeuronId);
+
+        if (NetworkView.IsValid())
+        {
+            NetworkView->RevealNeuron(NeuronId);
+        }
+
+        if (Network3DView.IsValid())
+        {
+            Network3DView->RevealNeuron(NeuronId);
+        }
+    }
+
+    return FReply::Handled();
+}
+
+FReply SMiaIAEditorPanel::HandleNavigateSelectedConnectionEndpoint(
+    bool bToNeuron)
+{
+    const FMiaIAConnectionSnapshot* connection =
+        FindConnection(SelectedConnectionId);
+    if (connection == nullptr)
+    {
+        return FReply::Handled();
+    }
+
+    return HandleNavigateRelationshipNeuron(
+        bToNeuron ? connection->ToNeuron : connection->FromNeuron);
+}
+
 void SMiaIAEditorPanel::OpenNetworkFromPreview()
 {
     if (!bNetworkPreview || NetworkOverview.Layers.IsEmpty())
@@ -2907,11 +3525,22 @@ const FMiaIANeuronSnapshot* SMiaIAEditorPanel::FindNeuron(
 const FMiaIAConnectionSnapshot* SMiaIAEditorPanel::FindConnection(
     int64 ConnectionId) const
 {
-    return Network.Connections.FindByPredicate(
+    const FMiaIAConnectionSnapshot* connection =
+        Network.Connections.FindByPredicate(
         [ConnectionId](const FMiaIAConnectionSnapshot& connection)
         {
             return connection.Id == ConnectionId;
         });
+
+    if (connection != nullptr)
+    {
+        return connection;
+    }
+
+    return bHasConnectionInspection &&
+        ConnectionInspection.Connection.Id == ConnectionId
+        ? &ConnectionInspection.Connection
+        : nullptr;
 }
 
 const FMiaIALayerOverview* SMiaIAEditorPanel::FindOverviewLayer(
@@ -3158,6 +3787,47 @@ TSharedRef<SWidget> SMiaIAEditorPanel::BuildLayoutMenu()
                 .OnValueChanged(
                     this,
                     &SMiaIAEditorPanel::HandleLayerGapChanged)
+            ]
+            + SVerticalBox::Slot()
+            .AutoHeight()
+            .Padding(0.0f, 12.0f, 0.0f, 4.0f)
+            [
+                SNew(STextBlock)
+                .Font(FAppStyle::GetFontStyle(TEXT("NormalFontBold")))
+                .Text(LOCTEXT(
+                    "NeuronDisplayHeading",
+                    "Neuron display"))
+            ]
+            + SVerticalBox::Slot()
+            .AutoHeight()
+            [
+                SNew(SCheckBox)
+                .IsChecked_Lambda([this]()
+                {
+                    return VisualizationSettings.bShowNeuronLabels
+                        ? ECheckBoxState::Checked
+                        : ECheckBoxState::Unchecked;
+                })
+                .OnCheckStateChanged_Lambda(
+                    [this](ECheckBoxState newState)
+                    {
+                        VisualizationSettings.bShowNeuronLabels =
+                            newState == ECheckBoxState::Checked;
+                        SaveVisualizationSettings(VisualizationSettings);
+                        NetworkView->SetVisualizationSettings(
+                            VisualizationSettings);
+                        Network3DView->SetVisualizationSettings(
+                            VisualizationSettings);
+                    })
+                .ToolTipText(LOCTEXT(
+                    "ShowNeuronLabelsTooltip",
+                    "Show neuron ID capsules when detailed labels are available."))
+                [
+                    SNew(STextBlock)
+                    .Text(LOCTEXT(
+                        "ShowNeuronLabels",
+                        "Show neuron labels"))
+                ]
             ]
             + SVerticalBox::Slot()
             .AutoHeight()
@@ -3932,7 +4602,7 @@ TSharedRef<SWidget> SMiaIAEditorPanel::BuildTopologyLimitsMenu()
                 SNew(STextBlock)
                 .Text(LOCTEXT(
                     "InspectorConnectionLimitLabel",
-                    "Inspector connections per direction"))
+                    "Relationship page size"))
             ]
             + SVerticalBox::Slot()
             .AutoHeight()
@@ -3951,7 +4621,7 @@ TSharedRef<SWidget> SMiaIAEditorPanel::BuildTopologyLimitsMenu()
                         HandlePendingInspectorConnectionLimitChanged)
                 .ToolTipText(LOCTEXT(
                     "InspectorConnectionLimitTooltip",
-                    "Maximum incoming and outgoing connections shown for one selected neuron."))
+                    "Relationship Explorer page size for one selected neuron."))
             ]
             + SVerticalBox::Slot()
             .AutoHeight()
@@ -4025,6 +4695,7 @@ FReply SMiaIAEditorPanel::HandleApplyTopologyLimits()
     DetailedNeuronLimit = PendingDetailedNeuronLimit;
     DetailedConnectionLimit = PendingDetailedConnectionLimit;
     InspectorConnectionLimit = PendingInspectorConnectionLimit;
+    RelationshipOffset = 0;
     SaveTopologyLimits(
         DetailedNeuronLimit,
         DetailedConnectionLimit,
@@ -4044,6 +4715,7 @@ FReply SMiaIAEditorPanel::HandleResetTopologyLimits()
     PendingDetailedConnectionLimit = DetailedConnectionLimit;
     InspectorConnectionLimit = DefaultInspectorConnectionLimit;
     PendingInspectorConnectionLimit = InspectorConnectionLimit;
+    RelationshipOffset = 0;
     SaveTopologyLimits(
         DetailedNeuronLimit,
         DetailedConnectionLimit,
@@ -4503,7 +5175,7 @@ FReply SMiaIAEditorPanel::HandleQuickHelp()
             "Mouse wheel: zoom. Middle drag: pan. Right drag pans in 2D and orbits in 3D.\n"
             "Use Layout for Expanded or Packed placement, Horizontal or Vertical flow, uniform neuron size, minimum gaps, and All or Selected connections. Click the active orientation again to mirror the layer direction. Packed with zero gaps makes symmetric nodes adjacent without overlap.\n\n"
             "INSPECTION AND DEBUG\n"
-            "The Inspector follows the current element or group. Use Start debug and Step phase to inspect forward, backward, update, verify, and commit states.\n\n"
+            "The Inspector follows the current element or group. For one neuron, choose Incoming or Outgoing relationships, page them, order by ID or weight, filter by minimum absolute weight, and open either the connection or its opposite neuron. Use Start debug and Step phase to inspect forward, backward, update, verify, and commit states.\n\n"
 
             "BREAKPOINTS\n"
             "Open the Breakpoints tab to stop controlled training on a phase, neuron activation, neuron gradient, or connection update. Automatic training stops after the triggering sample commits, before the next sample begins.\n\n"
@@ -5406,49 +6078,56 @@ FText SMiaIAEditorPanel::SelectionRelationshipsText() const
             "Connection details are unavailable.");
     }
 
-    FString details;
-    auto appendConnections = [&details](
-        const TCHAR* heading,
-        const TArray<FMiaIAConnectionSnapshot>& connections,
-        int64 totalCount)
+    return LOCTEXT(
+        "NeuronRelationshipExplorerHint",
+        "Relationship explorer");
+}
+
+FText SMiaIAEditorPanel::SelectedConnectionEndpointText(
+    bool bToNeuron) const
+{
+    const FMiaIAConnectionSnapshot* connection =
+        FindConnection(SelectedConnectionId);
+    if (connection == nullptr)
     {
-        details += FString::Printf(
-            TEXT("%s (%d shown of %lld)\n"),
-            heading,
-            connections.Num(),
-            totalCount);
+        return bToNeuron
+            ? LOCTEXT("NavigateToEndpointUnavailable", "Go to To neuron")
+            : LOCTEXT(
+                "NavigateFromEndpointUnavailable",
+                "Go to From neuron");
+    }
 
-        for (const FMiaIAConnectionSnapshot& connection : connections)
-        {
-            details += FString::Printf(
-                TEXT("#%lld: #%lld -> #%lld | Weight: %g\n"),
-                connection.Id,
-                connection.FromNeuron,
-                connection.ToNeuron,
-                connection.Weight);
-        }
+    return FText::Format(
+        bToNeuron
+            ? LOCTEXT("NavigateToEndpoint", "Go to To neuron #{0}")
+            : LOCTEXT("NavigateFromEndpoint", "Go to From neuron #{0}"),
+        FText::AsNumber(
+            bToNeuron ? connection->ToNeuron : connection->FromNeuron));
+}
 
-        const int64 hiddenCount = totalCount - connections.Num();
-        if (hiddenCount > 0)
-        {
-            details += FString::Printf(
-                TEXT("... %lld more\n"),
-                hiddenCount);
-        }
-    };
+FText SMiaIAEditorPanel::RelationshipSortText() const
+{
+    switch (RelationshipSort)
+    {
+    case EMiaIANeuronRelationshipSort::Weight:
+        return LOCTEXT("RelationshipSortWeightValue", "Weight");
+    case EMiaIANeuronRelationshipSort::AbsoluteWeight:
+        return LOCTEXT(
+            "RelationshipSortAbsoluteWeightValue",
+            "Absolute weight");
+    case EMiaIANeuronRelationshipSort::ConnectionId:
+    default:
+        return LOCTEXT("RelationshipSortIdValue", "Connection ID");
+    }
+}
 
-    appendConnections(
-        TEXT("Incoming"),
-        NeuronInspection.IncomingConnections,
-        NeuronInspection.IncomingConnectionCount);
-    details += TEXT("\n");
-    appendConnections(
-        TEXT("Outgoing"),
-        NeuronInspection.OutgoingConnections,
-        NeuronInspection.OutgoingConnectionCount);
-    details.RemoveFromEnd(TEXT("\n"));
-
-    return FText::FromString(details);
+EVisibility SMiaIAEditorPanel::RelationshipExplorerVisibility() const
+{
+    return bHasNeuronInspection &&
+        SelectedNeuronIds.Num() == 1 &&
+        SelectedConnectionId < 0
+        ? EVisibility::Visible
+        : EVisibility::Collapsed;
 }
 
 FSlateColor SMiaIAEditorPanel::PhaseColor(

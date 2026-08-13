@@ -1,6 +1,7 @@
 #include "Widgets/SMiaIANetworkView.h"
 
 #include "StudioTopology.h"
+#include "Fonts/FontMeasure.h"
 #include "Framework/Application/SlateApplication.h"
 #include "Input/Events.h"
 #include "Rendering/DrawElements.h"
@@ -25,6 +26,7 @@ namespace
 SMiaIANetworkView::SMiaIANetworkView()
     : NeuronBrush(FLinearColor::White)
     , SelectionBrush(FLinearColor::White)
+    , NeuronLabelBrush(FLinearColor::White, 4.0f)
 {
 }
 
@@ -1036,6 +1038,8 @@ int32 SMiaIANetworkView::OnPaint(
     }
 
     int32 nodeLayer = LayerId + 1;
+    const TSharedRef<FSlateFontMeasure> fontMeasure =
+        FSlateApplication::Get().GetRenderer()->GetFontMeasureService();
 
     for (const FMiaIALayerSnapshot& layer : Snapshot.Layers)
     {
@@ -1096,32 +1100,71 @@ int32 SMiaIANetworkView::OnPaint(
                 neuronColor);
 
             const bool showLabel =
+                VisualizationSettings.bShowNeuronLabels &&
                 VisualizationSettings.Layout.Mode !=
                     MiaIA::Studio::StudioLayoutMode::Packed &&
-                neuronDiameter >= 12.0f;
+                neuronDiameter >= 24.0f;
 
             if (showLabel)
             {
+                const FText label = FText::Format(
+                    NSLOCTEXT("MiaIAStudio", "NeuronId", "#{0}"),
+                    FText::AsNumber(neuron.Id));
+                FSlateFontInfo labelFont =
+                    FAppStyle::GetFontStyle(TEXT("SmallFont"));
+                labelFont.Size = FMath::Clamp(
+                    FMath::RoundToInt(neuronDiameter * 0.10f),
+                    6,
+                    12);
+                const FVector2D textSize =
+                    fontMeasure->Measure(label, labelFont);
+                const FVector2D labelSize =
+                    textSize + FVector2D(4.0f, 2.0f);
+                const FVector2D labelPosition =
+                    *position + FVector2D(
+                        -labelSize.X * 0.5f,
+                        neuronDiameter * 0.5f + 5.0f);
+                const bool selected =
+                    SelectedNeuronIds.Contains(neuron.Id);
+
+                FSlateDrawElement::MakeBox(
+                    OutDrawElements,
+                    nodeLayer + 2,
+                    AllottedGeometry.ToPaintGeometry(
+                        labelSize,
+                        FSlateLayoutTransform(labelPosition)),
+                    &NeuronLabelBrush,
+                    ESlateDrawEffect::None,
+                    selected
+                        ? palette.Selection.CopyWithNewOpacity(0.90f)
+                        : palette.SubduedText.CopyWithNewOpacity(0.35f));
+                FSlateDrawElement::MakeBox(
+                    OutDrawElements,
+                    nodeLayer + 3,
+                    AllottedGeometry.ToPaintGeometry(
+                        labelSize - FVector2D(2.0f, 2.0f),
+                        FSlateLayoutTransform(
+                            labelPosition + FVector2D(1.0f, 1.0f))),
+                    &NeuronLabelBrush,
+                    ESlateDrawEffect::None,
+                    palette.Surface.CopyWithNewOpacity(0.96f));
                 FSlateDrawElement::MakeText(
                 OutDrawElements,
-                nodeLayer + 2,
+                nodeLayer + 4,
                 AllottedGeometry.ToPaintGeometry(
-                    FVector2D(70.0f, 18.0f),
+                    textSize,
                     FSlateLayoutTransform(
-                        *position + FVector2D(
-                            -35.0f,
-                            neuronDiameter * 0.5f + 5.0f))),
-                FText::Format(
-                    NSLOCTEXT("MiaIAStudio", "NeuronId", "#{0}"),
-                    FText::AsNumber(neuron.Id)),
-                FAppStyle::GetFontStyle(TEXT("SmallFont")),
+                        labelPosition +
+                            (labelSize - textSize) * 0.5f)),
+                label,
+                labelFont,
                 ESlateDrawEffect::None,
-                palette.SubduedText);
+                selected ? palette.Selection : palette.SubduedText);
             }
         }
     }
 
-    int32 finalLayer = nodeLayer + 2;
+    int32 finalLayer = nodeLayer + 4;
 
     if (bMarqueeSelecting)
     {

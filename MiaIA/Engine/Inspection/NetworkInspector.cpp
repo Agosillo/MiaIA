@@ -3,10 +3,13 @@
 #include "../../Core/Execution/SnapshotBuilder.h"
 
 #include <algorithm>
+#include <cmath>
 #include <utility>
 
 namespace
 {
+    constexpr std::size_t MaximumRelationshipPageSize = 1000;
+
     bool TryBuildNeuronContext(
         const MiaIA::Engine::NetworkTopology& topology,
         std::uint64_t neuronId,
@@ -34,6 +37,43 @@ namespace
             layer->Activation
         };
         return true;
+    }
+
+    bool TryBuildNeuronContextWithoutConnectionIndex(
+        const MiaIA::Core::Network& network,
+        std::uint64_t neuronId,
+        MiaIA::Core::NeuronContextSnapshot& result)
+    {
+        for (const MiaIA::Core::Layer& layer : network.Layers)
+        {
+            const auto neuron = std::find_if(
+                layer.Neurons.begin(),
+                layer.Neurons.end(),
+                [neuronId](const MiaIA::Core::Neuron& candidate)
+                {
+                    return candidate.Id == neuronId;
+                });
+
+            if (neuron == layer.Neurons.end())
+            {
+                continue;
+            }
+
+            result = MiaIA::Core::NeuronContextSnapshot{
+                {
+                    neuron->Id,
+                    neuron->Activation,
+                    neuron->Bias
+                },
+                layer.Id,
+                layer.Name,
+                layer.Order,
+                layer.Activation
+            };
+            return true;
+        }
+
+        return false;
     }
 }
 
@@ -177,6 +217,145 @@ namespace MiaIA::Engine
             }
         }
 
+        result = std::move(snapshot);
+        return true;
+    }
+
+    bool NetworkInspector::TryGetNeuronRelationships(
+        const Core::Network& network,
+        std::uint64_t neuronId,
+        const Core::NeuronRelationshipPageRequest& request,
+        Core::NeuronRelationshipPageSnapshot& result)
+    {
+        const bool validDirection = request.Direction ==
+            Core::NeuronRelationshipDirection::Incoming ||
+            request.Direction ==
+                Core::NeuronRelationshipDirection::Outgoing;
+        const bool validSort = request.Sort ==
+            Core::NeuronRelationshipSort::ConnectionId ||
+            request.Sort == Core::NeuronRelationshipSort::Weight ||
+            request.Sort ==
+                Core::NeuronRelationshipSort::AbsoluteWeight;
+
+        if (!validDirection || !validSort || request.Limit == 0 ||
+            request.Limit > MaximumRelationshipPageSize ||
+            !std::isfinite(request.MinimumAbsoluteWeight) ||
+            request.MinimumAbsoluteWeight < 0.0)
+        {
+            return false;
+        }
+
+        Core::NeuronRelationshipPageSnapshot snapshot;
+
+        if (!TryBuildNeuronContextWithoutConnectionIndex(
+            network,
+            neuronId,
+            snapshot.Context))
+        {
+            return false;
+        }
+
+        snapshot.Direction = request.Direction;
+        snapshot.Offset = request.Offset;
+        snapshot.Limit = request.Limit;
+
+        std::vector<const Core::Connection*> filteredConnections;
+
+        for (const Core::Connection& connection : network.Connections)
+        {
+            const bool matchesDirection =
+                request.Direction ==
+                    Core::NeuronRelationshipDirection::Incoming
+                ? connection.ToNeuron == neuronId
+                : connection.FromNeuron == neuronId;
+
+            if (!matchesDirection)
+            {
+                continue;
+            }
+
+            ++snapshot.TotalConnectionCount;
+
+            if (std::abs(connection.Weight) <
+                request.MinimumAbsoluteWeight)
+            {
+                continue;
+            }
+
+            filteredConnections.push_back(&connection);
+        }
+
+        snapshot.FilteredConnectionCount = filteredConnections.size();
+
+        const auto ascendingLess = [&request](
+            const Core::Connection* left,
+            const Core::Connection* right)
+        {
+            switch (request.Sort)
+            {
+            case Core::NeuronRelationshipSort::Weight:
+                if (left->Weight != right->Weight)
+                {
+                    return left->Weight < right->Weight;
+                }
+                break;
+
+            case Core::NeuronRelationshipSort::AbsoluteWeight:
+                if (std::abs(left->Weight) != std::abs(right->Weight))
+                {
+                    return std::abs(left->Weight) <
+                        std::abs(right->Weight);
+                }
+                break;
+
+            case Core::NeuronRelationshipSort::ConnectionId:
+                break;
+            }
+
+            return left->Id < right->Id;
+        };
+
+        std::sort(
+            filteredConnections.begin(),
+            filteredConnections.end(),
+            [&ascendingLess, &request](
+                const Core::Connection* left,
+                const Core::Connection* right)
+            {
+                return request.Descending
+                    ? ascendingLess(right, left)
+                    : ascendingLess(left, right);
+            });
+
+        if (request.Offset < filteredConnections.size())
+        {
+            const std::size_t pageSize = std::min(
+                request.Limit,
+                filteredConnections.size() - request.Offset);
+            const std::size_t end = request.Offset + pageSize;
+            snapshot.Connections.reserve(pageSize);
+
+            for (std::size_t index = request.Offset;
+                index < end;
+                ++index)
+            {
+                const Core::Connection& connection =
+                    *filteredConnections[index];
+                snapshot.Connections.push_back({
+                    connection.Id,
+                    connection.FromNeuron,
+                    connection.ToNeuron,
+                    connection.Weight
+                });
+            }
+        }
+
+        snapshot.HasPrevious = request.Offset > 0 &&
+            snapshot.FilteredConnectionCount > 0;
+        snapshot.HasNext = request.Offset <
+            snapshot.FilteredConnectionCount &&
+            snapshot.Connections.size() <
+                snapshot.FilteredConnectionCount - request.Offset;
         result = std::move(snapshot);
         return true;
     }

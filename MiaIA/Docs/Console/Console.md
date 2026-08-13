@@ -310,6 +310,22 @@ inspect connection 1
 
 This focused relationship view is the textual counterpart of selecting an element in MiaIA Studio. It uses the same SDK inspection contract and never mutates the model.
 
+### `inspect relationships`
+
+```text
+inspect relationships <neuron-id> <incoming|outgoing>
+        [page] [page-size] [id|weight|abs-weight]
+        [asc|desc] [minimum-absolute-weight]
+```
+
+Traverses one relationship direction without requesting or printing the complete network. Page numbering starts at `1`; the default page size is `10` and the maximum accepted page size is `1000`. Results can be ordered by stable connection ID, signed weight, or absolute weight, in ascending or descending order. The optional non-negative weight threshold filters by absolute magnitude.
+
+```text
+inspect relationships 1003 incoming 1 25 abs-weight desc 0.01
+```
+
+The result reports both the exact unfiltered direction total and the count remaining after filtering, followed by page position and previous/next availability. An offset beyond the filtered result is a valid empty page at the SDK level; interactive clients clamp navigation to an existing page.
+
 ### `forward`
 
 ```text

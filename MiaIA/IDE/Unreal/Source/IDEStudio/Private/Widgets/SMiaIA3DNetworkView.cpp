@@ -5,6 +5,7 @@
 #include "DynamicMeshBuilder.h"
 #include "Engine/Engine.h"
 #include "Engine/EngineTypes.h"
+#include "Fonts/FontMeasure.h"
 #include "Framework/Application/SlateApplication.h"
 #include "Input/Events.h"
 #include "Materials/Material.h"
@@ -847,10 +848,13 @@ int32 SMiaIA3DNetworkView::OnPaint(
         localSize.Y / viewportSize.Y);
     const FMiaIAEditorPalette palette =
         FMiaIAEditorTheme::Palette(Theme);
-    const bool showLabels = !bCompactMode &&
+    const bool showLabels = VisualizationSettings.bShowNeuronLabels &&
+        !bCompactMode &&
         RenderedNodes.Num() <= 500 &&
         VisualizationSettings.Layout.Mode !=
             MiaIA::Studio::StudioLayoutMode::Packed;
+    const TSharedRef<FSlateFontMeasure> fontMeasure =
+        FSlateApplication::Get().GetRenderer()->GetFontMeasureService();
     int32 overlayLayer = viewportLayer + 1;
 
     for (const FNodeRenderData& node : RenderedNodes)
@@ -911,39 +915,62 @@ int32 SMiaIA3DNetworkView::OnPaint(
                 3.0f);
         }
 
-        if (showLabels)
+        if (showLabels && projectedRadius * 2.0f >= 24.0f)
         {
-            const FVector2D labelPosition = localPosition + FVector2D(
-                -35.0f,
-                FMath::Max(10.0f, projectedRadius) + 5.0f);
             const FText label = FText::Format(
                 NSLOCTEXT("MiaIAStudio", "NeuronId3D", "#{0}"),
                 FText::AsNumber(node.Id));
-            FSlateDrawElement::MakeText(
+            FSlateFontInfo labelFont =
+                FAppStyle::GetFontStyle(TEXT("SmallFont"));
+            labelFont.Size = FMath::Clamp(
+                FMath::RoundToInt(projectedRadius * 2.0f * 0.10f),
+                6,
+                12);
+            const FVector2D textSize =
+                fontMeasure->Measure(label, labelFont);
+            const FVector2D labelSize =
+                textSize + FVector2D(4.0f, 2.0f);
+            const FVector2D labelPosition = localPosition + FVector2D(
+                -labelSize.X * 0.5f,
+                FMath::Max(10.0f, projectedRadius) + 5.0f);
+
+            FSlateDrawElement::MakeBox(
                 OutDrawElements,
                 overlayLayer + 1,
                 AllottedGeometry.ToPaintGeometry(
-                    FVector2D(70.0f, 18.0f),
-                    FSlateLayoutTransform(
-                        labelPosition + FVector2D(1.0f, 1.0f))),
-                label,
-                FAppStyle::GetFontStyle(TEXT("SmallFont")),
+                    labelSize,
+                    FSlateLayoutTransform(labelPosition)),
+                &NeuronLabelBrush,
                 ESlateDrawEffect::None,
-                FLinearColor::Black.CopyWithNewOpacity(0.75f));
-            FSlateDrawElement::MakeText(
+                selected
+                    ? palette.Selection.CopyWithNewOpacity(0.90f)
+                    : palette.SubduedText.CopyWithNewOpacity(0.35f));
+            FSlateDrawElement::MakeBox(
                 OutDrawElements,
                 overlayLayer + 2,
                 AllottedGeometry.ToPaintGeometry(
-                    FVector2D(70.0f, 18.0f),
-                    FSlateLayoutTransform(labelPosition)),
-                label,
-                FAppStyle::GetFontStyle(TEXT("SmallFont")),
+                    labelSize - FVector2D(2.0f, 2.0f),
+                    FSlateLayoutTransform(
+                        labelPosition + FVector2D(1.0f, 1.0f))),
+                &NeuronLabelBrush,
                 ESlateDrawEffect::None,
-                palette.SubduedText);
+                palette.Surface.CopyWithNewOpacity(0.96f));
+            FSlateDrawElement::MakeText(
+                OutDrawElements,
+                overlayLayer + 3,
+                AllottedGeometry.ToPaintGeometry(
+                    textSize,
+                    FSlateLayoutTransform(
+                        labelPosition +
+                            (labelSize - textSize) * 0.5f)),
+                label,
+                labelFont,
+                ESlateDrawEffect::None,
+                selected ? palette.Selection : palette.SubduedText);
         }
     }
 
-    int32 finalLayer = showLabels ? overlayLayer + 2 : overlayLayer;
+    int32 finalLayer = showLabels ? overlayLayer + 3 : overlayLayer;
 
     if (bMarqueeSelecting)
     {

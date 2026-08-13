@@ -54,6 +54,7 @@ public:
 private:
     void RefreshData();
     void RebuildExplorer();
+    void RebuildRelationshipExplorer();
     void RebuildBreakpoints();
     bool ExpandExplorerForNeuron(int64 NeuronId);
     bool ExpandExplorerForNeurons(const TSet<int64>& NeuronIds);
@@ -68,6 +69,20 @@ private:
     void NavigateNeuron(EMiaIANeuronNavigationDirection Direction);
     void SelectConnection(int64 ConnectionId);
     void SelectLayer(int64 LayerId);
+    FReply SelectRelationshipDirection(
+        EMiaIANeuronRelationshipDirection InDirection);
+    TSharedRef<SWidget> BuildRelationshipSortMenu();
+    FReply SelectRelationshipSort(
+        EMiaIANeuronRelationshipSort InSort);
+    FReply ToggleRelationshipSortDirection();
+    void HandleRelationshipMinimumWeightCommitted(
+        double InValue,
+        ETextCommit::Type CommitType);
+    FReply HandlePreviousRelationshipPage();
+    FReply HandleNextRelationshipPage();
+    FReply HandleSelectRelationshipConnection(int64 ConnectionId);
+    FReply HandleNavigateRelationshipNeuron(int64 NeuronId);
+    FReply HandleNavigateSelectedConnectionEndpoint(bool bToNeuron);
     void OpenNetworkFromPreview();
     void OpenLayerDetail(int64 LayerId);
     bool NavigateBackFromTopology();
@@ -185,6 +200,9 @@ private:
     FText SelectionGradientText() const;
     FText SelectionUpdateText() const;
     FText SelectionRelationshipsText() const;
+    FText SelectedConnectionEndpointText(bool bToNeuron) const;
+    FText RelationshipSortText() const;
+    EVisibility RelationshipExplorerVisibility() const;
     EVisibility NeuronBiasEditorVisibility() const;
     EVisibility InputNeuronBiasNoticeVisibility() const;
     EVisibility ConnectionWeightEditorVisibility() const;
@@ -212,6 +230,7 @@ private:
     FMiaIATrainingDebugNeuron DebugNeuron;
     FMiaIATrainingDebugConnection DebugConnection;
     FMiaIANeuronInspection NeuronInspection;
+    FMiaIANeuronRelationshipPage RelationshipPage;
     FMiaIAConnectionInspection ConnectionInspection;
     TArray<FMiaIATrainingBreakpoint> Breakpoints;
     int64 SelectedNeuronId{-1};
@@ -223,6 +242,7 @@ private:
     FString SelectedLayerName;
     FString TopologyKey;
     FString BreakpointKey;
+    FString RelationshipKey;
     TSet<int64> ExpandedExplorerLayerIds;
     FString ConsoleHistory;
     TArray<FString> ConsoleCommandHistory;
@@ -237,6 +257,8 @@ private:
     int32 PendingDetailedConnectionLimit{};
     int32 InspectorConnectionLimit{};
     int32 PendingInspectorConnectionLimit{};
+    int64 RelationshipOffset{};
+    double RelationshipMinimumAbsoluteWeight{};
     int64 PendingNeuronBiasId{-1};
     int64 PendingConnectionWeightId{-1};
     double PendingNeuronBias{};
@@ -249,6 +271,10 @@ private:
     FMiaIAVisualizationSettings VisualizationSettings;
     EMiaIAProjectPathAction ProjectPathAction{
         EMiaIAProjectPathAction::None};
+    EMiaIANeuronRelationshipDirection RelationshipDirection{
+        EMiaIANeuronRelationshipDirection::Incoming};
+    EMiaIANeuronRelationshipSort RelationshipSort{
+        EMiaIANeuronRelationshipSort::ConnectionId};
     EMiaIATrainingBreakpointKind BreakpointKind{
         EMiaIATrainingBreakpointKind::Phase};
     EMiaIATrainingDebugPhase BreakpointPhase{
@@ -262,6 +288,7 @@ private:
     bool bHasDebugNeuron{};
     bool bHasDebugConnection{};
     bool bHasNeuronInspection{};
+    bool bHasRelationshipPage{};
     bool bHasConnectionInspection{};
     bool bPendingNeuronBiasDirty{};
     bool bPendingConnectionWeightDirty{};
@@ -273,9 +300,11 @@ private:
     bool bStandaloneMode{};
     bool bTopologyWorkspaceExpanded{};
     bool bDialogVisible{};
+    bool bRelationshipSortDescending{};
     double PeriodicRefreshElapsedSeconds{};
 
     TSharedPtr<SVerticalBox> ExplorerContent;
+    TSharedPtr<SVerticalBox> RelationshipContent;
     TSharedPtr<SVerticalBox> ConsoleSuggestionsContent;
     TSharedPtr<SVerticalBox> BreakpointContent;
     TSharedPtr<SMiaIANetworkView> NetworkView;

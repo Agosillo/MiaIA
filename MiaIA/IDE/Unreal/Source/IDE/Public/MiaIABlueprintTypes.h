@@ -44,6 +44,21 @@ enum class EMiaIAActivationType : uint8
     Linear
 };
 
+UENUM(BlueprintType)
+enum class EMiaIANeuronRelationshipDirection : uint8
+{
+    Incoming,
+    Outgoing
+};
+
+UENUM(BlueprintType)
+enum class EMiaIANeuronRelationshipSort : uint8
+{
+    ConnectionId,
+    Weight,
+    AbsoluteWeight
+};
+
 USTRUCT(BlueprintType)
 struct IDE_API FMiaIANeuronSnapshot
 {
@@ -206,6 +221,40 @@ struct IDE_API FMiaIANeuronInspection
 
     UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
     TArray<FMiaIAConnectionSnapshot> OutgoingConnections;
+};
+
+USTRUCT(BlueprintType)
+struct IDE_API FMiaIANeuronRelationshipPage
+{
+    GENERATED_BODY()
+
+    UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
+    FMiaIANeuronContext Context;
+
+    UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
+    EMiaIANeuronRelationshipDirection Direction{
+        EMiaIANeuronRelationshipDirection::Incoming};
+
+    UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
+    int64 TotalConnectionCount{};
+
+    UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
+    int64 FilteredConnectionCount{};
+
+    UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
+    int64 Offset{};
+
+    UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
+    int32 Limit{};
+
+    UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
+    bool bHasPrevious{};
+
+    UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
+    bool bHasNext{};
+
+    UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
+    TArray<FMiaIAConnectionSnapshot> Connections;
 };
 
 USTRUCT(BlueprintType)

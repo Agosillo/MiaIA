@@ -171,6 +171,7 @@ const std::vector<CommandCatalogEntry>& CommandCatalog()
         { "inspect", "inspect", "Inspect current network values.", true },
         { "inspect neuron", "inspect neuron <neuron-id> [maximum-connections]", "Inspect one neuron and its relationships.", true },
         { "inspect connection", "inspect connection <connection-id>", "Inspect one connection and both endpoint neurons.", true },
+        { "inspect relationships", "inspect relationships <neuron-id> <incoming|outgoing> [page] [page-size] [id|weight|abs-weight] [asc|desc] [minimum-absolute-weight]", "Page, filter, and order one neuron's relationships.", true },
         { "forward", "forward", "Run forward propagation with assigned inputs.", true },
         { "benchmark", "benchmark", "Benchmark repeated forward execution.", true },
         { "exit", "exit", "Exit the standalone terminal host.", true }
@@ -378,6 +379,11 @@ void PrintHelp()
 
         << "  inspect connection <connection-id>\n"
         << "      Show one connection and both endpoint neurons\n\n"
+
+        << "  inspect relationships <neuron-id> <incoming|outgoing>\n"
+           "      [page] [page-size] [id|weight|abs-weight]\n"
+           "      [asc|desc] [minimum-absolute-weight]\n"
+        << "      Page, filter and order one neuron's connections\n\n"
 
         << "  forward\n"
         << "      Execute forward propagation\n\n"
@@ -3252,6 +3258,46 @@ void PrintRelatedConnections(
     }
 }
 
+void PrintRelationshipPage(
+    const MiaIA::Core::NeuronRelationshipPageSnapshot& page)
+{
+    const std::size_t pageNumber = page.Limit == 0
+        ? 1
+        : page.Offset / page.Limit + 1;
+    const std::size_t pageCount = page.Limit == 0 ||
+        page.FilteredConnectionCount == 0
+        ? 1
+        : (page.FilteredConnectionCount + page.Limit - 1) / page.Limit;
+    const char* direction = page.Direction ==
+        MiaIA::Core::NeuronRelationshipDirection::Incoming
+        ? "Incoming"
+        : "Outgoing";
+
+    std::cout
+        << "\nNeuron Relationship Page\n\n";
+    PrintNeuronContext(page.Context);
+    std::cout
+        << "\nDirection: " << direction
+        << "\nPage: " << pageNumber << " of " << pageCount
+        << "\nFiltered: " << page.FilteredConnectionCount
+        << " of " << page.TotalConnectionCount
+        << "\nReturned: " << page.Connections.size() << "\n";
+
+    for (const auto& connection : page.Connections)
+    {
+        std::cout
+            << "  Connection " << connection.Id
+            << ": " << connection.FromNeuron
+            << " -> " << connection.ToNeuron
+            << " Weight " << connection.Weight << "\n";
+    }
+
+    std::cout
+        << "Previous: " << (page.HasPrevious ? "yes" : "no")
+        << " | Next: " << (page.HasNext ? "yes" : "no")
+        << "\n\n";
+}
+
 void InspectElement(const std::string& command)
 {
     using MiaIA::SDK::MiaIAClient;
@@ -3260,6 +3306,162 @@ void InspectElement(const std::string& command)
     std::string inspectToken;
     std::string elementType;
     stream >> inspectToken >> elementType;
+
+    if (elementType == "relationships")
+    {
+        constexpr const char* usage =
+            "Usage: inspect relationships <neuron-id> "
+            "<incoming|outgoing> [page] [page-size] "
+            "[id|weight|abs-weight] [asc|desc] "
+            "[minimum-absolute-weight]\n";
+        std::uint64_t neuronId{};
+        std::string directionToken;
+        std::int64_t pageNumber{1};
+        std::int64_t pageSize{10};
+        std::string sortToken{"id"};
+        std::string orderToken{"asc"};
+        double minimumAbsoluteWeight{};
+
+        if (!(stream >> neuronId >> directionToken))
+        {
+            std::cout << usage;
+            return;
+        }
+
+        stream >> std::ws;
+        if (!stream.eof() && !(stream >> pageNumber))
+        {
+            std::cout << usage;
+            return;
+        }
+        stream >> std::ws;
+        if (!stream.eof() && !(stream >> pageSize))
+        {
+            std::cout << usage;
+            return;
+        }
+        stream >> std::ws;
+        if (!stream.eof() && !(stream >> sortToken))
+        {
+            std::cout << usage;
+            return;
+        }
+        stream >> std::ws;
+        if (!stream.eof() && !(stream >> orderToken))
+        {
+            std::cout << usage;
+            return;
+        }
+        stream >> std::ws;
+        if (!stream.eof() && !(stream >> minimumAbsoluteWeight))
+        {
+            std::cout << usage;
+            return;
+        }
+        stream >> std::ws;
+
+        auto lowercase = [](std::string& value)
+        {
+            std::transform(
+                value.begin(),
+                value.end(),
+                value.begin(),
+                [](unsigned char character)
+                {
+                    return static_cast<char>(std::tolower(character));
+                });
+        };
+        lowercase(directionToken);
+        lowercase(sortToken);
+        lowercase(orderToken);
+
+        MiaIA::Core::NeuronRelationshipPageRequest request;
+        if (directionToken == "incoming")
+        {
+            request.Direction =
+                MiaIA::Core::NeuronRelationshipDirection::Incoming;
+        }
+        else if (directionToken == "outgoing")
+        {
+            request.Direction =
+                MiaIA::Core::NeuronRelationshipDirection::Outgoing;
+        }
+        else
+        {
+            std::cout << usage;
+            return;
+        }
+
+        if (sortToken == "id")
+        {
+            request.Sort =
+                MiaIA::Core::NeuronRelationshipSort::ConnectionId;
+        }
+        else if (sortToken == "weight")
+        {
+            request.Sort = MiaIA::Core::NeuronRelationshipSort::Weight;
+        }
+        else if (sortToken == "abs-weight")
+        {
+            request.Sort =
+                MiaIA::Core::NeuronRelationshipSort::AbsoluteWeight;
+        }
+        else
+        {
+            std::cout << usage;
+            return;
+        }
+
+        if (pageNumber <= 0 || pageSize <= 0 ||
+            pageSize > 1000 ||
+            !std::isfinite(minimumAbsoluteWeight) ||
+            minimumAbsoluteWeight < 0.0 ||
+            (orderToken != "asc" && orderToken != "desc") ||
+            !stream.eof())
+        {
+            std::cout << usage;
+            return;
+        }
+
+        const std::uint64_t zeroBasedPage =
+            static_cast<std::uint64_t>(pageNumber - 1);
+        const std::uint64_t unsignedPageSize =
+            static_cast<std::uint64_t>(pageSize);
+        if (zeroBasedPage >
+            std::numeric_limits<std::uint64_t>::max() / unsignedPageSize)
+        {
+            std::cout << usage;
+            return;
+        }
+
+        const std::uint64_t pageOffset =
+            zeroBasedPage * unsignedPageSize;
+        if (pageOffset > std::numeric_limits<std::size_t>::max())
+        {
+            std::cout << usage;
+            return;
+        }
+
+        request.Offset = static_cast<std::size_t>(pageOffset);
+        request.Limit = static_cast<std::size_t>(pageSize);
+        request.Descending = orderToken == "desc";
+        request.MinimumAbsoluteWeight = minimumAbsoluteWeight;
+
+        MiaIA::Core::NeuronRelationshipPageSnapshot result;
+        if (!MiaIAClient::TryGetNeuronRelationships(
+            neuronId,
+            request,
+            result))
+        {
+            std::cout
+                << "Relationship inspection failed. "
+                   "Check the neuron ID and query values.\n";
+            return;
+        }
+
+        PrintRelationshipPage(result);
+        return;
+    }
 
     if (elementType == "neuron")
     {

@@ -190,4 +190,5 @@ private:
     bool bDraggingNode{};
     bool bMarqueeSelecting{};
     bool bMarqueeAdditive{};
+    FSlateRoundedBoxBrush NeuronLabelBrush{FLinearColor::White, 4.0f};
 };

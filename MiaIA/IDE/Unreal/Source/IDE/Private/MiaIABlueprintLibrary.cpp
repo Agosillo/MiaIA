@@ -106,6 +106,34 @@ namespace
         return result;
     }
 
+    FMiaIANeuronRelationshipPage ToBlueprint(
+        const MiaIA::Core::NeuronRelationshipPageSnapshot& source)
+    {
+        FMiaIANeuronRelationshipPage result;
+        result.Context = ToBlueprint(source.Context);
+        result.Direction = source.Direction ==
+            MiaIA::Core::NeuronRelationshipDirection::Incoming
+            ? EMiaIANeuronRelationshipDirection::Incoming
+            : EMiaIANeuronRelationshipDirection::Outgoing;
+        result.TotalConnectionCount = static_cast<int64>(
+            source.TotalConnectionCount);
+        result.FilteredConnectionCount = static_cast<int64>(
+            source.FilteredConnectionCount);
+        result.Offset = static_cast<int64>(source.Offset);
+        result.Limit = static_cast<int32>(source.Limit);
+        result.bHasPrevious = source.HasPrevious;
+        result.bHasNext = source.HasNext;
+        result.Connections.Reserve(
+            static_cast<int32>(source.Connections.size()));
+
+        for (const auto& connection : source.Connections)
+        {
+            result.Connections.Add(ToBlueprint(connection));
+        }
+
+        return result;
+    }
+
     FMiaIAConnectionInspection ToBlueprint(
         const MiaIA::Core::ConnectionInspectionSnapshot& source)
     {
@@ -789,6 +817,62 @@ bool UMiaIABlueprintLibrary::InspectNeuron(
     }
 
     OutInspection = ToBlueprint(inspection);
+    return true;
+}
+
+bool UMiaIABlueprintLibrary::GetNeuronRelationshipPage(
+    int64 NeuronId,
+    EMiaIANeuronRelationshipDirection Direction,
+    int64 Offset,
+    int32 Limit,
+    EMiaIANeuronRelationshipSort Sort,
+    bool bDescending,
+    double MinimumAbsoluteWeight,
+    FMiaIANeuronRelationshipPage& OutPage)
+{
+    if (NeuronId < 0 || Offset < 0 || Limit <= 0 || Limit > 1000 ||
+        !FMath::IsFinite(MinimumAbsoluteWeight) ||
+        MinimumAbsoluteWeight < 0.0)
+    {
+        return false;
+    }
+
+    MiaIA::Core::NeuronRelationshipPageRequest request;
+    request.Direction = Direction ==
+        EMiaIANeuronRelationshipDirection::Incoming
+        ? MiaIA::Core::NeuronRelationshipDirection::Incoming
+        : MiaIA::Core::NeuronRelationshipDirection::Outgoing;
+    request.Offset = static_cast<std::size_t>(Offset);
+    request.Limit = static_cast<std::size_t>(Limit);
+    request.Descending = bDescending;
+    request.MinimumAbsoluteWeight = MinimumAbsoluteWeight;
+
+    switch (Sort)
+    {
+    case EMiaIANeuronRelationshipSort::Weight:
+        request.Sort = MiaIA::Core::NeuronRelationshipSort::Weight;
+        break;
+    case EMiaIANeuronRelationshipSort::AbsoluteWeight:
+        request.Sort =
+            MiaIA::Core::NeuronRelationshipSort::AbsoluteWeight;
+        break;
+    case EMiaIANeuronRelationshipSort::ConnectionId:
+    default:
+        request.Sort =
+            MiaIA::Core::NeuronRelationshipSort::ConnectionId;
+        break;
+    }
+
+    MiaIA::Core::NeuronRelationshipPageSnapshot page;
+    if (!MiaIA::SDK::MiaIAClient::TryGetNeuronRelationships(
+        static_cast<std::uint64_t>(NeuronId),
+        request,
+        page))
+    {
+        return false;
+    }
+
+    OutPage = ToBlueprint(page);
     return true;
 }
 

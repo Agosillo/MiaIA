@@ -60,6 +60,7 @@ The roadmap is organized by dependency rather than by a fixed release date. Math
 - adaptive tessellation and compact scene policies that avoid one Unreal Actor per graph element.
 - three-level compact navigation from a whole-network aggregate through linear layer aggregates to on-demand SDK layer detail, with shared 2D/3D Back or Escape navigation;
 - bounded selected-neuron relationship inspection with exact incoming and outgoing totals;
+- paged incoming/outgoing relationship traversal with ID or weight ordering, absolute-weight filtering, connection selection, and cross-layer neuron navigation;
 - selected-connection inspection with contextual source and target neuron snapshots across SDK, CLI, StudioCore, Blueprint, 2D, and 3D clients.
 - engine-owned training breakpoints for debug phases, neuron activations and gradients, and connection updates;
 - safe automatic worker pause with structured trigger telemetry;
@@ -111,7 +112,6 @@ Retained session steps can now be compared through one renderer-neutral Engine o
 
 The debugging experience should next evolve toward:
 
-- add paged relationship traversal and filtering for very highly connected elements;
 - extend retained history with an explicit bounded policy for hidden-neuron activations;
 - identify inactive or consistently saturated neurons;
 - trace signal and gradient flow through the network;
@@ -140,10 +140,10 @@ The precise version 1 boundary is documented in the [MiaIA project format](../Pr
 - added a lightweight network overview and automatic compact layer rendering for large topologies;
 - broaden Blueprint coverage to the remaining appropriate SDK operations;
 - refine the IDE command console with persistent history and asynchronous long-running execution;
-- extend compact layer drill-down with paged cross-layer neurons and connections;
+- render paged cross-layer relationship results directly on compact topology scenes;
 - expand neuron coloring beyond activation and current debug state;
 - animate forward signal flow and backward gradient flow;
-- extend compact navigation from the current layer-bounded detail to paged cross-layer neurons and connections;
+- extend compact navigation with visual cross-layer relationship overlays;
 - compare snapshots and training checkpoints;
 - keep Unreal-specific rendering data outside the mathematical Core.
 

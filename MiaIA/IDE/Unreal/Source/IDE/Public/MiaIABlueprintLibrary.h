@@ -88,6 +88,17 @@ public:
         FMiaIANeuronInspection& OutInspection);
 
     UFUNCTION(BlueprintCallable, Category = "MiaIA|Network|Inspection")
+    static bool GetNeuronRelationshipPage(
+        int64 NeuronId,
+        EMiaIANeuronRelationshipDirection Direction,
+        int64 Offset,
+        int32 Limit,
+        EMiaIANeuronRelationshipSort Sort,
+        bool bDescending,
+        double MinimumAbsoluteWeight,
+        FMiaIANeuronRelationshipPage& OutPage);
+
+    UFUNCTION(BlueprintCallable, Category = "MiaIA|Network|Inspection")
     static bool InspectConnection(
         int64 ConnectionId,
         FMiaIAConnectionInspection& OutInspection);

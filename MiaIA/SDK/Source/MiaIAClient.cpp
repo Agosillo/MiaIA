@@ -257,6 +257,19 @@ namespace MiaIA::SDK
             result);
     }
 
+    bool MiaIAClient::TryGetNeuronRelationships(
+        std::uint64_t neuronId,
+        const Core::NeuronRelationshipPageRequest& request,
+        Core::NeuronRelationshipPageSnapshot& result)
+    {
+        const std::scoped_lock lock(Detail::ClientMutex());
+        return Engine::NetworkInspector::TryGetNeuronRelationships(
+            Detail::ClientNetwork(),
+            neuronId,
+            request,
+            result);
+    }
+
     bool MiaIAClient::TryInspectConnection(
         std::uint64_t connectionId,
         Core::ConnectionInspectionSnapshot& result)

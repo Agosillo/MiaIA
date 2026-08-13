@@ -331,6 +331,17 @@ int main()
     assert(connectionInspection.Output.find("To Endpoint") !=
         std::string::npos);
 
+    const auto relationshipPage = MiaIACommandProcessor::Execute(
+        "inspect relationships 1003 incoming 2 1 abs-weight desc 0");
+    assert(relationshipPage.Output.find("Neuron Relationship Page") !=
+        std::string::npos);
+    assert(relationshipPage.Output.find("Page: 2 of 2") !=
+        std::string::npos);
+    assert(relationshipPage.Output.find("Connection 1:") !=
+        std::string::npos);
+    assert(relationshipPage.Output.find("Previous: yes | Next: no") !=
+        std::string::npos);
+
     assert(MiaIACommandProcessor::Execute(
         "inspect neuron 1003 0").Output.find("Usage:") !=
         std::string::npos);
@@ -340,11 +351,20 @@ int main()
     assert(MiaIACommandProcessor::Execute(
         "inspect connection 999999").Output.find("failed") !=
         std::string::npos);
+    assert(MiaIACommandProcessor::Execute(
+        "inspect relationships 1003 sideways").Output.find("Usage:") !=
+        std::string::npos);
 
     const auto inspectSuggestions =
         MiaIACommandProcessor::GetSuggestions("inspect n");
     assert(inspectSuggestions.size() == 1);
     assert(inspectSuggestions[0].Completion == "inspect neuron");
+
+    const auto relationshipSuggestions =
+        MiaIACommandProcessor::GetSuggestions("inspect r");
+    assert(relationshipSuggestions.size() == 1);
+    assert(relationshipSuggestions[0].Completion ==
+        "inspect relationships");
 
     const auto configuredCreate = MiaIACommandProcessor::Execute(
         "create 2 3 1 1 --hidden-activation ReLU "
@@ -559,6 +579,82 @@ int main()
     assert(neuronInspection.IncomingConnections[0].Id == 1);
     assert(neuronInspection.OutgoingConnections.size() == 1);
     assert(neuronInspection.OutgoingConnections[0].Id == 3);
+
+    MiaIA::Core::NeuronRelationshipPageRequest relationshipRequest;
+    relationshipRequest.Direction =
+        MiaIA::Core::NeuronRelationshipDirection::Incoming;
+    relationshipRequest.Offset = 1;
+    relationshipRequest.Limit = 1;
+    relationshipRequest.Sort =
+        MiaIA::Core::NeuronRelationshipSort::AbsoluteWeight;
+    relationshipRequest.Descending = true;
+
+    MiaIA::Core::NeuronRelationshipPageSnapshot relationshipPage;
+    assert(MiaIAClient::TryGetNeuronRelationships(
+        2001,
+        relationshipRequest,
+        relationshipPage));
+    assert(relationshipPage.Context.Neuron.Id == 2001);
+    assert(relationshipPage.TotalConnectionCount == 2);
+    assert(relationshipPage.FilteredConnectionCount == 2);
+    assert(relationshipPage.Offset == 1);
+    assert(relationshipPage.Limit == 1);
+    assert(relationshipPage.HasPrevious);
+    assert(!relationshipPage.HasNext);
+    assert(relationshipPage.Connections.size() == 1);
+    assert(relationshipPage.Connections[0].Id == 1);
+
+    relationshipRequest.Offset = 0;
+    relationshipRequest.Limit = 10;
+    relationshipRequest.MinimumAbsoluteWeight = 0.3;
+    assert(MiaIAClient::TryGetNeuronRelationships(
+        2001,
+        relationshipRequest,
+        relationshipPage));
+    assert(relationshipPage.TotalConnectionCount == 2);
+    assert(relationshipPage.FilteredConnectionCount == 1);
+    assert(relationshipPage.Connections.size() == 1);
+    assert(relationshipPage.Connections[0].Id == 2);
+
+    relationshipRequest.MinimumAbsoluteWeight = 0.0;
+    relationshipRequest.Sort =
+        MiaIA::Core::NeuronRelationshipSort::Weight;
+    relationshipRequest.Descending = false;
+    assert(MiaIAClient::TryGetNeuronRelationships(
+        2001,
+        relationshipRequest,
+        relationshipPage));
+    assert(relationshipPage.Connections.size() == 2);
+    assert(relationshipPage.Connections[0].Id == 2);
+    assert(relationshipPage.Connections[1].Id == 1);
+
+    relationshipRequest.Direction =
+        MiaIA::Core::NeuronRelationshipDirection::Outgoing;
+    relationshipRequest.Sort =
+        MiaIA::Core::NeuronRelationshipSort::ConnectionId;
+    assert(MiaIAClient::TryGetNeuronRelationships(
+        2001,
+        relationshipRequest,
+        relationshipPage));
+    assert(relationshipPage.TotalConnectionCount == 1);
+    assert(relationshipPage.Connections.size() == 1);
+    assert(relationshipPage.Connections[0].Id == 3);
+
+    relationshipRequest.Limit = 0;
+    MiaIA::Core::NeuronRelationshipPageSnapshot preservedRelationshipPage;
+    preservedRelationshipPage.TotalConnectionCount = 777;
+    assert(!MiaIAClient::TryGetNeuronRelationships(
+        2001,
+        relationshipRequest,
+        preservedRelationshipPage));
+    assert(preservedRelationshipPage.TotalConnectionCount == 777);
+
+    relationshipRequest.Limit = 1001;
+    assert(!MiaIAClient::TryGetNeuronRelationships(
+        2001,
+        relationshipRequest,
+        preservedRelationshipPage));
+    assert(preservedRelationshipPage.TotalConnectionCount == 777);
 
     MiaIA::Core::NeuronInspectionSnapshot countOnlyInspection;
     assert(MiaIAClient::TryInspectNeuron(2001, 0, countOnlyInspection));

@@ -55,6 +55,10 @@ namespace MiaIA::SDK
             std::uint64_t neuronId,
             std::size_t maximumConnectionsPerDirection,
             Core::NeuronInspectionSnapshot& result);
+        static bool TryGetNeuronRelationships(
+            std::uint64_t neuronId,
+            const Core::NeuronRelationshipPageRequest& request,
+            Core::NeuronRelationshipPageSnapshot& result);
         static bool TryInspectConnection(
             std::uint64_t connectionId,
             Core::ConnectionInspectionSnapshot& result);
