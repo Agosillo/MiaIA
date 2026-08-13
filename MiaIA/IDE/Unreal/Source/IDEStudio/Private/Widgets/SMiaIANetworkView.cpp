@@ -132,10 +132,14 @@ void SMiaIANetworkView::SetDebugSnapshot(
 
 void SMiaIANetworkView::SetForwardTraceOverlay(
     const TMap<int64, double>& InActivations,
-    const TMap<int64, double>& InContributions)
+    const TMap<int64, double>& InContributions,
+    const TSet<int64>& InPlaybackConnections,
+    bool bInPlaybackActive)
 {
     ForwardTraceActivations = InActivations;
     ForwardTraceContributions = InContributions;
+    ForwardTracePlaybackConnections = InPlaybackConnections;
+    bForwardTracePlaybackActive = bInPlaybackActive;
     MaximumForwardTraceContribution = UE_DOUBLE_SMALL_NUMBER;
 
     for (const TPair<int64, double>& contribution :
@@ -1011,6 +1015,8 @@ int32 SMiaIANetworkView::OnPaint(
             ConnectionTelemetry.Find(connection.Id);
         const double* traceContribution =
             ForwardTraceContributions.Find(connection.Id);
+        const bool playbackConnection =
+            ForwardTracePlaybackConnections.Contains(connection.Id);
         const double displayedValue = traceContribution
             ? *traceContribution
             : telemetry
@@ -1022,7 +1028,9 @@ int32 SMiaIANetworkView::OnPaint(
                 (DebugPhase == EMiaIATrainingDebugPhase::UpdateComplete &&
                     telemetry->bHasUpdate));
         const float weightStrength = FMath::Clamp(
-            static_cast<float>(traceContribution
+            static_cast<float>(playbackConnection
+                ? 1.0
+                : traceContribution
                 ? FMath::Abs(displayedValue) /
                     MaximumForwardTraceContribution
                 : displaysTelemetry
@@ -1037,7 +1045,10 @@ int32 SMiaIANetworkView::OnPaint(
                 ? SignedConnectionColor(
                     displayedValue,
                     MaximumForwardTraceContribution)
-                : !ForwardTraceActivations.IsEmpty()
+                : playbackConnection
+                    ? palette.Debug
+                : bForwardTracePlaybackActive ||
+                    !ForwardTraceActivations.IsEmpty()
                     ? palette.SubduedText.CopyWithNewOpacity(0.12f)
                 : displaysTelemetry
                 ? SignedConnectionColor(
@@ -1116,6 +1127,8 @@ int32 SMiaIANetworkView::OnPaint(
                 ? SignedNeuronColor(
                     NeuronMetric(*telemetry),
                     MaximumNeuronMetric)
+                : bForwardTracePlaybackActive && !traceActivation
+                    ? palette.InactiveNeuron.CopyWithNewOpacity(0.28f)
                 : ActivationColor(traceActivation
                     ? *traceActivation
                     : telemetry

@@ -288,6 +288,43 @@ int main()
         assert(controller.State().ForwardTrace.HasContributionPage);
         assert(controller.State().ForwardTrace.ContributionPage.
             TotalContributionCount == 2);
+        assert(controller.State().ForwardTrace.PlaybackFrames.size() == 5);
+        assert(controller.State().ForwardTrace.PlaybackFrameIndex == 0);
+        assert(controller.State().ForwardTrace.PlaybackFrames[0].Kind ==
+            StudioForwardTraceFrameKind::InputActivations);
+        assert(controller.State().ForwardTrace.PlaybackFrames[1].Kind ==
+            StudioForwardTraceFrameKind::IncomingSignal);
+        assert(controller.State().ForwardTrace.PlaybackFrames[2].Kind ==
+            StudioForwardTraceFrameKind::LayerActivations);
+        assert(controller.State().ForwardTrace.PlaybackFrames[3].LayerIndex ==
+            2);
+        assert(controller.State().ForwardTrace.PlaybackStatus ==
+            StudioForwardTracePlaybackStatus::Paused);
+        assert(!controller.StepForwardTraceBackward());
+        assert(controller.SetForwardTraceFrameDuration(0.5));
+        assert(!controller.SetForwardTraceFrameDuration(0.0));
+        assert(!controller.SetForwardTraceFrameDuration(
+            std::numeric_limits<double>::infinity()));
+        assert(controller.PlayForwardTrace());
+        assert(!controller.AdvanceForwardTracePlayback(0.25));
+        assert(controller.State().ForwardTrace.PlaybackFrameIndex == 0);
+        assert(controller.AdvanceForwardTracePlayback(0.25));
+        assert(controller.State().ForwardTrace.PlaybackFrameIndex == 1);
+        assert(controller.PauseForwardTrace());
+        assert(controller.StepForwardTraceForward());
+        assert(controller.State().ForwardTrace.PlaybackFrameIndex == 2);
+        assert(controller.StepForwardTraceBackward());
+        assert(controller.State().ForwardTrace.PlaybackFrameIndex == 1);
+        assert(controller.RestartForwardTrace());
+        assert(controller.State().ForwardTrace.PlaybackFrameIndex == 0);
+        assert(controller.PlayForwardTrace());
+        assert(controller.AdvanceForwardTracePlayback(2.5));
+        assert(controller.State().ForwardTrace.PlaybackFrameIndex == 4);
+        assert(controller.State().ForwardTrace.PlaybackStatus ==
+            StudioForwardTracePlaybackStatus::Completed);
+        assert(controller.PlayForwardTrace());
+        assert(controller.State().ForwardTrace.PlaybackFrameIndex == 0);
+        assert(controller.PauseForwardTrace());
 
         MiaIA::Core::ForwardTraceContributionPageRequest traceRequest;
         traceRequest.Offset = 1;

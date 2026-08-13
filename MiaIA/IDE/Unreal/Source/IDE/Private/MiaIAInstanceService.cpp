@@ -122,6 +122,59 @@ bool FMiaIAInstanceService::SetForwardTraceContributionRequest(
         controller->SetForwardTraceContributionRequest(Request);
 }
 
+bool FMiaIAInstanceService::PlayForwardTrace(
+    FMiaIAInstanceHandle Instance)
+{
+    MiaIA::Studio::StudioController* controller = Resolve(Instance);
+    return controller && controller->PlayForwardTrace();
+}
+
+bool FMiaIAInstanceService::PauseForwardTrace(
+    FMiaIAInstanceHandle Instance)
+{
+    MiaIA::Studio::StudioController* controller = Resolve(Instance);
+    return controller && controller->PauseForwardTrace();
+}
+
+bool FMiaIAInstanceService::RestartForwardTrace(
+    FMiaIAInstanceHandle Instance)
+{
+    MiaIA::Studio::StudioController* controller = Resolve(Instance);
+    return controller && controller->RestartForwardTrace();
+}
+
+bool FMiaIAInstanceService::StepForwardTraceForward(
+    FMiaIAInstanceHandle Instance)
+{
+    MiaIA::Studio::StudioController* controller = Resolve(Instance);
+    return controller && controller->StepForwardTraceForward();
+}
+
+bool FMiaIAInstanceService::StepForwardTraceBackward(
+    FMiaIAInstanceHandle Instance)
+{
+    MiaIA::Studio::StudioController* controller = Resolve(Instance);
+    return controller && controller->StepForwardTraceBackward();
+}
+
+bool FMiaIAInstanceService::AdvanceForwardTracePlayback(
+    FMiaIAInstanceHandle Instance,
+    double ElapsedSeconds)
+{
+    MiaIA::Studio::StudioController* controller = Resolve(Instance);
+    return controller &&
+        controller->AdvanceForwardTracePlayback(ElapsedSeconds);
+}
+
+bool FMiaIAInstanceService::SetForwardTraceFrameDuration(
+    FMiaIAInstanceHandle Instance,
+    double DurationSeconds)
+{
+    MiaIA::Studio::StudioController* controller = Resolve(Instance);
+    return controller &&
+        controller->SetForwardTraceFrameDuration(DurationSeconds);
+}
+
 MiaIA::Studio::StudioForwardTraceState
 FMiaIAInstanceService::ForwardTraceState(FMiaIAInstanceHandle Instance)
 {

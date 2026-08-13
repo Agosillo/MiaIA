@@ -62,6 +62,7 @@ The roadmap is organized by dependency rather than by a fixed release date. Math
 - bounded selected-neuron relationship inspection with exact incoming and outgoing totals;
 - paged incoming/outgoing relationship traversal with ID or weight ordering, absolute-weight filtering, connection selection, and cross-layer neuron navigation;
 - selected-connection inspection with contextual source and target neuron snapshots across SDK, CLI, StudioCore, Blueprint, 2D, and 3D clients.
+- immutable graphical forward traces with per-neuron values, paged exact contributions, and deterministic layer-by-layer 2D/3D playback controls;
 - engine-owned training breakpoints for debug phases, neuron activations and gradients, and connection updates;
 - safe automatic worker pause with structured trigger telemetry;
 - shared CLI, SDK, Blueprint, and MiaIA Studio breakpoint authoring.
@@ -110,13 +111,13 @@ The first debugger-like training workflow is implemented for one sample: clients
 
 Retained session steps can now be compared through one renderer-neutral Engine operation and the public SDK. The first comparison contract covers loss, output predictions, neuron and connection gradients, final weights, and final biases, associates elements by stable ID, and exposes both signed and absolute differences. The shared CLI ranks the largest changes without requiring a client to print the complete result.
 
-Forward execution now also has an immutable renderer-neutral trace. Engine and SDK expose each neuron's weighted sum, bias, pre-activation, and activation plus paged incoming connection contributions, while the shared CLI provides complete and focused textual views. The trace evaluates a copy and therefore remains safe for inspection without publishing temporary activations. A later Studio step can animate this data without moving mathematical rules into Unreal.
+Forward execution now also has an immutable renderer-neutral trace. Engine and SDK expose each neuron's weighted sum, bias, pre-activation, and activation plus paged incoming connection contributions, while the shared CLI provides complete and focused textual views. The trace evaluates a copy and therefore remains safe for inspection without publishing temporary activations. StudioCore retains the captured result and drives a deterministic input, incoming-signal, and layer-activation timeline without moving mathematical rules into Unreal.
 
 The debugging experience should next evolve toward:
 
 - extend retained history with an explicit bounded policy for hidden-neuron activations;
 - identify inactive or consistently saturated neurons;
-- animate the implemented forward signal trace and add an equivalent gradient-flow trace;
+- add an equivalent backward gradient-flow trace;
 - preserve selected checkpoints for comparison;
 - provide structured diagnostics rather than only Boolean failure results.
 
@@ -144,7 +145,7 @@ The precise version 1 boundary is documented in the [MiaIA project format](../Pr
 - refine the IDE command console with persistent history and asynchronous long-running execution;
 - render paged cross-layer relationship results directly on compact topology scenes;
 - expand neuron coloring beyond activation and current debug state;
-- animate forward signal flow and backward gradient flow;
+- animate backward gradient flow with the same renderer-neutral playback model;
 - extend compact navigation with visual cross-layer relationship overlays;
 - compare snapshots and training checkpoints;
 - keep Unreal-specific rendering data outside the mathematical Core.

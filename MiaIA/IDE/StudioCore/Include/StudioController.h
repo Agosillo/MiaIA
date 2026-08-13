@@ -39,6 +39,28 @@ namespace MiaIA::Studio
         std::string Description;
     };
 
+    enum class StudioForwardTraceFrameKind
+    {
+        InputActivations,
+        IncomingSignal,
+        LayerActivations
+    };
+
+    enum class StudioForwardTracePlaybackStatus
+    {
+        Paused,
+        Playing,
+        Completed
+    };
+
+    struct StudioForwardTraceFrame
+    {
+        StudioForwardTraceFrameKind Kind{
+            StudioForwardTraceFrameKind::InputActivations };
+        std::size_t LayerIndex{};
+        std::uint64_t LayerId{};
+    };
+
     struct StudioForwardTraceState
     {
         bool Active{};
@@ -47,6 +69,12 @@ namespace MiaIA::Studio
         Core::ForwardTraceContributionPageRequest ContributionRequest;
         bool HasContributionPage{};
         Core::ForwardTraceContributionPageSnapshot ContributionPage;
+        std::vector<StudioForwardTraceFrame> PlaybackFrames;
+        std::size_t PlaybackFrameIndex{};
+        StudioForwardTracePlaybackStatus PlaybackStatus{
+            StudioForwardTracePlaybackStatus::Paused };
+        double PlaybackFrameDurationSeconds{ 0.65 };
+        double PlaybackFrameElapsedSeconds{};
     };
 
     struct StudioState
@@ -92,6 +120,13 @@ namespace MiaIA::Studio
         bool FocusForwardTraceNeuron(std::uint64_t neuronId);
         bool SetForwardTraceContributionRequest(
             const Core::ForwardTraceContributionPageRequest& request);
+        bool PlayForwardTrace();
+        bool PauseForwardTrace();
+        bool RestartForwardTrace();
+        bool StepForwardTraceForward();
+        bool StepForwardTraceBackward();
+        bool AdvanceForwardTracePlayback(double elapsedSeconds);
+        bool SetForwardTraceFrameDuration(double durationSeconds);
 
         [[nodiscard]] const StudioState& State() const;
 
@@ -104,10 +139,12 @@ namespace MiaIA::Studio
         void RefreshSelectionInspection();
         bool ContainsForwardTraceNeuron(std::uint64_t neuronId) const;
         bool RefreshForwardTraceContributions();
+        void BuildForwardTracePlaybackFrames();
 
         std::string WorkingDirectory;
         StudioViewMode ViewMode{ StudioViewMode::TwoDimensional };
         std::size_t RelationshipLimit{ 10 };
+        double ForwardTraceFrameDurationSeconds{ 0.65 };
         StudioState CurrentState;
     };
 }

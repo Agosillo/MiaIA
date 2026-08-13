@@ -60,7 +60,9 @@ public:
     void SetDebugSnapshot(const FMiaIATrainingDebugSnapshot& InDebug);
     void SetForwardTraceOverlay(
         const TMap<int64, double>& InActivations,
-        const TMap<int64, double>& InContributions);
+        const TMap<int64, double>& InContributions,
+        const TSet<int64>& InPlaybackConnections,
+        bool bInPlaybackActive);
     void SetSelectedNeurons(
         const TSet<int64>& InNeuronIds,
         int64 InPrimaryNeuronId);
@@ -157,6 +159,7 @@ private:
     TMap<int64, FMiaIADebugConnectionTelemetry> ConnectionTelemetry;
     TMap<int64, double> ForwardTraceActivations;
     TMap<int64, double> ForwardTraceContributions;
+    TSet<int64> ForwardTracePlaybackConnections;
     double MaximumNeuronMetric{1.0};
     double MaximumConnectionMetric{1.0};
     double MaximumForwardTraceContribution{1.0};
@@ -179,6 +182,7 @@ private:
     float Zoom{1.0f};
     bool bCompactMode{};
     bool bNetworkAggregateMode{};
+    bool bForwardTracePlaybackActive{};
     bool bPanning{};
     bool bMarqueeSelecting{};
     bool bMarqueeAdditive{};

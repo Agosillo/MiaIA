@@ -162,6 +162,12 @@ private:
     FReply HandleClearBreakpoints();
     FReply HandleRunForwardTrace();
     FReply HandleClearForwardTrace();
+    FReply HandleRestartForwardTrace();
+    FReply HandlePreviousForwardTraceFrame();
+    FReply HandleToggleForwardTracePlayback();
+    FReply HandleNextForwardTraceFrame();
+    TSharedRef<SWidget> BuildForwardTraceSpeedMenu();
+    FReply SelectForwardTraceSpeed(double SpeedMultiplier);
     FReply HandlePreviousForwardTracePage();
     FReply HandleNextForwardTracePage();
     void ShowDialog(const FText& Title, const FText& Content);
@@ -209,6 +215,8 @@ private:
     FText SelectionRelationshipsText() const;
     FText ForwardTraceSummaryText() const;
     FText ForwardTraceSelectionText() const;
+    FText ForwardTracePlayPauseText() const;
+    FText ForwardTraceSpeedText() const;
     FText SelectedConnectionEndpointText(bool bToNeuron) const;
     FText RelationshipSortText() const;
     EVisibility RelationshipExplorerVisibility() const;

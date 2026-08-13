@@ -63,6 +63,7 @@ namespace
     constexpr int32 DefaultInspectorConnectionLimit = 5;
     constexpr int32 MaximumInspectorConnectionLimit = 1000;
     constexpr int32 MaximumInspectorConnectionSliderLimit = 50;
+    constexpr double DefaultForwardTraceFrameDurationSeconds = 0.65;
 
     FString DataRefreshModeName(EMiaIADataRefreshMode Mode)
     {
@@ -1980,6 +1981,89 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
                             ]
                             + SVerticalBox::Slot()
                             .AutoHeight()
+                            .Padding(2.0f, 0.0f, 2.0f, 5.0f)
+                            [
+                                SNew(SHorizontalBox)
+                                + SHorizontalBox::Slot()
+                                .AutoWidth()
+                                .Padding(2.0f)
+                                [
+                                    SNew(SButton)
+                                    .ButtonStyle(&ButtonStyle)
+                                    .Text(LOCTEXT(
+                                        "RestartForwardTrace",
+                                        "Reset"))
+                                    .OnClicked(
+                                        this,
+                                        &SMiaIAEditorPanel::
+                                            HandleRestartForwardTrace)
+                                ]
+                                + SHorizontalBox::Slot()
+                                .AutoWidth()
+                                .Padding(2.0f)
+                                [
+                                    SNew(SButton)
+                                    .ButtonStyle(&ButtonStyle)
+                                    .Text(LOCTEXT(
+                                        "PreviousForwardTraceFrame",
+                                        "Previous frame"))
+                                    .OnClicked(
+                                        this,
+                                        &SMiaIAEditorPanel::
+                                            HandlePreviousForwardTraceFrame)
+                                ]
+                                + SHorizontalBox::Slot()
+                                .AutoWidth()
+                                .Padding(2.0f)
+                                [
+                                    SNew(SButton)
+                                    .ButtonStyle(&ButtonStyle)
+                                    .Text(
+                                        this,
+                                        &SMiaIAEditorPanel::
+                                            ForwardTracePlayPauseText)
+                                    .OnClicked(
+                                        this,
+                                        &SMiaIAEditorPanel::
+                                            HandleToggleForwardTracePlayback)
+                                ]
+                                + SHorizontalBox::Slot()
+                                .AutoWidth()
+                                .Padding(2.0f)
+                                [
+                                    SNew(SButton)
+                                    .ButtonStyle(&ButtonStyle)
+                                    .Text(LOCTEXT(
+                                        "NextForwardTraceFrame",
+                                        "Next frame"))
+                                    .OnClicked(
+                                        this,
+                                        &SMiaIAEditorPanel::
+                                            HandleNextForwardTraceFrame)
+                                ]
+                                + SHorizontalBox::Slot()
+                                .AutoWidth()
+                                .VAlign(VAlign_Center)
+                                .Padding(8.0f, 2.0f, 2.0f, 2.0f)
+                                [
+                                    SNew(SComboButton)
+                                    .ComboButtonStyle(&ComboButtonStyle)
+                                    .ButtonContent()
+                                    [
+                                        SNew(STextBlock)
+                                        .Text(
+                                            this,
+                                            &SMiaIAEditorPanel::
+                                                ForwardTraceSpeedText)
+                                    ]
+                                    .OnGetMenuContent(
+                                        this,
+                                        &SMiaIAEditorPanel::
+                                            BuildForwardTraceSpeedMenu)
+                                ]
+                            ]
+                            + SVerticalBox::Slot()
+                            .AutoHeight()
                             .Padding(4.0f, 0.0f, 4.0f, 6.0f)
                             [
                                 SNew(STextBlock)
@@ -2015,7 +2099,7 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
                                     .ButtonStyle(&ButtonStyle)
                                     .Text(LOCTEXT(
                                         "PreviousForwardTracePage",
-                                        "Previous"))
+                                        "Previous page"))
                                     .OnClicked(
                                         this,
                                         &SMiaIAEditorPanel::
@@ -2029,7 +2113,7 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
                                     .ButtonStyle(&ButtonStyle)
                                     .Text(LOCTEXT(
                                         "NextForwardTracePage",
-                                        "Next"))
+                                        "Next page"))
                                     .OnClicked(
                                         this,
                                         &SMiaIAEditorPanel::
@@ -2573,14 +2657,64 @@ void SMiaIAEditorPanel::ApplyForwardTraceOverlay()
 {
     TMap<int64, double> activations;
     TMap<int64, double> contributions;
+    TSet<int64> playbackConnections;
+    bool playbackActive = false;
     const MiaIA::Studio::StudioForwardTraceState state =
         FMiaIAInstanceService::ForwardTraceState(MiaIAInstance);
 
     if (state.Active)
     {
-        for (const MiaIA::Core::ForwardTraceLayerSnapshot& layer :
-            state.Trace.Layers)
+        const bool playbackComplete = state.PlaybackStatus ==
+            MiaIA::Studio::StudioForwardTracePlaybackStatus::Completed;
+        const bool hasPlaybackFrame =
+            !state.PlaybackFrames.empty() &&
+            state.PlaybackFrameIndex < state.PlaybackFrames.size();
+        std::size_t activatedThroughLayer = state.Trace.Layers.size();
+
+        if (!playbackComplete && hasPlaybackFrame)
         {
+            playbackActive = true;
+            const MiaIA::Studio::StudioForwardTraceFrame& frame =
+                state.PlaybackFrames[state.PlaybackFrameIndex];
+            activatedThroughLayer = frame.LayerIndex + 1;
+
+            if (frame.Kind ==
+                MiaIA::Studio::StudioForwardTraceFrameKind::IncomingSignal)
+            {
+                activatedThroughLayer = frame.LayerIndex;
+            }
+
+            if (frame.Kind != MiaIA::Studio::
+                StudioForwardTraceFrameKind::InputActivations &&
+                frame.LayerIndex < state.Trace.Layers.size())
+            {
+                TSet<int64> targetNeurons;
+
+                for (const MiaIA::Core::ForwardTraceNeuronSnapshot& neuron :
+                    state.Trace.Layers[frame.LayerIndex].Neurons)
+                {
+                    targetNeurons.Add(static_cast<int64>(neuron.Id));
+                }
+
+                for (const FMiaIAConnectionSnapshot& connection :
+                    Network.Connections)
+                {
+                    if (targetNeurons.Contains(connection.ToNeuron))
+                    {
+                        playbackConnections.Add(connection.Id);
+                    }
+                }
+            }
+        }
+
+        for (std::size_t layerIndex = 0;
+            layerIndex < state.Trace.Layers.size() &&
+                layerIndex < activatedThroughLayer;
+            ++layerIndex)
+        {
+            const MiaIA::Core::ForwardTraceLayerSnapshot& layer =
+                state.Trace.Layers[layerIndex];
+
             for (const MiaIA::Core::ForwardTraceNeuronSnapshot& neuron :
                 layer.Neurons)
             {
@@ -2590,7 +2724,7 @@ void SMiaIAEditorPanel::ApplyForwardTraceOverlay()
             }
         }
 
-        if (state.HasContributionPage)
+        if (playbackComplete && state.HasContributionPage)
         {
             for (const auto& contribution :
                 state.ContributionPage.Contributions)
@@ -2606,14 +2740,18 @@ void SMiaIAEditorPanel::ApplyForwardTraceOverlay()
     {
         NetworkView->SetForwardTraceOverlay(
             activations,
-            contributions);
+            contributions,
+            playbackConnections,
+            playbackActive);
     }
 
     if (Network3DView.IsValid())
     {
         Network3DView->SetForwardTraceOverlay(
             activations,
-            contributions);
+            contributions,
+            playbackConnections,
+            playbackActive);
     }
 }
 
@@ -3852,6 +3990,14 @@ EActiveTimerReturnType SMiaIAEditorPanel::HandleRefreshTimer(
     double,
     float DeltaTime)
 {
+    if (FMiaIAInstanceService::AdvanceForwardTracePlayback(
+        MiaIAInstance,
+        DeltaTime))
+    {
+        RebuildForwardTrace();
+        ApplyForwardTraceOverlay();
+    }
+
     PeriodicRefreshElapsedSeconds += DeltaTime;
 
     if (PeriodicRefreshElapsedSeconds >= DataRefreshInterval())
@@ -4505,6 +4651,97 @@ FReply SMiaIAEditorPanel::HandleClearForwardTrace()
     FMiaIAInstanceService::ClearForwardTrace(MiaIAInstance);
     RebuildForwardTrace();
     ApplyForwardTraceOverlay();
+    return FReply::Handled();
+}
+
+FReply SMiaIAEditorPanel::HandleRestartForwardTrace()
+{
+    if (FMiaIAInstanceService::RestartForwardTrace(MiaIAInstance))
+    {
+        RebuildForwardTrace();
+        ApplyForwardTraceOverlay();
+    }
+
+    return FReply::Handled();
+}
+
+FReply SMiaIAEditorPanel::HandlePreviousForwardTraceFrame()
+{
+    if (FMiaIAInstanceService::StepForwardTraceBackward(MiaIAInstance))
+    {
+        RebuildForwardTrace();
+        ApplyForwardTraceOverlay();
+    }
+
+    return FReply::Handled();
+}
+
+FReply SMiaIAEditorPanel::HandleToggleForwardTracePlayback()
+{
+    const MiaIA::Studio::StudioForwardTraceState state =
+        FMiaIAInstanceService::ForwardTraceState(MiaIAInstance);
+    const bool changed = state.PlaybackStatus ==
+        MiaIA::Studio::StudioForwardTracePlaybackStatus::Playing
+        ? FMiaIAInstanceService::PauseForwardTrace(MiaIAInstance)
+        : FMiaIAInstanceService::PlayForwardTrace(MiaIAInstance);
+
+    if (changed)
+    {
+        RebuildForwardTrace();
+        ApplyForwardTraceOverlay();
+    }
+
+    return FReply::Handled();
+}
+
+FReply SMiaIAEditorPanel::HandleNextForwardTraceFrame()
+{
+    if (FMiaIAInstanceService::StepForwardTraceForward(MiaIAInstance))
+    {
+        RebuildForwardTrace();
+        ApplyForwardTraceOverlay();
+    }
+
+    return FReply::Handled();
+}
+
+TSharedRef<SWidget> SMiaIAEditorPanel::BuildForwardTraceSpeedMenu()
+{
+    TSharedRef<SVerticalBox> menu = SNew(SVerticalBox);
+    constexpr double speeds[] = { 0.25, 0.5, 1.0, 2.0, 4.0 };
+
+    for (const double speed : speeds)
+    {
+        menu->AddSlot()
+        .AutoHeight()
+        [
+            SNew(SButton)
+            .ButtonStyle(&ButtonStyle)
+            .Text(FText::FromString(FString::Printf(
+                TEXT("%gx"),
+                speed)))
+            .OnClicked(
+                this,
+                &SMiaIAEditorPanel::SelectForwardTraceSpeed,
+                speed)
+        ];
+    }
+
+    return menu;
+}
+
+FReply SMiaIAEditorPanel::SelectForwardTraceSpeed(
+    double SpeedMultiplier)
+{
+    if (SpeedMultiplier > 0.0)
+    {
+        FMiaIAInstanceService::SetForwardTraceFrameDuration(
+            MiaIAInstance,
+            DefaultForwardTraceFrameDurationSeconds / SpeedMultiplier);
+        RebuildForwardTrace();
+    }
+
+    FSlateApplication::Get().DismissAllMenus();
     return FReply::Handled();
 }
 
@@ -5574,7 +5811,7 @@ FReply SMiaIAEditorPanel::HandleQuickHelp()
             "The Inspector follows the current element or group. For one neuron, choose Incoming or Outgoing relationships, page them, order by ID or weight, filter by minimum absolute weight, and open either the connection or its opposite neuron. Use Start debug and Step phase to inspect forward, backward, update, verify, and commit states.\n\n"
 
             "EXECUTION TRACE\n"
-            "Open Execution trace, enter one whitespace-separated value per input neuron, and choose Run trace. Select a neuron to inspect its weighted input, bias, pre-activation, activation, and paged incoming contributions. Clear removes the captured overlay without changing the model.\n\n"
+            "Open Execution trace, enter one whitespace-separated value per input neuron, and choose Run trace. Use Reset, Previous frame, Play/Pause, Next frame, and Speed to inspect the signal layer by layer in 2D or 3D. Select a neuron to inspect its weighted input, bias, pre-activation, activation, and paged incoming contributions. Clear removes the captured overlay without changing the model.\n\n"
 
             "BREAKPOINTS\n"
             "Open the Breakpoints tab to stop controlled training on a phase, neuron activation, neuron gradient, or connection update. Automatic training stops after the triggering sample commits, before the next sample begins.\n\n"
@@ -6128,10 +6365,77 @@ FText SMiaIAEditorPanel::ForwardTraceSummaryText() const
         outputText += FString::SanitizeFloat(value);
     }
 
+    FString playbackText = TEXT("Complete");
+
+    if (state.PlaybackStatus !=
+        MiaIA::Studio::StudioForwardTracePlaybackStatus::Completed &&
+        state.PlaybackFrameIndex < state.PlaybackFrames.size())
+    {
+        const MiaIA::Studio::StudioForwardTraceFrame& frame =
+            state.PlaybackFrames[state.PlaybackFrameIndex];
+        const TCHAR* phase = TEXT("Input activations");
+
+        if (frame.Kind ==
+            MiaIA::Studio::StudioForwardTraceFrameKind::IncomingSignal)
+        {
+            phase = TEXT("Incoming signal");
+        }
+        else if (frame.Kind == MiaIA::Studio::
+            StudioForwardTraceFrameKind::LayerActivations)
+        {
+            phase = TEXT("Layer activations");
+        }
+
+        FString layerName = FString::Printf(
+            TEXT("Layer %llu"),
+            static_cast<uint64>(frame.LayerIndex));
+
+        if (frame.LayerIndex < state.Trace.Layers.size())
+        {
+            layerName = UTF8_TO_TCHAR(
+                state.Trace.Layers[frame.LayerIndex].Name.c_str());
+        }
+
+        const TCHAR* status = state.PlaybackStatus ==
+            MiaIA::Studio::StudioForwardTracePlaybackStatus::Playing
+            ? TEXT("Playing")
+            : TEXT("Paused");
+        playbackText = FString::Printf(
+            TEXT("Frame %llu/%llu | %s | %s | %s"),
+            static_cast<uint64>(state.PlaybackFrameIndex + 1),
+            static_cast<uint64>(state.PlaybackFrames.size()),
+            *layerName,
+            phase,
+            status);
+    }
+
     return FText::FromString(FString::Printf(
-        TEXT("Captured snapshot | Inputs: [%s] | Outputs: [%s]"),
+        TEXT("Captured snapshot | Inputs: [%s] | Outputs: [%s]\n%s"),
         *inputText,
-        *outputText));
+        *outputText,
+        *playbackText));
+}
+
+FText SMiaIAEditorPanel::ForwardTracePlayPauseText() const
+{
+    const MiaIA::Studio::StudioForwardTraceState state =
+        FMiaIAInstanceService::ForwardTraceState(MiaIAInstance);
+    return state.PlaybackStatus ==
+        MiaIA::Studio::StudioForwardTracePlaybackStatus::Playing
+        ? LOCTEXT("PauseForwardTracePlayback", "Pause")
+        : LOCTEXT("PlayForwardTracePlayback", "Play");
+}
+
+FText SMiaIAEditorPanel::ForwardTraceSpeedText() const
+{
+    const MiaIA::Studio::StudioForwardTraceState state =
+        FMiaIAInstanceService::ForwardTraceState(MiaIAInstance);
+    const double duration = state.PlaybackFrameDurationSeconds > 0.0
+        ? state.PlaybackFrameDurationSeconds
+        : DefaultForwardTraceFrameDurationSeconds;
+    return FText::FromString(FString::Printf(
+        TEXT("Speed %gx"),
+        DefaultForwardTraceFrameDurationSeconds / duration));
 }
 
 FText SMiaIAEditorPanel::ForwardTraceSelectionText() const

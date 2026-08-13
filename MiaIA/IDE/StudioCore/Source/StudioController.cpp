@@ -3,6 +3,7 @@
 #include "../../../CLI/Include/MiaIACommandProcessor.h"
 #include "../../../SDK/Include/MiaIAClient.h"
 
+#include <cmath>
 #include <utility>
 
 MiaIA::Studio::StudioController::StudioController(
@@ -200,6 +201,8 @@ bool MiaIA::Studio::StudioController::RunForwardTrace(
     next.Trace = std::move(trace);
     next.ContributionRequest =
         CurrentState.ForwardTrace.ContributionRequest;
+    next.PlaybackFrameDurationSeconds =
+        ForwardTraceFrameDurationSeconds;
 
     if (CurrentState.Selection.Kind == StudioSelectionKind::Neuron)
     {
@@ -207,6 +210,7 @@ bool MiaIA::Studio::StudioController::RunForwardTrace(
     }
 
     CurrentState.ForwardTrace = std::move(next);
+    BuildForwardTracePlaybackFrames();
 
     if (CurrentState.ForwardTrace.FocusedNeuronId != 0)
     {
@@ -219,6 +223,8 @@ bool MiaIA::Studio::StudioController::RunForwardTrace(
 void MiaIA::Studio::StudioController::ClearForwardTrace()
 {
     CurrentState.ForwardTrace = {};
+    CurrentState.ForwardTrace.PlaybackFrameDurationSeconds =
+        ForwardTraceFrameDurationSeconds;
 }
 
 bool MiaIA::Studio::StudioController::FocusForwardTraceNeuron(
@@ -261,6 +267,168 @@ bool MiaIA::Studio::StudioController::SetForwardTraceContributionRequest(
         return false;
     }
 
+    return true;
+}
+
+bool MiaIA::Studio::StudioController::PlayForwardTrace()
+{
+    StudioForwardTraceState& state = CurrentState.ForwardTrace;
+
+    if (!state.Active || state.PlaybackFrames.empty() ||
+        state.PlaybackStatus == StudioForwardTracePlaybackStatus::Playing)
+    {
+        return false;
+    }
+
+    if (state.PlaybackStatus ==
+        StudioForwardTracePlaybackStatus::Completed)
+    {
+        state.PlaybackFrameIndex = 0;
+        state.PlaybackFrameElapsedSeconds = 0.0;
+    }
+
+    state.PlaybackStatus = StudioForwardTracePlaybackStatus::Playing;
+    return true;
+}
+
+bool MiaIA::Studio::StudioController::PauseForwardTrace()
+{
+    StudioForwardTraceState& state = CurrentState.ForwardTrace;
+
+    if (!state.Active || state.PlaybackStatus !=
+        StudioForwardTracePlaybackStatus::Playing)
+    {
+        return false;
+    }
+
+    state.PlaybackStatus = StudioForwardTracePlaybackStatus::Paused;
+    return true;
+}
+
+bool MiaIA::Studio::StudioController::RestartForwardTrace()
+{
+    StudioForwardTraceState& state = CurrentState.ForwardTrace;
+
+    if (!state.Active || state.PlaybackFrames.empty())
+    {
+        return false;
+    }
+
+    state.PlaybackFrameIndex = 0;
+    state.PlaybackFrameElapsedSeconds = 0.0;
+    state.PlaybackStatus = StudioForwardTracePlaybackStatus::Paused;
+    return true;
+}
+
+bool MiaIA::Studio::StudioController::StepForwardTraceForward()
+{
+    StudioForwardTraceState& state = CurrentState.ForwardTrace;
+
+    if (!state.Active || state.PlaybackFrames.empty())
+    {
+        return false;
+    }
+
+    state.PlaybackFrameElapsedSeconds = 0.0;
+
+    if (state.PlaybackStatus ==
+        StudioForwardTracePlaybackStatus::Completed)
+    {
+        return false;
+    }
+
+    state.PlaybackStatus = StudioForwardTracePlaybackStatus::Paused;
+
+    if (state.PlaybackFrameIndex + 1 < state.PlaybackFrames.size())
+    {
+        ++state.PlaybackFrameIndex;
+        return true;
+    }
+
+    state.PlaybackStatus = StudioForwardTracePlaybackStatus::Completed;
+    return true;
+}
+
+bool MiaIA::Studio::StudioController::StepForwardTraceBackward()
+{
+    StudioForwardTraceState& state = CurrentState.ForwardTrace;
+
+    if (!state.Active || state.PlaybackFrames.empty())
+    {
+        return false;
+    }
+
+    state.PlaybackFrameElapsedSeconds = 0.0;
+
+    if (state.PlaybackStatus ==
+        StudioForwardTracePlaybackStatus::Completed)
+    {
+        state.PlaybackStatus = StudioForwardTracePlaybackStatus::Paused;
+        return true;
+    }
+
+    state.PlaybackStatus = StudioForwardTracePlaybackStatus::Paused;
+
+    if (state.PlaybackFrameIndex == 0)
+    {
+        return false;
+    }
+
+    --state.PlaybackFrameIndex;
+    return true;
+}
+
+bool MiaIA::Studio::StudioController::AdvanceForwardTracePlayback(
+    double elapsedSeconds)
+{
+    StudioForwardTraceState& state = CurrentState.ForwardTrace;
+
+    if (!state.Active || state.PlaybackFrames.empty() ||
+        state.PlaybackStatus != StudioForwardTracePlaybackStatus::Playing ||
+        !std::isfinite(elapsedSeconds) || elapsedSeconds < 0.0)
+    {
+        return false;
+    }
+
+    state.PlaybackFrameElapsedSeconds += elapsedSeconds;
+    bool changed = false;
+
+    while (state.PlaybackFrameElapsedSeconds >=
+        state.PlaybackFrameDurationSeconds)
+    {
+        state.PlaybackFrameElapsedSeconds -=
+            state.PlaybackFrameDurationSeconds;
+
+        if (state.PlaybackFrameIndex + 1 <
+            state.PlaybackFrames.size())
+        {
+            ++state.PlaybackFrameIndex;
+            changed = true;
+            continue;
+        }
+
+        state.PlaybackFrameElapsedSeconds = 0.0;
+        state.PlaybackStatus =
+            StudioForwardTracePlaybackStatus::Completed;
+        changed = true;
+        break;
+    }
+
+    return changed;
+}
+
+bool MiaIA::Studio::StudioController::SetForwardTraceFrameDuration(
+    double durationSeconds)
+{
+    if (!std::isfinite(durationSeconds) || durationSeconds <= 0.0)
+    {
+        return false;
+    }
+
+    ForwardTraceFrameDurationSeconds = durationSeconds;
+    CurrentState.ForwardTrace.PlaybackFrameDurationSeconds =
+        durationSeconds;
+    CurrentState.ForwardTrace.PlaybackFrameElapsedSeconds = 0.0;
     return true;
 }
 
@@ -375,6 +543,44 @@ bool MiaIA::Studio::StudioController::ContainsForwardTraceNeuron(
     }
 
     return false;
+}
+
+void MiaIA::Studio::StudioController::BuildForwardTracePlaybackFrames()
+{
+    StudioForwardTraceState& state = CurrentState.ForwardTrace;
+    state.PlaybackFrames.clear();
+    state.PlaybackFrameIndex = 0;
+    state.PlaybackFrameElapsedSeconds = 0.0;
+    state.PlaybackStatus = StudioForwardTracePlaybackStatus::Paused;
+
+    for (std::size_t layerIndex = 0;
+        layerIndex < state.Trace.Layers.size();
+        ++layerIndex)
+    {
+        const Core::ForwardTraceLayerSnapshot& layer =
+            state.Trace.Layers[layerIndex];
+
+        if (layerIndex == 0)
+        {
+            state.PlaybackFrames.push_back({
+                StudioForwardTraceFrameKind::InputActivations,
+                layerIndex,
+                layer.Id
+            });
+            continue;
+        }
+
+        state.PlaybackFrames.push_back({
+            StudioForwardTraceFrameKind::IncomingSignal,
+            layerIndex,
+            layer.Id
+        });
+        state.PlaybackFrames.push_back({
+            StudioForwardTraceFrameKind::LayerActivations,
+            layerIndex,
+            layer.Id
+        });
+    }
 }
 
 bool MiaIA::Studio::StudioController::RefreshForwardTraceContributions()

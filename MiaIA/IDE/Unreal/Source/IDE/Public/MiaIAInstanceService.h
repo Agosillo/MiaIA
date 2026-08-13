@@ -30,6 +30,17 @@ public:
     static bool SetForwardTraceContributionRequest(
         FMiaIAInstanceHandle Instance,
         const MiaIA::Core::ForwardTraceContributionPageRequest& Request);
+    static bool PlayForwardTrace(FMiaIAInstanceHandle Instance);
+    static bool PauseForwardTrace(FMiaIAInstanceHandle Instance);
+    static bool RestartForwardTrace(FMiaIAInstanceHandle Instance);
+    static bool StepForwardTraceForward(FMiaIAInstanceHandle Instance);
+    static bool StepForwardTraceBackward(FMiaIAInstanceHandle Instance);
+    static bool AdvanceForwardTracePlayback(
+        FMiaIAInstanceHandle Instance,
+        double ElapsedSeconds);
+    static bool SetForwardTraceFrameDuration(
+        FMiaIAInstanceHandle Instance,
+        double DurationSeconds);
     static MiaIA::Studio::StudioForwardTraceState ForwardTraceState(
         FMiaIAInstanceHandle Instance);
 };

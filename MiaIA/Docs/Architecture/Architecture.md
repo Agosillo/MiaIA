@@ -147,6 +147,8 @@ Both Engine operations construct a complete local result before publishing it. I
 
 `StudioController` owns the graphical trace session above that SDK contract. It retains one immutable trace, one optional focused neuron, and one bounded contribution-page request without introducing renderer types. Changing the focused neuron resets its contribution offset, while invalid trace or paging requests preserve the last valid graphical state. Frontends render the stored activation values and exact contribution records; they do not recompute weighted sums or activation functions.
 
+The same controller derives a deterministic playback timeline from the captured layer order. The first frame publishes input activations; every later layer contributes one incoming-signal frame followed by one activation frame. Playback state owns its cursor, Playing/Paused/Completed status, frame duration, elapsed time, stepping, restart, and automatic advancement. Advancing the timeline never executes the network again and never changes the retained trace or public model. Frontends decide how to render the active layer and connection identities, while the existing focused page remains the source of exact signed contribution values.
+
 ### Prediction
 
 ```text
