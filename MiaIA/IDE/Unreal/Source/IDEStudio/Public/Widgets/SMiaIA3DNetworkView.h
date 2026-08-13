@@ -117,6 +117,11 @@ private:
     float ProjectedSphereRadius(
         const FVector& WorldPosition,
         float WorldRadius) const;
+    bool ProjectedSphereBounds(
+        const FVector& WorldPosition,
+        float WorldRadius,
+        FVector2D& OutMinimum,
+        FVector2D& OutMaximum) const;
     bool DeprojectFromViewport(
         const FVector2D& ViewportPosition,
         FVector& OutOrigin,
@@ -191,9 +196,11 @@ private:
     int64 SelectedConnectionId{-1};
     int64 SelectedLayerId{-1};
     int64 DraggedNeuronId{-1};
+    int32 SelectionBlinkFrame{-1};
     bool bCompactMode{};
     bool bNetworkAggregateMode{};
     bool bForwardTracePlaybackActive{};
+    bool bSelectionCursorVisible{true};
     bool bSceneDirty{true};
     bool bOrbiting{};
     bool bPanning{};

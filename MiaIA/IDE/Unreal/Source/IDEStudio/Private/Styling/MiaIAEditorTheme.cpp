@@ -13,6 +13,22 @@ namespace
 {
     constexpr TCHAR SettingsSection[] = TEXT("MiaIA.Studio");
     constexpr TCHAR ThemeKey[] = TEXT("Theme");
+    constexpr TCHAR VisualizationPresetKey[] =
+        TEXT("VisualizationPalette");
+    constexpr TCHAR CustomInactiveNeuronKey[] =
+        TEXT("CustomInactiveNeuron");
+    constexpr TCHAR CustomActiveNeuronKey[] =
+        TEXT("CustomActiveNeuron");
+    constexpr TCHAR CustomPositiveContributionKey[] =
+        TEXT("CustomPositiveContribution");
+    constexpr TCHAR CustomNegativeContributionKey[] =
+        TEXT("CustomNegativeContribution");
+    constexpr TCHAR CustomSelectionKey[] = TEXT("CustomSelection");
+    constexpr TCHAR CustomDebugKey[] = TEXT("CustomDebug");
+
+    EMiaIAVisualizationPalettePreset CurrentVisualizationPreset =
+        EMiaIAVisualizationPalettePreset::MiaIAClassic;
+    FMiaIAVisualizationPalette CurrentCustomVisualizationPalette;
 
     FString ThemeName(EMiaIAEditorTheme Theme)
     {
@@ -25,6 +41,72 @@ namespace
         default:
             return TEXT("FollowUnreal");
         }
+    }
+
+    FString VisualizationPresetName(
+        EMiaIAVisualizationPalettePreset Preset)
+    {
+        switch (Preset)
+        {
+        case EMiaIAVisualizationPalettePreset::HighContrast:
+            return TEXT("HighContrast");
+        case EMiaIAVisualizationPalettePreset::ColorBlindSafe:
+            return TEXT("ColorBlindSafe");
+        case EMiaIAVisualizationPalettePreset::Monochrome:
+            return TEXT("Monochrome");
+        case EMiaIAVisualizationPalettePreset::Custom:
+            return TEXT("Custom");
+        case EMiaIAVisualizationPalettePreset::MiaIAClassic:
+        default:
+            return TEXT("MiaIAClassic");
+        }
+    }
+
+    FMiaIAVisualizationPalette VisualizationFromEditorPalette(
+        const FMiaIAEditorPalette& Palette)
+    {
+        return {
+            Palette.InactiveNeuron,
+            Palette.ActiveNeuron,
+            Palette.PositiveWeight,
+            Palette.NegativeWeight,
+            Palette.Selection,
+            Palette.Debug
+        };
+    }
+
+    FLinearColor LoadColor(
+        const TCHAR* Key,
+        const FLinearColor& DefaultColor)
+    {
+        FString value;
+        FLinearColor color = DefaultColor;
+
+        if (GConfig && GConfig->GetString(
+            SettingsSection,
+            Key,
+            value,
+            GGameUserSettingsIni))
+        {
+            color.InitFromString(value);
+        }
+
+        color.A = 1.0f;
+        return color;
+    }
+
+    void SaveColor(const TCHAR* Key, const FLinearColor& Color)
+    {
+        if (!GConfig)
+        {
+            return;
+        }
+
+        GConfig->SetString(
+            SettingsSection,
+            Key,
+            *Color.CopyWithNewOpacity(1.0f).ToString(),
+            GGameUserSettingsIni);
     }
 }
 
@@ -110,6 +192,210 @@ FMiaIAEditorPalette FMiaIAEditorTheme::Palette(
         FStyleColors::AccentYellow.GetSpecifiedColor(),
         FStyleColors::Primary.GetSpecifiedColor()
     };
+}
+
+FMiaIAEditorPalette FMiaIAEditorTheme::StudioPalette(
+    EMiaIAEditorTheme Theme)
+{
+    FMiaIAEditorPalette palette = Palette(Theme);
+    const FMiaIAVisualizationPalette visualization =
+        VisualizationPalette(Theme);
+    palette.InactiveNeuron = visualization.InactiveNeuron;
+    palette.ActiveNeuron = visualization.ActiveNeuron;
+    palette.PositiveWeight = visualization.PositiveWeight;
+    palette.NegativeWeight = visualization.NegativeWeight;
+    palette.Selection = visualization.Selection;
+    palette.Debug = visualization.Debug;
+    return palette;
+}
+
+EMiaIAVisualizationPalettePreset
+FMiaIAEditorTheme::LoadVisualizationPalettePreset()
+{
+    FString value;
+    GConfig->GetString(
+        SettingsSection,
+        VisualizationPresetKey,
+        value,
+        GGameUserSettingsIni);
+
+    if (value.Equals(TEXT("HighContrast"), ESearchCase::IgnoreCase))
+    {
+        return EMiaIAVisualizationPalettePreset::HighContrast;
+    }
+
+    if (value.Equals(TEXT("ColorBlindSafe"), ESearchCase::IgnoreCase))
+    {
+        return EMiaIAVisualizationPalettePreset::ColorBlindSafe;
+    }
+
+    if (value.Equals(TEXT("Monochrome"), ESearchCase::IgnoreCase))
+    {
+        return EMiaIAVisualizationPalettePreset::Monochrome;
+    }
+
+    if (value.Equals(TEXT("Custom"), ESearchCase::IgnoreCase))
+    {
+        return EMiaIAVisualizationPalettePreset::Custom;
+    }
+
+    return EMiaIAVisualizationPalettePreset::MiaIAClassic;
+}
+
+void FMiaIAEditorTheme::SaveVisualizationPalettePreset(
+    EMiaIAVisualizationPalettePreset Preset)
+{
+    if (!GConfig)
+    {
+        return;
+    }
+
+    GConfig->SetString(
+        SettingsSection,
+        VisualizationPresetKey,
+        *VisualizationPresetName(Preset),
+        GGameUserSettingsIni);
+    GConfig->Flush(false, GGameUserSettingsIni);
+}
+
+FMiaIAVisualizationPalette
+FMiaIAEditorTheme::LoadCustomVisualizationPalette(
+    EMiaIAEditorTheme Theme)
+{
+    const FMiaIAVisualizationPalette defaults =
+        VisualizationFromEditorPalette(Palette(Theme));
+    return {
+        LoadColor(CustomInactiveNeuronKey, defaults.InactiveNeuron),
+        LoadColor(CustomActiveNeuronKey, defaults.ActiveNeuron),
+        LoadColor(
+            CustomPositiveContributionKey,
+            defaults.PositiveWeight),
+        LoadColor(
+            CustomNegativeContributionKey,
+            defaults.NegativeWeight),
+        LoadColor(CustomSelectionKey, defaults.Selection),
+        LoadColor(CustomDebugKey, defaults.Debug)
+    };
+}
+
+void FMiaIAEditorTheme::SaveCustomVisualizationPalette(
+    const FMiaIAVisualizationPalette& Palette)
+{
+    SaveColor(CustomInactiveNeuronKey, Palette.InactiveNeuron);
+    SaveColor(CustomActiveNeuronKey, Palette.ActiveNeuron);
+    SaveColor(CustomPositiveContributionKey, Palette.PositiveWeight);
+    SaveColor(CustomNegativeContributionKey, Palette.NegativeWeight);
+    SaveColor(CustomSelectionKey, Palette.Selection);
+    SaveColor(CustomDebugKey, Palette.Debug);
+
+    if (GConfig)
+    {
+        GConfig->Flush(false, GGameUserSettingsIni);
+    }
+}
+
+void FMiaIAEditorTheme::SetVisualizationPalette(
+    EMiaIAVisualizationPalettePreset Preset,
+    const FMiaIAVisualizationPalette& CustomPalette)
+{
+    CurrentVisualizationPreset = Preset;
+    CurrentCustomVisualizationPalette = CustomPalette;
+}
+
+FMiaIAVisualizationPalette FMiaIAEditorTheme::VisualizationPalette(
+    EMiaIAEditorTheme Theme)
+{
+    return VisualizationPaletteForPreset(
+        CurrentVisualizationPreset,
+        Theme,
+        CurrentCustomVisualizationPalette);
+}
+
+FMiaIAVisualizationPalette
+FMiaIAEditorTheme::VisualizationPaletteForPreset(
+    EMiaIAVisualizationPalettePreset Preset,
+    EMiaIAEditorTheme Theme,
+    const FMiaIAVisualizationPalette& CustomPalette)
+{
+    switch (Preset)
+    {
+    case EMiaIAVisualizationPalettePreset::HighContrast:
+        return {
+            FLinearColor(0.30f, 0.32f, 0.36f, 1.0f),
+            FLinearColor(0.20f, 1.00f, 0.28f, 1.0f),
+            FLinearColor(0.00f, 0.78f, 1.00f, 1.0f),
+            FLinearColor(1.00f, 0.15f, 0.45f, 1.0f),
+            FLinearColor(1.00f, 0.85f, 0.00f, 1.0f),
+            FLinearColor(0.68f, 0.38f, 1.00f, 1.0f)
+        };
+    case EMiaIAVisualizationPalettePreset::ColorBlindSafe:
+        return {
+            FLinearColor(0.36f, 0.38f, 0.42f, 1.0f),
+            FLinearColor(0.00f, 0.62f, 0.45f, 1.0f),
+            FLinearColor(0.34f, 0.71f, 0.91f, 1.0f),
+            FLinearColor(0.84f, 0.37f, 0.00f, 1.0f),
+            FLinearColor(0.94f, 0.89f, 0.26f, 1.0f),
+            FLinearColor(0.80f, 0.47f, 0.65f, 1.0f)
+        };
+    case EMiaIAVisualizationPalettePreset::Monochrome:
+        return {
+            FLinearColor(0.28f, 0.28f, 0.28f, 1.0f),
+            FLinearColor(0.78f, 0.78f, 0.78f, 1.0f),
+            FLinearColor(0.68f, 0.68f, 0.68f, 1.0f),
+            FLinearColor(0.44f, 0.44f, 0.44f, 1.0f),
+            FLinearColor(1.00f, 1.00f, 1.00f, 1.0f),
+            FLinearColor(0.86f, 0.86f, 0.86f, 1.0f)
+        };
+    case EMiaIAVisualizationPalettePreset::Custom:
+        return CustomPalette;
+    case EMiaIAVisualizationPalettePreset::MiaIAClassic:
+    default:
+        return VisualizationFromEditorPalette(Palette(Theme));
+    }
+}
+
+FText FMiaIAEditorTheme::VisualizationPaletteDisplayName(
+    EMiaIAVisualizationPalettePreset Preset)
+{
+    switch (Preset)
+    {
+    case EMiaIAVisualizationPalettePreset::HighContrast:
+        return LOCTEXT("HighContrastPalette", "High Contrast");
+    case EMiaIAVisualizationPalettePreset::ColorBlindSafe:
+        return LOCTEXT("ColorBlindSafePalette", "Color-blind Safe");
+    case EMiaIAVisualizationPalettePreset::Monochrome:
+        return LOCTEXT("MonochromePalette", "Monochrome");
+    case EMiaIAVisualizationPalettePreset::Custom:
+        return LOCTEXT("CustomPalette", "Custom");
+    case EMiaIAVisualizationPalettePreset::MiaIAClassic:
+    default:
+        return LOCTEXT("MiaIAClassicPalette", "MiaIA Classic");
+    }
+}
+
+FText FMiaIAEditorTheme::VisualizationColorRoleDisplayName(
+    EMiaIAVisualizationColorRole Role)
+{
+    switch (Role)
+    {
+    case EMiaIAVisualizationColorRole::InactiveNeuron:
+        return LOCTEXT("InactiveNeuronColor", "Inactive neuron");
+    case EMiaIAVisualizationColorRole::ActiveNeuron:
+        return LOCTEXT("ActiveNeuronColor", "Active neuron");
+    case EMiaIAVisualizationColorRole::PositiveContribution:
+        return LOCTEXT(
+            "PositiveContributionColor",
+            "Positive contribution");
+    case EMiaIAVisualizationColorRole::NegativeContribution:
+        return LOCTEXT(
+            "NegativeContributionColor",
+            "Negative contribution");
+    case EMiaIAVisualizationColorRole::Selection:
+        return LOCTEXT("SelectionColor", "Selection");
+    case EMiaIAVisualizationColorRole::Debug:
+    default:
+        return LOCTEXT("DebugColor", "Debug / cursor");
+    }
 }
 
 FText FMiaIAEditorTheme::DisplayName(EMiaIAEditorTheme Theme)

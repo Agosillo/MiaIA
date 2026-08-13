@@ -12,6 +12,7 @@ public class IDEStudio : ModuleRules
 
         PublicDependencyModuleNames.AddRange(new string[]
         {
+            "AppFramework",
             "Core",
             "CoreUObject",
             "Engine",

@@ -141,6 +141,17 @@ private:
     FReply SelectViewMode(EMiaIAStudioViewMode InViewMode);
     TSharedRef<SWidget> BuildThemeMenu();
     FReply SelectTheme(EMiaIAEditorTheme InTheme);
+    TSharedRef<SWidget> BuildColorsMenu();
+    FReply SelectVisualizationPalette(
+        EMiaIAVisualizationPalettePreset InPreset);
+    FReply HandleEditVisualizationColor(
+        EMiaIAVisualizationColorRole InRole);
+    void HandleVisualizationColorCommitted(
+        FLinearColor InColor,
+        EMiaIAVisualizationColorRole InRole);
+    FLinearColor CustomVisualizationColor(
+        EMiaIAVisualizationColorRole InRole) const;
+    void ApplyVisualizationPalette();
     TSharedRef<SWidget> BuildDataRefreshMenu();
     FReply SelectDataRefreshMode(EMiaIADataRefreshMode InMode);
     TSharedRef<SWidget> BuildTopologyLimitsMenu();
@@ -240,6 +251,7 @@ private:
     FText ViewModeText() const;
     FText LayoutModeText() const;
     FText ThemeText() const;
+    FText ColorsText() const;
     FText DataRefreshText() const;
     FText TopologyLimitsText() const;
     FText TopologyWorkspaceText() const;
@@ -295,6 +307,9 @@ private:
     EMiaIAStudioViewMode ViewMode{
         EMiaIAStudioViewMode::TwoDimensional};
     EMiaIAEditorTheme Theme{EMiaIAEditorTheme::FollowUnreal};
+    EMiaIAVisualizationPalettePreset VisualizationPalettePreset{
+        EMiaIAVisualizationPalettePreset::MiaIAClassic};
+    FMiaIAVisualizationPalette CustomVisualizationPalette;
     EMiaIADataRefreshMode DataRefreshMode{
         EMiaIADataRefreshMode::Adaptive};
     FMiaIAVisualizationSettings VisualizationSettings;

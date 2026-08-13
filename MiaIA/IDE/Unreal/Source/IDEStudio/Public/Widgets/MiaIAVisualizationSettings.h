@@ -17,4 +17,5 @@ struct FMiaIAVisualizationSettings
     float NeuronScale{1.0f};
     float ConnectionScale{1.0f};
     bool bShowNeuronLabels{true};
+    bool bAlwaysShowSelectionCursor{};
 };

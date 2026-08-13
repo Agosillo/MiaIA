@@ -192,6 +192,12 @@ The shared Unreal editor and standalone panel gained an `Execution trace` tab. O
 
 The retained trace now also owns a deterministic renderer-neutral playback timeline: inputs activate first, then every non-input layer receives an incoming-signal frame and an activation frame. Manual previous/next stepping, restart, play/pause, completion, and configurable speed are shared by the editor and standalone 2D/3D hosts. Playback consumes the immutable snapshot and never reruns or mutates the network.
 
+### Shared visualization palettes
+
+MiaIA Studio separated interface themes from semantic data colors. MiaIA Classic preserves the original theme-aware inactive, active, positive, negative, selection, and debug mapping, while High Contrast, Color-blind Safe, and Monochrome provide complete alternatives. A runtime Unreal color picker edits and persists every Custom role without introducing editor-only UI. One resolved palette now drives 2D and 3D topology rendering, legends, execution traces, selection, debug emphasis, and the training timeline in both the editor and packaged application.
+
+The detailed-neuron selection ring was then replaced by one shared blinking vertical cursor to the left of the primary neuron. Its height follows the visible neuron diameter and it completes one blink per second. Adaptive visibility follows zoom and density while remaining available when Packed placement hides labels; a persisted `Always show selection cursor` preference instead retains a minimum 12-pixel marker. The 3D overlay resolves horizontal and vertical projected radii independently so the fixed two-pixel gap remains attached at extreme zoom. Both overlays use the semantic selection color, while secondary neuron labels and compact aggregate outlines continue to identify their selections without adding multiple blinking markers.
+
 The trace integration also introduced the first explicit Unreal instance boundary. An opaque handle identifies the initial `default` instance, while a runtime service in `IDE.dll` owns and invokes its `StudioController`. The Slate module therefore shares the exact process-local SDK state used by Blueprint and the integrated CLI instead of acquiring a second static-library copy. True simultaneous model contexts remain future native SDK work behind this boundary.
 
 ### Selectable training timeline

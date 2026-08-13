@@ -76,6 +76,10 @@ public:
     void RevealNeuron(int64 NeuronId);
 
     virtual bool SupportsKeyboardFocus() const override { return true; }
+    virtual void Tick(
+        const FGeometry& AllottedGeometry,
+        const double InCurrentTime,
+        const float InDeltaTime) override;
     virtual FVector2D ComputeDesiredSize(float) const override;
     virtual int32 OnPaint(
         const FPaintArgs& Args,
@@ -166,6 +170,7 @@ private:
     int64 SelectedNeuronId{-1};
     int64 SelectedConnectionId{-1};
     int64 SelectedLayerId{-1};
+    int32 SelectionBlinkFrame{-1};
     int64 DraggedNeuronId{-1};
     TSet<int64> SelectedNeuronIds;
     EMiaIAEditorTheme Theme{EMiaIAEditorTheme::FollowUnreal};
@@ -183,6 +188,7 @@ private:
     bool bCompactMode{};
     bool bNetworkAggregateMode{};
     bool bForwardTracePlaybackActive{};
+    bool bSelectionCursorVisible{true};
     bool bPanning{};
     bool bMarqueeSelecting{};
     bool bMarqueeAdditive{};

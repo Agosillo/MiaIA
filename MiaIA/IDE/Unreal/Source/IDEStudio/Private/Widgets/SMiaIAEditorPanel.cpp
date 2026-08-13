@@ -15,6 +15,8 @@
 #include "Widgets/Input/SComboButton.h"
 #include "Widgets/Input/SEditableTextBox.h"
 #include "Widgets/Input/SSpinBox.h"
+#include "Widgets/Colors/SColorBlock.h"
+#include "Widgets/Colors/SColorPicker.h"
 #include "Widgets/Text/SMultiLineEditableText.h"
 #include "Widgets/Layout/SBorder.h"
 #include "Widgets/Layout/SBox.h"
@@ -53,6 +55,8 @@ namespace
     constexpr TCHAR ConnectionScaleSettingsKey[] = TEXT("ConnectionScale");
     constexpr TCHAR ShowNeuronLabelsSettingsKey[] =
         TEXT("ShowNeuronLabels");
+    constexpr TCHAR AlwaysShowSelectionCursorSettingsKey[] =
+        TEXT("AlwaysShowSelectionCursor");
     constexpr TCHAR NeuronGapSettingsKey[] = TEXT("NeuronGap");
     constexpr TCHAR LayerGapSettingsKey[] = TEXT("LayerGap");
     constexpr int32 MinimumTopologyLimit = 1;
@@ -267,6 +271,11 @@ namespace
             ShowNeuronLabelsSettingsKey,
             settings.bShowNeuronLabels,
             GGameUserSettingsIni);
+        GConfig->GetBool(
+            DataRefreshSettingsSection,
+            AlwaysShowSelectionCursorSettingsKey,
+            settings.bAlwaysShowSelectionCursor,
+            GGameUserSettingsIni);
         settings.NeuronScale = FMath::Clamp(
             settings.NeuronScale,
             0.25f,
@@ -358,6 +367,11 @@ namespace
             DataRefreshSettingsSection,
             ShowNeuronLabelsSettingsKey,
             Settings.bShowNeuronLabels,
+            GGameUserSettingsIni);
+        GConfig->SetBool(
+            DataRefreshSettingsSection,
+            AlwaysShowSelectionCursorSettingsKey,
+            Settings.bAlwaysShowSelectionCursor,
             GGameUserSettingsIni);
         GConfig->Flush(false, GGameUserSettingsIni);
     }
@@ -636,6 +650,13 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
     bStandaloneMode = InArgs._StandaloneMode;
     MiaIAInstance = FMiaIAInstanceService::DefaultInstance();
     Theme = FMiaIAEditorTheme::Load();
+    VisualizationPalettePreset =
+        FMiaIAEditorTheme::LoadVisualizationPalettePreset();
+    CustomVisualizationPalette =
+        FMiaIAEditorTheme::LoadCustomVisualizationPalette(Theme);
+    FMiaIAEditorTheme::SetVisualizationPalette(
+        VisualizationPalettePreset,
+        CustomVisualizationPalette);
     DataRefreshMode = LoadDataRefreshMode();
     VisualizationSettings = LoadVisualizationSettings();
     DetailedNeuronLimit = LoadTopologyLimit(
@@ -835,6 +856,33 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
                 .Padding(10.0f, 0.0f, 2.0f, 0.0f)
                 [
                     SNew(STextBlock)
+                    .Text(LOCTEXT("ColorsLabel", "Colors"))
+                ]
+                + SHorizontalBox::Slot()
+                .AutoWidth()
+                .VAlign(VAlign_Center)
+                .Padding(2.0f)
+                [
+                    SNew(SComboButton)
+                    .ComboButtonStyle(&ComboButtonStyle)
+                    .ToolTipText(LOCTEXT(
+                        "ColorsTooltip",
+                        "Choose the shared neuron, contribution, selection, and debug colors used by 2D, 3D, traces, legends, and the training timeline."))
+                    .ButtonContent()
+                    [
+                        SNew(STextBlock)
+                        .Text(this, &SMiaIAEditorPanel::ColorsText)
+                    ]
+                    .OnGetMenuContent(
+                        this,
+                        &SMiaIAEditorPanel::BuildColorsMenu)
+                ]
+                + SHorizontalBox::Slot()
+                .AutoWidth()
+                .VAlign(VAlign_Center)
+                .Padding(10.0f, 0.0f, 2.0f, 0.0f)
+                [
+                    SNew(STextBlock)
                     .Text(LOCTEXT("DataRefreshLabel", "Data refresh"))
                 ]
                 + SHorizontalBox::Slot()
@@ -1015,7 +1063,7 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
                     .ColorAndOpacity_Lambda([this]()
                     {
                         return FSlateColor(
-                            FMiaIAEditorTheme::Palette(Theme).Debug);
+                            FMiaIAEditorTheme::StudioPalette(Theme).Debug);
                     })
                 ]
                 ]
@@ -1182,7 +1230,7 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
                                 .ColorAndOpacity_Lambda([this]()
                                 {
                                     return FSlateColor(
-                                        FMiaIAEditorTheme::Palette(Theme)
+                                        FMiaIAEditorTheme::StudioPalette(Theme)
                                             .InactiveNeuron);
                                 })
                             ]
@@ -1195,7 +1243,7 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
                                 .ColorAndOpacity_Lambda([this]()
                                 {
                                     return FSlateColor(
-                                        FMiaIAEditorTheme::Palette(Theme)
+                                        FMiaIAEditorTheme::StudioPalette(Theme)
                                             .ActiveNeuron);
                                 })
                             ]
@@ -1208,7 +1256,7 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
                                 .ColorAndOpacity_Lambda([this]()
                                 {
                                     return FSlateColor(
-                                        FMiaIAEditorTheme::Palette(Theme)
+                                        FMiaIAEditorTheme::StudioPalette(Theme)
                                             .PositiveWeight);
                                 })
                             ]
@@ -1221,7 +1269,7 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
                                 .ColorAndOpacity_Lambda([this]()
                                 {
                                     return FSlateColor(
-                                        FMiaIAEditorTheme::Palette(Theme)
+                                        FMiaIAEditorTheme::StudioPalette(Theme)
                                             .NegativeWeight);
                                 })
                             ]
@@ -1233,7 +1281,7 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
                                 .ColorAndOpacity_Lambda([this]()
                                 {
                                     return FSlateColor(
-                                        FMiaIAEditorTheme::Palette(Theme)
+                                        FMiaIAEditorTheme::StudioPalette(Theme)
                                             .Selection);
                                 })
                             ]
@@ -1297,7 +1345,7 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
                             .ColorAndOpacity_Lambda([this]()
                             {
                                 return FSlateColor(
-                                    FMiaIAEditorTheme::Palette(Theme).Debug);
+                                    FMiaIAEditorTheme::StudioPalette(Theme).Debug);
                             })
                         ]
                         + SVerticalBox::Slot()
@@ -3251,7 +3299,7 @@ void SMiaIAEditorPanel::RebuildTrainingTimeline()
         const bool selected = TrainingTimeline.HasSelectedStep &&
             TrainingTimeline.SelectedStepIndex == entry.StepIndex;
         const FMiaIAEditorPalette palette =
-            FMiaIAEditorTheme::Palette(Theme);
+            FMiaIAEditorTheme::StudioPalette(Theme);
 
         TrainingTimelineContent->AddSlot()
         .AutoHeight()
@@ -4753,6 +4801,38 @@ TSharedRef<SWidget> SMiaIAEditorPanel::BuildLayoutMenu()
             ]
             + SVerticalBox::Slot()
             .AutoHeight()
+            .Padding(0.0f, 4.0f, 0.0f, 0.0f)
+            [
+                SNew(SCheckBox)
+                .IsChecked_Lambda([this]()
+                {
+                    return VisualizationSettings.bAlwaysShowSelectionCursor
+                        ? ECheckBoxState::Checked
+                        : ECheckBoxState::Unchecked;
+                })
+                .OnCheckStateChanged_Lambda(
+                    [this](ECheckBoxState newState)
+                    {
+                        VisualizationSettings.bAlwaysShowSelectionCursor =
+                            newState == ECheckBoxState::Checked;
+                        SaveVisualizationSettings(VisualizationSettings);
+                        NetworkView->SetVisualizationSettings(
+                            VisualizationSettings);
+                        Network3DView->SetVisualizationSettings(
+                            VisualizationSettings);
+                    })
+                .ToolTipText(LOCTEXT(
+                    "AlwaysShowSelectionCursorTooltip",
+                    "Keep the blinking primary-selection cursor available at every zoom and density level."))
+                [
+                    SNew(STextBlock)
+                    .Text(LOCTEXT(
+                        "AlwaysShowSelectionCursor",
+                        "Always show selection cursor"))
+                ]
+            ]
+            + SVerticalBox::Slot()
+            .AutoHeight()
             .Padding(0.0f, 12.0f, 0.0f, 4.0f)
             [
                 SNew(STextBlock)
@@ -5591,6 +5671,277 @@ FReply SMiaIAEditorPanel::SelectTheme(EMiaIAEditorTheme InTheme)
     return FReply::Handled();
 }
 
+TSharedRef<SWidget> SMiaIAEditorPanel::BuildColorsMenu()
+{
+    TSharedRef<SVerticalBox> menu = SNew(SVerticalBox);
+
+    const auto buildPresetRow = [this](
+        EMiaIAVisualizationPalettePreset preset)
+        -> TSharedRef<SWidget>
+    {
+        const FMiaIAVisualizationPalette palette =
+            FMiaIAEditorTheme::VisualizationPaletteForPreset(
+                preset,
+                Theme,
+                CustomVisualizationPalette);
+        const FText name =
+            FMiaIAEditorTheme::VisualizationPaletteDisplayName(preset);
+        const FText label = preset == VisualizationPalettePreset
+            ? FText::Format(
+                LOCTEXT("CurrentColorsFormat", "Current: {0}"),
+                name)
+            : name;
+
+        TSharedRef<SHorizontalBox> row = SNew(SHorizontalBox);
+        row->AddSlot()
+        .FillWidth(1.0f)
+        .VAlign(VAlign_Center)
+        [
+            SNew(STextBlock)
+            .Text(label)
+        ];
+
+        const FLinearColor colors[] = {
+            palette.InactiveNeuron,
+            palette.ActiveNeuron,
+            palette.PositiveWeight,
+            palette.NegativeWeight,
+            palette.Selection,
+            palette.Debug
+        };
+
+        for (const FLinearColor& color : colors)
+        {
+            row->AddSlot()
+            .AutoWidth()
+            .VAlign(VAlign_Center)
+            .Padding(2.0f, 0.0f)
+            [
+                SNew(SColorBlock)
+                .Color(color)
+                .CornerRadius(FVector4(2.0f))
+                .Size(FVector2D(14.0f, 14.0f))
+            ];
+        }
+
+        return SNew(SButton)
+            .ButtonStyle(&ButtonStyle)
+            .OnClicked(
+                this,
+                &SMiaIAEditorPanel::SelectVisualizationPalette,
+                preset)
+            [
+                row
+            ];
+    };
+
+    const EMiaIAVisualizationPalettePreset presets[] = {
+        EMiaIAVisualizationPalettePreset::MiaIAClassic,
+        EMiaIAVisualizationPalettePreset::HighContrast,
+        EMiaIAVisualizationPalettePreset::ColorBlindSafe,
+        EMiaIAVisualizationPalettePreset::Monochrome,
+        EMiaIAVisualizationPalettePreset::Custom
+    };
+
+    for (const EMiaIAVisualizationPalettePreset preset : presets)
+    {
+        menu->AddSlot()
+        .AutoHeight()
+        .Padding(1.0f)
+        [
+            buildPresetRow(preset)
+        ];
+    }
+
+    menu->AddSlot()
+    .AutoHeight()
+    .Padding(5.0f, 7.0f, 5.0f, 3.0f)
+    [
+        SNew(STextBlock)
+        .Text(LOCTEXT("CustomizeColorsLabel", "Customize"))
+        .ColorAndOpacity(FSlateColor(
+            FMiaIAEditorTheme::Palette(Theme).SubduedText))
+    ];
+
+    const EMiaIAVisualizationColorRole roles[] = {
+        EMiaIAVisualizationColorRole::InactiveNeuron,
+        EMiaIAVisualizationColorRole::ActiveNeuron,
+        EMiaIAVisualizationColorRole::PositiveContribution,
+        EMiaIAVisualizationColorRole::NegativeContribution,
+        EMiaIAVisualizationColorRole::Selection,
+        EMiaIAVisualizationColorRole::Debug
+    };
+
+    for (const EMiaIAVisualizationColorRole role : roles)
+    {
+        menu->AddSlot()
+        .AutoHeight()
+        .Padding(1.0f)
+        [
+            SNew(SButton)
+            .ButtonStyle(&ButtonStyle)
+            .ToolTipText(LOCTEXT(
+                "EditCustomColorTooltip",
+                "Edit this custom visualization color. Confirming the picker activates the Custom palette."))
+            .OnClicked(
+                this,
+                &SMiaIAEditorPanel::HandleEditVisualizationColor,
+                role)
+            [
+                SNew(SHorizontalBox)
+                + SHorizontalBox::Slot()
+                .FillWidth(1.0f)
+                .VAlign(VAlign_Center)
+                [
+                    SNew(STextBlock)
+                    .Text(FMiaIAEditorTheme::
+                        VisualizationColorRoleDisplayName(role))
+                ]
+                + SHorizontalBox::Slot()
+                .AutoWidth()
+                .VAlign(VAlign_Center)
+                .Padding(10.0f, 0.0f, 2.0f, 0.0f)
+                [
+                    SNew(SColorBlock)
+                    .Color_Lambda([this, role]()
+                    {
+                        return CustomVisualizationColor(role);
+                    })
+                    .CornerRadius(FVector4(2.0f))
+                    .Size(FVector2D(28.0f, 14.0f))
+                ]
+            ]
+        ];
+    }
+
+    menu->AddSlot()
+    .AutoHeight()
+    .Padding(1.0f, 7.0f, 1.0f, 1.0f)
+    [
+        SNew(SButton)
+        .ButtonStyle(&ButtonStyle)
+        .Text(LOCTEXT(
+            "ResetMiaIAClassicColors",
+            "Reset to MiaIA Classic"))
+        .OnClicked(
+            this,
+            &SMiaIAEditorPanel::SelectVisualizationPalette,
+            EMiaIAVisualizationPalettePreset::MiaIAClassic)
+    ];
+
+    return menu;
+}
+
+FReply SMiaIAEditorPanel::SelectVisualizationPalette(
+    EMiaIAVisualizationPalettePreset InPreset)
+{
+    VisualizationPalettePreset = InPreset;
+    FMiaIAEditorTheme::SaveVisualizationPalettePreset(
+        VisualizationPalettePreset);
+    ApplyVisualizationPalette();
+    FSlateApplication::Get().DismissAllMenus();
+    return FReply::Handled();
+}
+
+FReply SMiaIAEditorPanel::HandleEditVisualizationColor(
+    EMiaIAVisualizationColorRole InRole)
+{
+    FSlateApplication::Get().DismissAllMenus();
+
+    FColorPickerArgs arguments(
+        CustomVisualizationColor(InRole),
+        FOnLinearColorValueChanged::CreateSP(
+            this,
+            &SMiaIAEditorPanel::HandleVisualizationColorCommitted,
+            InRole));
+    arguments.ParentWidget = AsShared();
+    arguments.bIsModal = true;
+    arguments.bUseAlpha = false;
+    arguments.bOnlyRefreshOnOk = true;
+    arguments.bClampValue = true;
+    OpenColorPicker(arguments);
+    return FReply::Handled();
+}
+
+void SMiaIAEditorPanel::HandleVisualizationColorCommitted(
+    FLinearColor InColor,
+    EMiaIAVisualizationColorRole InRole)
+{
+    InColor.A = 1.0f;
+
+    switch (InRole)
+    {
+    case EMiaIAVisualizationColorRole::InactiveNeuron:
+        CustomVisualizationPalette.InactiveNeuron = InColor;
+        break;
+    case EMiaIAVisualizationColorRole::ActiveNeuron:
+        CustomVisualizationPalette.ActiveNeuron = InColor;
+        break;
+    case EMiaIAVisualizationColorRole::PositiveContribution:
+        CustomVisualizationPalette.PositiveWeight = InColor;
+        break;
+    case EMiaIAVisualizationColorRole::NegativeContribution:
+        CustomVisualizationPalette.NegativeWeight = InColor;
+        break;
+    case EMiaIAVisualizationColorRole::Selection:
+        CustomVisualizationPalette.Selection = InColor;
+        break;
+    case EMiaIAVisualizationColorRole::Debug:
+    default:
+        CustomVisualizationPalette.Debug = InColor;
+        break;
+    }
+
+    VisualizationPalettePreset =
+        EMiaIAVisualizationPalettePreset::Custom;
+    FMiaIAEditorTheme::SaveCustomVisualizationPalette(
+        CustomVisualizationPalette);
+    FMiaIAEditorTheme::SaveVisualizationPalettePreset(
+        VisualizationPalettePreset);
+    ApplyVisualizationPalette();
+}
+
+FLinearColor SMiaIAEditorPanel::CustomVisualizationColor(
+    EMiaIAVisualizationColorRole InRole) const
+{
+    switch (InRole)
+    {
+    case EMiaIAVisualizationColorRole::InactiveNeuron:
+        return CustomVisualizationPalette.InactiveNeuron;
+    case EMiaIAVisualizationColorRole::ActiveNeuron:
+        return CustomVisualizationPalette.ActiveNeuron;
+    case EMiaIAVisualizationColorRole::PositiveContribution:
+        return CustomVisualizationPalette.PositiveWeight;
+    case EMiaIAVisualizationColorRole::NegativeContribution:
+        return CustomVisualizationPalette.NegativeWeight;
+    case EMiaIAVisualizationColorRole::Selection:
+        return CustomVisualizationPalette.Selection;
+    case EMiaIAVisualizationColorRole::Debug:
+    default:
+        return CustomVisualizationPalette.Debug;
+    }
+}
+
+void SMiaIAEditorPanel::ApplyVisualizationPalette()
+{
+    FMiaIAEditorTheme::SetVisualizationPalette(
+        VisualizationPalettePreset,
+        CustomVisualizationPalette);
+
+    if (NetworkView.IsValid())
+    {
+        NetworkView->SetTheme(Theme);
+    }
+
+    if (Network3DView.IsValid())
+    {
+        Network3DView->SetTheme(Theme);
+    }
+
+    RebuildTrainingTimeline();
+    Invalidate(EInvalidateWidgetReason::PaintAndVolatility);
+}
+
 TSharedRef<SWidget> SMiaIAEditorPanel::BuildDataRefreshMenu()
 {
     return SNew(SVerticalBox)
@@ -6317,7 +6668,9 @@ FReply SMiaIAEditorPanel::HandleQuickHelp()
             "Compact mode: click a layer aggregate to inspect its summary, then double-click it or press Enter to open that layer. Use Back or Esc to retrace the available levels to the preview.\n"
             "Click the topology, then use the arrow keys in the visible direction; their layer/neuron meaning follows Horizontal or Vertical flow and its Forward or Reverse direction.\n"
             "Mouse wheel: zoom. Middle drag: pan. Right drag pans in 2D and orbits in 3D.\n"
-            "Use Layout for Expanded or Packed placement, Horizontal or Vertical flow, uniform neuron size, minimum gaps, and All or Selected connections. Click the active orientation again to mirror the layer direction. Packed with zero gaps makes symmetric nodes adjacent without overlap.\n\n"
+            "Use Layout for Expanded or Packed placement, Horizontal or Vertical flow, uniform neuron size, minimum gaps, and All or Selected connections. Click the active orientation again to mirror the layer direction. Packed with zero gaps makes symmetric nodes adjacent without overlap. The primary-selection cursor is adaptive by default; enable Always show selection cursor to retain a readable marker at every zoom and density level.\n\n"
+            "COLORS\n"
+            "Theme controls interface surfaces and text. Colors independently selects MiaIA Classic, High Contrast, Color-blind Safe, Monochrome, or Custom semantic colors shared by 2D, 3D, traces, legends, selection, debug emphasis, and the training timeline. Choose a Customize row to edit one custom role with the Unreal color picker.\n\n"
             "INSPECTION AND DEBUG\n"
             "The Inspector follows the current element or group. For one neuron, choose Incoming or Outgoing relationships, page them, order by ID or weight, filter by minimum absolute weight, and open either the connection or its opposite neuron. Use Start debug and Step phase to inspect forward, backward, update, verify, and commit states.\n\n"
 
@@ -7564,7 +7917,7 @@ FSlateColor SMiaIAEditorPanel::PhaseColor(
     EMiaIATrainingDebugPhase Phase) const
 {
     const FMiaIAEditorPalette palette =
-        FMiaIAEditorTheme::Palette(Theme);
+        FMiaIAEditorTheme::StudioPalette(Theme);
     const uint8 currentPhase = static_cast<uint8>(
         TrainingTimeline.Debug.Phase);
     const bool selectedCommittedStep =
@@ -7577,7 +7930,8 @@ FSlateColor SMiaIAEditorPanel::PhaseColor(
 
 FSlateColor SMiaIAEditorPanel::PhaseCursorColor() const
 {
-    return FSlateColor(FMiaIAEditorTheme::Palette(Theme).Selection);
+    return FSlateColor(
+        FMiaIAEditorTheme::StudioPalette(Theme).Selection);
 }
 
 EVisibility SMiaIAEditorPanel::PhaseCursorVisibility(
@@ -7622,6 +7976,12 @@ FText SMiaIAEditorPanel::LayoutModeText() const
 FText SMiaIAEditorPanel::ThemeText() const
 {
     return FMiaIAEditorTheme::DisplayName(Theme);
+}
+
+FText SMiaIAEditorPanel::ColorsText() const
+{
+    return FMiaIAEditorTheme::VisualizationPaletteDisplayName(
+        VisualizationPalettePreset);
 }
 
 FText SMiaIAEditorPanel::DataRefreshText() const

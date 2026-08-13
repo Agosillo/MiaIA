@@ -20,6 +20,8 @@ namespace
     constexpr float NetworkAggregateDiameter = 104.0f;
     constexpr float NetworkIndicatorLength = 84.0f;
     constexpr float NetworkIndicatorGap = 8.0f;
+    constexpr float SelectionCursorGap = 2.0f;
+    constexpr float SelectionCursorThickness = 3.0f;
     constexpr int32 MaximumNetworkIndicators = 512;
 }
 
@@ -157,6 +159,7 @@ void SMiaIANetworkView::SetSelectedNeurons(
     const TSet<int64>& InNeuronIds,
     int64 InPrimaryNeuronId)
 {
+    const int64 previousPrimaryNeuronId = SelectedNeuronId;
     SelectedNeuronIds = InNeuronIds;
     SelectedNeuronId = SelectedNeuronIds.Contains(InPrimaryNeuronId)
         ? InPrimaryNeuronId
@@ -167,6 +170,13 @@ void SMiaIANetworkView::SetSelectedNeurons(
         SelectedConnectionId = -1;
         SelectedLayerId = -1;
     }
+
+    if (SelectedNeuronId != previousPrimaryNeuronId)
+    {
+        SelectionBlinkFrame = -1;
+        bSelectionCursorVisible = true;
+    }
+    SetCanTick(SelectedNeuronId >= 0);
 
     Invalidate(EInvalidateWidgetReason::Paint);
 }
@@ -180,6 +190,7 @@ void SMiaIANetworkView::SetSelectedConnection(int64 InConnectionId)
         SelectedNeuronIds.Reset();
         SelectedNeuronId = -1;
         SelectedLayerId = -1;
+        SetCanTick(false);
     }
 
     Invalidate(EInvalidateWidgetReason::Paint);
@@ -194,6 +205,7 @@ void SMiaIANetworkView::SetSelectedLayer(int64 InLayerId)
         SelectedNeuronIds.Reset();
         SelectedNeuronId = -1;
         SelectedConnectionId = -1;
+        SetCanTick(false);
     }
 
     Invalidate(EInvalidateWidgetReason::Paint);
@@ -202,6 +214,25 @@ void SMiaIANetworkView::SetSelectedLayer(int64 InLayerId)
 void SMiaIANetworkView::SetTheme(EMiaIAEditorTheme InTheme)
 {
     Theme = InTheme;
+    Invalidate(EInvalidateWidgetReason::Paint);
+}
+
+void SMiaIANetworkView::Tick(
+    const FGeometry& AllottedGeometry,
+    const double InCurrentTime,
+    const float InDeltaTime)
+{
+    (void)AllottedGeometry;
+    (void)InDeltaTime;
+    const int32 blinkFrame = FMath::FloorToInt(InCurrentTime * 2.0);
+
+    if (blinkFrame == SelectionBlinkFrame)
+    {
+        return;
+    }
+
+    SelectionBlinkFrame = blinkFrame;
+    bSelectionCursorVisible = blinkFrame % 2 == 0;
     Invalidate(EInvalidateWidgetReason::Paint);
 }
 
@@ -407,7 +438,7 @@ FVector2D SMiaIANetworkView::ComputeDesiredSize(float) const
 FLinearColor SMiaIANetworkView::ActivationColor(double Activation) const
 {
     const FMiaIAEditorPalette palette =
-        FMiaIAEditorTheme::Palette(Theme);
+        FMiaIAEditorTheme::StudioPalette(Theme);
     const float strength = FMath::Clamp(
         static_cast<float>(FMath::Abs(Activation)),
         0.0f,
@@ -423,7 +454,7 @@ FLinearColor SMiaIANetworkView::SignedNeuronColor(
     double Maximum) const
 {
     const FMiaIAEditorPalette palette =
-        FMiaIAEditorTheme::Palette(Theme);
+        FMiaIAEditorTheme::StudioPalette(Theme);
     const float strength = FMath::Clamp(
         static_cast<float>(FMath::Abs(Value) / Maximum),
         0.0f,
@@ -442,7 +473,7 @@ FLinearColor SMiaIANetworkView::SignedConnectionColor(
     double Maximum) const
 {
     const FMiaIAEditorPalette palette =
-        FMiaIAEditorTheme::Palette(Theme);
+        FMiaIAEditorTheme::StudioPalette(Theme);
     const float strength = FMath::Clamp(
         static_cast<float>(FMath::Abs(Value) / Maximum),
         0.0f,
@@ -517,7 +548,7 @@ int32 SMiaIANetworkView::PaintCompactOverview(
     }
 
     const FMiaIAEditorPalette palette =
-        FMiaIAEditorTheme::Palette(Theme);
+        FMiaIAEditorTheme::StudioPalette(Theme);
     const FVector2D size = AllottedGeometry.GetLocalSize();
     const int32 layerCount = Overview.Layers.Num();
     CompactLayerPositions.Reset();
@@ -657,7 +688,7 @@ int32 SMiaIANetworkView::PaintNetworkAggregate(
 {
     CompactLayerPositions.Reset();
     const FMiaIAEditorPalette palette =
-        FMiaIAEditorTheme::Palette(Theme);
+        FMiaIAEditorTheme::StudioPalette(Theme);
     const FVector2D size = AllottedGeometry.GetLocalSize();
     const FVector2D center = NetworkAggregatePosition(size);
     const float radius = NetworkAggregateDiameter * 0.5f * Zoom;
@@ -940,7 +971,7 @@ int32 SMiaIANetworkView::OnPaint(
     NeuronPositions.Reset();
     ViewportSize = AllottedGeometry.GetLocalSize();
     const FMiaIAEditorPalette palette =
-        FMiaIAEditorTheme::Palette(Theme);
+        FMiaIAEditorTheme::StudioPalette(Theme);
 
     if (bCompactMode)
     {
@@ -1096,22 +1127,39 @@ int32 SMiaIANetworkView::OnPaint(
             }
 
             const float neuronDiameter = DisplayNeuronDiameter();
-            const float selectionDiameter = DisplaySelectionDiameter();
 
-            if (SelectedNeuronIds.Contains(neuron.Id))
+            const bool showSelectionCursor =
+                VisualizationSettings.bAlwaysShowSelectionCursor ||
+                neuronDiameter >= 24.0f;
+
+            if (neuron.Id == SelectedNeuronId &&
+                bSelectionCursorVisible &&
+                showSelectionCursor)
             {
-                FSlateDrawElement::MakeBox(
+                const float cursorHeight =
+                    VisualizationSettings.bAlwaysShowSelectionCursor
+                    ? FMath::Max(12.0f, neuronDiameter)
+                    : neuronDiameter;
+                const float cursorTipX = position->X -
+                    neuronDiameter * 0.5f - SelectionCursorGap;
+                const TArray<FVector2D> cursorPoints{
+                    FVector2D(
+                        cursorTipX,
+                        position->Y - cursorHeight * 0.5f),
+                    FVector2D(
+                        cursorTipX,
+                        position->Y + cursorHeight * 0.5f)
+                };
+
+                FSlateDrawElement::MakeLines(
                     OutDrawElements,
                     nodeLayer,
-                    AllottedGeometry.ToPaintGeometry(
-                        FVector2D(selectionDiameter, selectionDiameter),
-                        FSlateLayoutTransform(
-                            *position - FVector2D(
-                                selectionDiameter * 0.5f,
-                                selectionDiameter * 0.5f))),
-                    &SelectionBrush,
+                    AllottedGeometry.ToPaintGeometry(),
+                    cursorPoints,
                     ESlateDrawEffect::None,
-                    palette.Selection);
+                    palette.Selection,
+                    true,
+                    SelectionCursorThickness);
             }
 
             const FMiaIADebugNeuronTelemetry* telemetry =

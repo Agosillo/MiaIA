@@ -20,6 +20,9 @@
 
 namespace
 {
+    constexpr float SelectionCursorGap = 2.0f;
+    constexpr float SelectionCursorThickness = 3.0f;
+
     struct FMiaIAViewportSphere
     {
         FVector Position{FVector::ZeroVector};
@@ -431,7 +434,7 @@ void SMiaIA3DNetworkView::Construct(const FArguments& InArgs)
     ViewportClient = MakeShareable(
         new FMiaIAViewportClient(PreviewScene.Get()));
     ViewportClient->SetBackgroundColor(
-        FMiaIAEditorTheme::Palette(Theme).Background);
+        FMiaIAEditorTheme::StudioPalette(Theme).Background);
     SceneViewport = FSceneViewport::Create(
         ViewportClient,
         SharedThis(this));
@@ -559,6 +562,7 @@ void SMiaIA3DNetworkView::SetSelectedNeurons(
     const TSet<int64>& InNeuronIds,
     int64 InPrimaryNeuronId)
 {
+    const int64 previousPrimaryNeuronId = SelectedNeuronId;
     SelectedNeuronIds = InNeuronIds;
     SelectedNeuronId = SelectedNeuronIds.Contains(InPrimaryNeuronId)
         ? InPrimaryNeuronId
@@ -568,6 +572,12 @@ void SMiaIA3DNetworkView::SetSelectedNeurons(
     {
         SelectedConnectionId = -1;
         SelectedLayerId = -1;
+    }
+
+    if (SelectedNeuronId != previousPrimaryNeuronId)
+    {
+        SelectionBlinkFrame = -1;
+        bSelectionCursorVisible = true;
     }
 
     bSceneDirty = true;
@@ -608,7 +618,7 @@ void SMiaIA3DNetworkView::SetTheme(EMiaIAEditorTheme InTheme)
     if (ViewportClient.IsValid())
     {
         ViewportClient->SetBackgroundColor(
-            FMiaIAEditorTheme::Palette(Theme).Background);
+            FMiaIAEditorTheme::StudioPalette(Theme).Background);
     }
 
     bSceneDirty = true;
@@ -801,6 +811,19 @@ void SMiaIA3DNetworkView::Tick(
     const double InCurrentTime,
     const float InDeltaTime)
 {
+    if (SelectedNeuronId >= 0)
+    {
+        const int32 blinkFrame =
+            FMath::FloorToInt(InCurrentTime * 2.0);
+
+        if (blinkFrame != SelectionBlinkFrame)
+        {
+            SelectionBlinkFrame = blinkFrame;
+            bSelectionCursorVisible = blinkFrame % 2 == 0;
+            Invalidate(EInvalidateWidgetReason::Paint);
+        }
+    }
+
     if (!SceneViewport.IsValid() || !ViewportClient.IsValid())
     {
         return;
@@ -870,7 +893,7 @@ int32 SMiaIA3DNetworkView::OnPaint(
         localSize.X / viewportSize.X,
         localSize.Y / viewportSize.Y);
     const FMiaIAEditorPalette palette =
-        FMiaIAEditorTheme::Palette(Theme);
+        FMiaIAEditorTheme::StudioPalette(Theme);
     const bool showLabels = VisualizationSettings.bShowNeuronLabels &&
         !bCompactMode &&
         RenderedNodes.Num() <= 500 &&
@@ -895,16 +918,21 @@ int32 SMiaIA3DNetworkView::OnPaint(
         const float compactRadius = bNetworkAggregateMode
             ? NetworkAggregateSphereRadius
             : CompactSphereRadius;
-        const float projectedRadius = ProjectedSphereRadius(
+        const float projectedViewportRadius = ProjectedSphereRadius(
             node.Position,
-            bCompactMode ? compactRadius : SphereRadius()) *
-            static_cast<float>((viewportToLocal.X + viewportToLocal.Y) * 0.5);
+            bCompactMode ? compactRadius : SphereRadius());
+        const float projectedRadiusX = projectedViewportRadius *
+            static_cast<float>(viewportToLocal.X);
+        const float projectedRadiusY = projectedViewportRadius *
+            static_cast<float>(viewportToLocal.Y);
+        const float projectedRadius =
+            (projectedRadiusX + projectedRadiusY) * 0.5f;
 
         const bool selected = bCompactMode && !bNetworkAggregateMode
             ? node.Id == SelectedLayerId
             : SelectedNeuronIds.Contains(node.Id);
 
-        if (selected)
+        if (selected && bCompactMode)
         {
             const FVector2D selectionCenter = localPosition;
             const float selectionRadius = FMath::Max(
@@ -936,6 +964,60 @@ int32 SMiaIA3DNetworkView::OnPaint(
                 palette.Selection,
                 true,
                 3.0f);
+        }
+
+        const bool showSelectionCursor =
+            !bCompactMode &&
+            (VisualizationSettings.bAlwaysShowSelectionCursor ||
+                (RenderedNodes.Num() <= 500 &&
+                    projectedRadius * 2.0f >= 24.0f));
+
+        if (node.Id == SelectedNeuronId &&
+            bSelectionCursorVisible &&
+            showSelectionCursor)
+        {
+            FVector2D projectedMinimum;
+            FVector2D projectedMaximum;
+            const bool hasProjectedBounds = ProjectedSphereBounds(
+                node.Position,
+                SphereRadius(),
+                projectedMinimum,
+                projectedMaximum);
+            const float cursorX = hasProjectedBounds
+                ? projectedMinimum.X * viewportToLocal.X -
+                    SelectionCursorGap
+                : localPosition.X - projectedRadiusX -
+                    SelectionCursorGap;
+            float cursorTop = hasProjectedBounds
+                ? projectedMinimum.Y * viewportToLocal.Y
+                : localPosition.Y - projectedRadiusY;
+            float cursorBottom = hasProjectedBounds
+                ? projectedMaximum.Y * viewportToLocal.Y
+                : localPosition.Y + projectedRadiusY;
+
+            if (VisualizationSettings.bAlwaysShowSelectionCursor &&
+                cursorBottom - cursorTop < 12.0f)
+            {
+                const float cursorCenter =
+                    (cursorTop + cursorBottom) * 0.5f;
+                cursorTop = cursorCenter - 6.0f;
+                cursorBottom = cursorCenter + 6.0f;
+            }
+
+            const TArray<FVector2D> cursorPoints{
+                FVector2D(cursorX, cursorTop),
+                FVector2D(cursorX, cursorBottom)
+            };
+
+            FSlateDrawElement::MakeLines(
+                OutDrawElements,
+                overlayLayer,
+                AllottedGeometry.ToPaintGeometry(),
+                cursorPoints,
+                ESlateDrawEffect::None,
+                palette.Selection,
+                true,
+                SelectionCursorThickness);
         }
 
         if (showLabels && projectedRadius * 2.0f >= 24.0f)
@@ -1522,7 +1604,7 @@ void SMiaIA3DNetworkView::RebuildScene()
 void SMiaIA3DNetworkView::RebuildDetailedScene()
 {
     const FMiaIAEditorPalette palette =
-        FMiaIAEditorTheme::Palette(Theme);
+        FMiaIAEditorTheme::StudioPalette(Theme);
     TMap<int64, FVector> positions;
     int32 neuronCount = 0;
 
@@ -1688,7 +1770,7 @@ void SMiaIA3DNetworkView::RebuildDetailedScene()
 void SMiaIA3DNetworkView::RebuildCompactScene()
 {
     const FMiaIAEditorPalette palette =
-        FMiaIAEditorTheme::Palette(Theme);
+        FMiaIAEditorTheme::StudioPalette(Theme);
     const int32 layerCount = Overview.Layers.Num();
     FVector previousPosition = FVector::ZeroVector;
     bool hasPrevious = false;
@@ -1729,7 +1811,7 @@ void SMiaIA3DNetworkView::RebuildCompactScene()
 void SMiaIA3DNetworkView::RebuildNetworkAggregateScene()
 {
     const FMiaIAEditorPalette palette =
-        FMiaIAEditorTheme::Palette(Theme);
+        FMiaIAEditorTheme::StudioPalette(Theme);
     const int64 inputCount = Overview.Layers.IsEmpty()
         ? 0
         : Overview.Layers[0].NeuronCount;
@@ -1852,6 +1934,103 @@ float SMiaIA3DNetworkView::ProjectedSphereRadius(
     }
 
     return static_cast<float>(FVector2D::Distance(center, edge));
+}
+
+bool SMiaIA3DNetworkView::ProjectedSphereBounds(
+    const FVector& WorldPositionValue,
+    float WorldRadius,
+    FVector2D& OutMinimum,
+    FVector2D& OutMaximum) const
+{
+    if (WorldRadius <= UE_KINDA_SMALL_NUMBER)
+    {
+        return false;
+    }
+
+    const FRotator rotation(CameraPitch, CameraYaw, 0.0f);
+    const FRotationMatrix rotationMatrix(rotation);
+    const FVector forward = rotation.Vector();
+    const FVector right = rotationMatrix.GetScaledAxis(EAxis::Y);
+    const FVector up = rotationMatrix.GetScaledAxis(EAxis::Z);
+    const FVector cameraLocation =
+        LookAt - forward * CameraDistance;
+    const FVector cameraToCenter =
+        WorldPositionValue - cameraLocation;
+    const double depth = FVector::DotProduct(cameraToCenter, forward);
+
+    if (depth <= WorldRadius)
+    {
+        return false;
+    }
+
+    const auto projectTangents = [this,
+        &cameraLocation,
+        &cameraToCenter,
+        &forward,
+        depth,
+        WorldRadius](
+            const FVector& screenAxis,
+            FVector2D& first,
+            FVector2D& second)
+    {
+        const double lateral = FVector::DotProduct(
+            cameraToCenter,
+            screenAxis);
+        const double distanceSquared =
+            depth * depth + lateral * lateral;
+        const double radiusSquared =
+            static_cast<double>(WorldRadius) * WorldRadius;
+
+        if (distanceSquared <= radiusSquared)
+        {
+            return false;
+        }
+
+        const double projectionScale =
+            1.0 - radiusSquared / distanceSquared;
+        const double tangentScale = WorldRadius * FMath::Sqrt(
+            distanceSquared - radiusSquared) / distanceSquared;
+        const double firstDepth =
+            projectionScale * depth - tangentScale * lateral;
+        const double firstLateral =
+            projectionScale * lateral + tangentScale * depth;
+        const double secondDepth =
+            projectionScale * depth + tangentScale * lateral;
+        const double secondLateral =
+            projectionScale * lateral - tangentScale * depth;
+        const FVector fixedOffset = cameraToCenter -
+            forward * depth - screenAxis * lateral;
+
+        return ProjectToViewport(
+                cameraLocation + fixedOffset +
+                    forward * firstDepth +
+                    screenAxis * firstLateral,
+                first) &&
+            ProjectToViewport(
+                cameraLocation + fixedOffset +
+                    forward * secondDepth +
+                    screenAxis * secondLateral,
+                second);
+    };
+
+    FVector2D horizontalFirst;
+    FVector2D horizontalSecond;
+    FVector2D verticalFirst;
+    FVector2D verticalSecond;
+
+    if (!projectTangents(right, horizontalFirst, horizontalSecond) ||
+        !projectTangents(up, verticalFirst, verticalSecond))
+    {
+        return false;
+    }
+
+    OutMinimum = FVector2D(
+        FMath::Min(horizontalFirst.X, horizontalSecond.X),
+        FMath::Min(verticalFirst.Y, verticalSecond.Y));
+    OutMaximum = FVector2D(
+        FMath::Max(horizontalFirst.X, horizontalSecond.X),
+        FMath::Max(verticalFirst.Y, verticalSecond.Y));
+    return true;
 }
 
 bool SMiaIA3DNetworkView::DeprojectFromViewport(
@@ -2115,7 +2294,7 @@ FLinearColor SMiaIA3DNetworkView::ActivationColor(
     double Activation) const
 {
     const FMiaIAEditorPalette palette =
-        FMiaIAEditorTheme::Palette(Theme);
+        FMiaIAEditorTheme::StudioPalette(Theme);
     const float strength = FMath::Clamp(
         static_cast<float>(FMath::Abs(Activation)),
         0.0f,
@@ -2131,7 +2310,7 @@ FLinearColor SMiaIA3DNetworkView::SignedNeuronColor(
     double Maximum) const
 {
     const FMiaIAEditorPalette palette =
-        FMiaIAEditorTheme::Palette(Theme);
+        FMiaIAEditorTheme::StudioPalette(Theme);
     const float strength = FMath::Clamp(
         static_cast<float>(FMath::Abs(Value) / Maximum),
         0.0f,
@@ -2150,7 +2329,7 @@ FLinearColor SMiaIA3DNetworkView::SignedConnectionColor(
     double Maximum) const
 {
     const FMiaIAEditorPalette palette =
-        FMiaIAEditorTheme::Palette(Theme);
+        FMiaIAEditorTheme::StudioPalette(Theme);
     const float strength = FMath::Clamp(
         static_cast<float>(FMath::Abs(Value) / Maximum),
         0.0f,
