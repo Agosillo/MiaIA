@@ -642,6 +642,7 @@ void SMiaIA3DNetworkView::SetSelectedConnection(int64 InConnectionId)
 
 void SMiaIA3DNetworkView::SetSelectedLayer(int64 InLayerId)
 {
+    const int64 previousLayerId = SelectedLayerId;
     SelectedLayerId = InLayerId;
 
     if (SelectedLayerId >= 0)
@@ -649,6 +650,12 @@ void SMiaIA3DNetworkView::SetSelectedLayer(int64 InLayerId)
         SelectedNeuronIds.Reset();
         SelectedNeuronId = -1;
         SelectedConnectionId = -1;
+    }
+
+    if (SelectedLayerId != previousLayerId)
+    {
+        SelectionBlinkFrame = -1;
+        bSelectionCursorVisible = true;
     }
 
     bSceneDirty = true;
@@ -854,7 +861,9 @@ void SMiaIA3DNetworkView::Tick(
     const double InCurrentTime,
     const float InDeltaTime)
 {
-    if (SelectedNeuronId >= 0)
+    if (SelectedNeuronId >= 0 ||
+        (bCompactMode && !bNetworkAggregateMode &&
+            SelectedLayerId >= 0))
     {
         const int32 blinkFrame =
             FMath::FloorToInt(InCurrentTime * 2.0);
@@ -870,19 +879,6 @@ void SMiaIA3DNetworkView::Tick(
     if (!SceneViewport.IsValid() || !ViewportClient.IsValid())
     {
         return;
-    }
-
-    const FVector2D localSize = AllottedGeometry.GetLocalSize();
-    const FIntPoint desiredSize(
-        FMath::Max(1, FMath::RoundToInt(localSize.X)),
-        FMath::Max(1, FMath::RoundToInt(localSize.Y)));
-
-    if (SceneViewport->GetSizeXY() != desiredSize)
-    {
-        SceneViewport->ResizeFrame(
-            desiredSize.X,
-            desiredSize.Y,
-            EWindowMode::Windowed);
     }
 
     if (bSceneDirty)
@@ -975,28 +971,40 @@ int32 SMiaIA3DNetworkView::OnPaint(
             ? node.Id == SelectedLayerId
             : SelectedNeuronIds.Contains(node.Id);
 
-        if (selected && bCompactMode)
+        if (selected && bCompactMode && bSelectionCursorVisible)
         {
-            const FVector2D selectionCenter = localPosition;
-            const float selectionRadius = FMath::Max(
-                12.0f,
-                projectedRadius + 4.0f);
-            constexpr int32 selectionSegments = 40;
-            TArray<FVector2D> selectionPoints;
-            selectionPoints.Reserve(selectionSegments + 1);
+            FVector2D projectedMinimum;
+            FVector2D projectedMaximum;
+            const bool hasProjectedBounds = ProjectedSphereBounds(
+                node.Position,
+                compactRadius,
+                projectedMinimum,
+                projectedMaximum);
+            float cursorLeft = hasProjectedBounds
+                ? projectedMinimum.X * viewportToLocal.X
+                : localPosition.X - projectedRadiusX;
+            float cursorRight = hasProjectedBounds
+                ? projectedMaximum.X * viewportToLocal.X
+                : localPosition.X + projectedRadiusX;
+            const float cursorY = hasProjectedBounds
+                ? projectedMaximum.Y * viewportToLocal.Y +
+                    SelectionCursorGap
+                : localPosition.Y + projectedRadiusY +
+                    SelectionCursorGap;
 
-            for (int32 segment = 0;
-                segment <= selectionSegments;
-                ++segment)
+            if (VisualizationSettings.bAlwaysShowSelectionCursor &&
+                cursorRight - cursorLeft < 12.0f)
             {
-                const float angle =
-                    static_cast<float>(segment) /
-                    selectionSegments * 2.0f * UE_PI;
-                selectionPoints.Add(
-                    selectionCenter + FVector2D(
-                        FMath::Cos(angle) * selectionRadius,
-                        FMath::Sin(angle) * selectionRadius));
+                const float cursorCenter =
+                    (cursorLeft + cursorRight) * 0.5f;
+                cursorLeft = cursorCenter - 6.0f;
+                cursorRight = cursorCenter + 6.0f;
             }
+
+            const TArray<FVector2D> selectionPoints{
+                FVector2D(cursorLeft, cursorY),
+                FVector2D(cursorRight, cursorY)
+            };
 
             FSlateDrawElement::MakeLines(
                 OutDrawElements,
@@ -1006,7 +1014,7 @@ int32 SMiaIA3DNetworkView::OnPaint(
                 ESlateDrawEffect::None,
                 palette.Selection,
                 true,
-                3.0f);
+                SelectionCursorThickness);
         }
 
         const bool showSelectionCursor =

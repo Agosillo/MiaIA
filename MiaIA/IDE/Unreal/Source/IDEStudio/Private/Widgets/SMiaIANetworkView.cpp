@@ -241,6 +241,7 @@ void SMiaIANetworkView::SetSelectedConnection(int64 InConnectionId)
 
 void SMiaIANetworkView::SetSelectedLayer(int64 InLayerId)
 {
+    const int64 previousLayerId = SelectedLayerId;
     SelectedLayerId = InLayerId;
 
     if (SelectedLayerId >= 0)
@@ -248,8 +249,18 @@ void SMiaIANetworkView::SetSelectedLayer(int64 InLayerId)
         SelectedNeuronIds.Reset();
         SelectedNeuronId = -1;
         SelectedConnectionId = -1;
-        SetCanTick(false);
     }
+
+    if (SelectedLayerId != previousLayerId)
+    {
+        SelectionBlinkFrame = -1;
+        bSelectionCursorVisible = true;
+    }
+
+    SetCanTick(
+        SelectedNeuronId >= 0 ||
+        (bCompactMode && !bNetworkAggregateMode &&
+            SelectedLayerId >= 0));
 
     Invalidate(EInvalidateWidgetReason::Paint);
 }
@@ -438,7 +449,9 @@ void SMiaIANetworkView::ResetLayout()
 
 void SMiaIANetworkView::RevealNeuron(int64 NeuronId)
 {
-    const FVector2D* position = NeuronPositions.Find(NeuronId);
+    const FVector2D* position = bCompactMode
+        ? CompactLayerPositions.Find(NeuronId)
+        : NeuronPositions.Find(NeuronId);
 
     if (!position || ViewportSize.X <= 0.0f || ViewportSize.Y <= 0.0f)
     {
@@ -690,22 +703,25 @@ int32 SMiaIANetworkView::PaintCompactOverview(
         const FMiaIALayerOverview& layer = Overview.Layers[index];
         CompactLayerPositions.Add(layer.Id, position);
 
-        if (layer.Id == SelectedLayerId)
+        if (layer.Id == SelectedLayerId && bSelectionCursorVisible)
         {
-            const float selectionDiameter = BaseNeuronDiameter +
-                SelectionPadding;
-            FSlateDrawElement::MakeBox(
+            const float cursorWidth = BaseNeuronDiameter;
+            const float cursorY = position.Y +
+                BaseNeuronDiameter * 0.5f + SelectionCursorGap;
+            const TArray<FVector2D> cursorPoints{
+                FVector2D(position.X - cursorWidth * 0.5f, cursorY),
+                FVector2D(position.X + cursorWidth * 0.5f, cursorY)
+            };
+
+            FSlateDrawElement::MakeLines(
                 OutDrawElements,
                 nodeLayer,
-                AllottedGeometry.ToPaintGeometry(
-                    FVector2D(selectionDiameter, selectionDiameter),
-                    FSlateLayoutTransform(
-                        position - FVector2D(
-                            selectionDiameter * 0.5f,
-                            selectionDiameter * 0.5f))),
-                &SelectionBrush,
+                AllottedGeometry.ToPaintGeometry(),
+                cursorPoints,
                 ESlateDrawEffect::None,
-                palette.Selection);
+                palette.Selection,
+                true,
+                SelectionCursorThickness);
         }
 
         FSlateDrawElement::MakeBox(

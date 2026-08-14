@@ -5138,7 +5138,52 @@ void SMiaIAEditorPanel::SelectNeurons(
 void SMiaIAEditorPanel::NavigateNeuron(
     EMiaIANeuronNavigationDirection Direction)
 {
-    if (bCompactTopology || Network.Layers.IsEmpty())
+    if (bCompactTopology)
+    {
+        if (bNetworkPreview || NetworkOverview.Layers.IsEmpty() ||
+            (Direction != EMiaIANeuronNavigationDirection::PreviousLayer &&
+                Direction != EMiaIANeuronNavigationDirection::NextLayer))
+        {
+            return;
+        }
+
+        const int32 currentLayerIndex =
+            NetworkOverview.Layers.IndexOfByPredicate(
+                [this](const FMiaIALayerOverview& layer)
+                {
+                    return layer.Id == SelectedLayerId;
+                });
+        const int32 layerStep =
+            Direction == EMiaIANeuronNavigationDirection::PreviousLayer
+            ? -1
+            : 1;
+        const int32 targetLayerIndex = currentLayerIndex == INDEX_NONE
+            ? (layerStep < 0 ? NetworkOverview.Layers.Num() - 1 : 0)
+            : currentLayerIndex + layerStep;
+
+        if (!NetworkOverview.Layers.IsValidIndex(targetLayerIndex))
+        {
+            return;
+        }
+
+        const int64 targetLayerId =
+            NetworkOverview.Layers[targetLayerIndex].Id;
+        SelectLayer(targetLayerId);
+
+        if (NetworkView.IsValid())
+        {
+            NetworkView->RevealNeuron(targetLayerId);
+        }
+
+        if (Network3DView.IsValid())
+        {
+            Network3DView->RevealNeuron(targetLayerId);
+        }
+
+        return;
+    }
+
+    if (Network.Layers.IsEmpty())
     {
         return;
     }
