@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [string] $PackageVersion = "1.0.0.0",
+    [string] $PackageVersion = "1.0.2.0",
 
     [string] $SourceDirectory,
 

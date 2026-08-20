@@ -52,6 +52,10 @@ namespace
         TEXT("LayoutOrientation");
     constexpr TCHAR LayoutDirectionSettingsKey[] =
         TEXT("LayoutDirection");
+    constexpr TCHAR TwoDimensionalVisualizationSettingsKey[] =
+        TEXT("TwoDimensionalVisualization");
+    constexpr TCHAR ThreeDimensionalVisualizationSettingsKey[] =
+        TEXT("ThreeDimensionalVisualization");
     constexpr TCHAR ConnectionDisplaySettingsKey[] =
         TEXT("ConnectionDisplay");
     constexpr TCHAR NeuronScaleSettingsKey[] = TEXT("NeuronScale");
@@ -238,6 +242,28 @@ namespace
 
         if (GConfig->GetString(
             DataRefreshSettingsSection,
+            ThreeDimensionalVisualizationSettingsKey,
+            savedValue,
+            GGameUserSettingsIni))
+        {
+            if (savedValue.Equals(
+                TEXT("CoaxialRings"),
+                ESearchCase::IgnoreCase))
+            {
+                settings.ThreeDimensionalVisualization =
+                    EMiaIAVisualizationMode::CoaxialRings;
+            }
+            else if (savedValue.Equals(
+                TEXT("SpiralTokens"),
+                ESearchCase::IgnoreCase))
+            {
+                settings.ThreeDimensionalVisualization =
+                    EMiaIAVisualizationMode::SpiralTokens;
+            }
+        }
+
+        if (GConfig->GetString(
+            DataRefreshSettingsSection,
             ConnectionDisplaySettingsKey,
             savedValue,
             GGameUserSettingsIni))
@@ -325,6 +351,23 @@ namespace
             MiaIA::Studio::StudioLayoutDirection::Reverse
             ? TEXT("Reverse")
             : TEXT("Forward");
+        const TCHAR* threeDimensionalVisualization = TEXT("Classic");
+
+        if (Settings.ThreeDimensionalVisualization ==
+            EMiaIAVisualizationMode::CoaxialRings)
+        {
+            threeDimensionalVisualization = TEXT("CoaxialRings");
+        }
+        else if (Settings.ThreeDimensionalVisualization ==
+            EMiaIAVisualizationMode::SpiralTokens)
+        {
+            threeDimensionalVisualization = TEXT("SpiralTokens");
+        }
+        const TCHAR* twoDimensionalVisualization =
+            Settings.TwoDimensionalVisualization ==
+                EMiaIAVisualizationMode::CoaxialRings
+            ? TEXT("CoaxialRings")
+            : TEXT("Classic");
         const TCHAR* connectionDisplay = TEXT("All");
 
         if (Settings.ConnectionDisplay ==
@@ -347,6 +390,16 @@ namespace
             DataRefreshSettingsSection,
             LayoutDirectionSettingsKey,
             layoutDirection,
+            GGameUserSettingsIni);
+        GConfig->SetString(
+            DataRefreshSettingsSection,
+            TwoDimensionalVisualizationSettingsKey,
+            twoDimensionalVisualization,
+            GGameUserSettingsIni);
+        GConfig->SetString(
+            DataRefreshSettingsSection,
+            ThreeDimensionalVisualizationSettingsKey,
+            threeDimensionalVisualization,
             GGameUserSettingsIni);
         GConfig->SetString(
             DataRefreshSettingsSection,
@@ -761,7 +814,7 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
                     .ButtonContent()
                     [
                         SNew(STextBlock)
-                        .Text(this, &SMiaIAEditorPanel::LayoutModeText)
+                        .Text(LOCTEXT("LayoutMenuLabel", "Layout"))
                     ]
                     .OnGetMenuContent(
                         this,
@@ -775,44 +828,6 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
                     .ButtonStyle(&ButtonStyle)
                     .Text(LOCTEXT("Refresh", "Refresh"))
                     .OnClicked(this, &SMiaIAEditorPanel::HandleRefresh)
-                ]
-                + SHorizontalBox::Slot()
-                .AutoWidth()
-                .Padding(2.0f)
-                [
-                    SNew(SButton)
-                    .ButtonStyle(&ButtonStyle)
-                    .Text(LOCTEXT("FitView", "Fit view"))
-                    .ToolTipText(LOCTEXT(
-                        "FitViewTooltip",
-                        "Fit every neuron in the current topology view."))
-                    .OnClicked(this, &SMiaIAEditorPanel::HandleFitView)
-                ]
-                + SHorizontalBox::Slot()
-                .AutoWidth()
-                .Padding(2.0f)
-                [
-                    SNew(SButton)
-                    .ButtonStyle(&ButtonStyle)
-                    .Text(LOCTEXT("ResetLayout", "Reset layout"))
-                    .ToolTipText(LOCTEXT(
-                        "ResetLayoutTooltip",
-                        "Restore automatic neuron positions and the default camera framing."))
-                    .OnClicked(this, &SMiaIAEditorPanel::HandleResetLayout)
-                ]
-                + SHorizontalBox::Slot()
-                .AutoWidth()
-                .Padding(2.0f)
-                [
-                    SNew(SButton)
-                    .ButtonStyle(&ButtonStyle)
-                    .Text(this, &SMiaIAEditorPanel::TopologyWorkspaceText)
-                    .ToolTipText(LOCTEXT(
-                        "TopologyWorkspaceTooltip",
-                        "Expand the topology canvas or restore the surrounding panels."))
-                    .OnClicked(
-                        this,
-                        &SMiaIAEditorPanel::HandleToggleTopologyWorkspace)
                 ]
                 + SHorizontalBox::Slot()
                 .AutoWidth()
@@ -847,31 +862,7 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
                 .Padding(10.0f, 0.0f, 2.0f, 0.0f)
                 [
                     SNew(STextBlock)
-                    .Text(LOCTEXT("ThemeLabel", "Theme"))
-                ]
-                + SHorizontalBox::Slot()
-                .AutoWidth()
-                .VAlign(VAlign_Center)
-                .Padding(2.0f)
-                [
-                    SNew(SComboButton)
-                    .ComboButtonStyle(&ComboButtonStyle)
-                    .ButtonContent()
-                    [
-                        SNew(STextBlock)
-                        .Text(this, &SMiaIAEditorPanel::ThemeText)
-                    ]
-                    .OnGetMenuContent(
-                        this,
-                        &SMiaIAEditorPanel::BuildThemeMenu)
-                ]
-                + SHorizontalBox::Slot()
-                .AutoWidth()
-                .VAlign(VAlign_Center)
-                .Padding(10.0f, 0.0f, 2.0f, 0.0f)
-                [
-                    SNew(STextBlock)
-                    .Text(LOCTEXT("ColorsLabel", "Colors"))
+                    .Text(LOCTEXT("VisualizationLabel", "Visualization"))
                 ]
                 + SHorizontalBox::Slot()
                 .AutoWidth()
@@ -881,70 +872,58 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
                     SNew(SComboButton)
                     .ComboButtonStyle(&ComboButtonStyle)
                     .ToolTipText(LOCTEXT(
-                        "ColorsTooltip",
-                        "Choose the shared neuron, contribution, selection, and debug colors used by 2D, 3D, traces, legends, and the training timeline."))
+                        "VisualizationTooltip",
+                        "Choose a model visualization compatible with the active 2D or 3D view."))
                     .ButtonContent()
                     [
                         SNew(STextBlock)
-                        .Text(this, &SMiaIAEditorPanel::ColorsText)
+                        .Text(this, &SMiaIAEditorPanel::VisualizationText)
                     ]
                     .OnGetMenuContent(
                         this,
-                        &SMiaIAEditorPanel::BuildColorsMenu)
+                        &SMiaIAEditorPanel::BuildVisualizationMenu)
                 ]
                 + SHorizontalBox::Slot()
                 .AutoWidth()
                 .VAlign(VAlign_Center)
                 .Padding(10.0f, 0.0f, 2.0f, 0.0f)
                 [
-                    SNew(STextBlock)
-                    .Text(LOCTEXT("DataRefreshLabel", "Data refresh"))
-                ]
-                + SHorizontalBox::Slot()
-                .AutoWidth()
-                .VAlign(VAlign_Center)
-                .Padding(2.0f)
-                [
                     SNew(SComboButton)
                     .ComboButtonStyle(&ComboButtonStyle)
                     .ToolTipText(LOCTEXT(
-                        "DataRefreshTooltip",
-                        "Control automatic model-data polling. Commands and debug controls always refresh immediately."))
+                        "AppearanceMenuTooltip",
+                        "Choose the interface theme and semantic visualization colors."))
                     .ButtonContent()
                     [
                         SNew(STextBlock)
-                        .Text(this, &SMiaIAEditorPanel::DataRefreshText)
+                        .Text(LOCTEXT(
+                            "AppearanceMenuLabel",
+                            "Appearance"))
                     ]
                     .OnGetMenuContent(
                         this,
-                        &SMiaIAEditorPanel::BuildDataRefreshMenu)
+                        &SMiaIAEditorPanel::BuildAppearanceMenu)
                 ]
                 + SHorizontalBox::Slot()
                 .AutoWidth()
                 .VAlign(VAlign_Center)
                 .Padding(10.0f, 0.0f, 2.0f, 0.0f)
                 [
-                    SNew(STextBlock)
-                    .Text(LOCTEXT("TopologyLimitsLabel", "Detail limits"))
-                ]
-                + SHorizontalBox::Slot()
-                .AutoWidth()
-                .VAlign(VAlign_Center)
-                .Padding(2.0f)
-                [
                     SNew(SComboButton)
                     .ComboButtonStyle(&ComboButtonStyle)
                     .ToolTipText(LOCTEXT(
-                        "TopologyLimitsTooltip",
-                        "Set the largest neuron and connection counts rendered in detailed mode. Larger networks use compact mode."))
+                        "PerformanceMenuTooltip",
+                        "Control automatic data refresh and detailed-topology limits."))
                     .ButtonContent()
                     [
                         SNew(STextBlock)
-                        .Text(this, &SMiaIAEditorPanel::TopologyLimitsText)
+                        .Text(LOCTEXT(
+                            "PerformanceMenuLabel",
+                            "Performance"))
                     ]
                     .OnGetMenuContent(
                         this,
-                        &SMiaIAEditorPanel::BuildTopologyLimitsMenu)
+                        &SMiaIAEditorPanel::BuildPerformanceMenu)
                 ]
                 + SHorizontalBox::Slot()
                 .AutoWidth()
@@ -3387,8 +3366,14 @@ void SMiaIAEditorPanel::RefreshData()
     const bool topologyChanged = newTopologyKey != TopologyKey;
     TopologyKey = newTopologyKey;
 
-    if (!bCompactTopology || bNetworkPreview ||
-        !FindOverviewLayer(SelectedLayerId))
+    const bool supportsDetailedLayerSelection =
+        !bCompactTopology &&
+        ViewMode == EMiaIAStudioViewMode::ThreeDimensional &&
+        VisualizationSettings.ThreeDimensionalVisualization ==
+            EMiaIAVisualizationMode::SpiralTokens;
+
+    if ((!bCompactTopology && !supportsDetailedLayerSelection) ||
+        bNetworkPreview || !FindOverviewLayer(SelectedLayerId))
     {
         SelectedLayerId = -1;
     }
@@ -5680,7 +5665,58 @@ TSharedRef<SWidget> SMiaIAEditorPanel::BuildLayoutMenu()
             [
                 SNew(STextBlock)
                 .Font(FAppStyle::GetFontStyle(TEXT("NormalFontBold")))
-                .Text(LOCTEXT("LayoutPlacementHeading", "Placement"))
+                .Text(LOCTEXT("LayoutCanvasHeading", "Canvas"))
+            ]
+            + SVerticalBox::Slot()
+            .AutoHeight()
+            [
+                SNew(SHorizontalBox)
+                + SHorizontalBox::Slot()
+                .FillWidth(1.0f)
+                .Padding(0.0f, 0.0f, 2.0f, 0.0f)
+                [
+                    SNew(SButton)
+                    .ButtonStyle(&ButtonStyle)
+                    .Text(LOCTEXT("FitView", "Fit view"))
+                    .ToolTipText(LOCTEXT(
+                        "FitViewTooltip",
+                        "Fit every neuron in the current topology view."))
+                    .OnClicked(this, &SMiaIAEditorPanel::HandleFitView)
+                ]
+                + SHorizontalBox::Slot()
+                .FillWidth(1.0f)
+                .Padding(2.0f, 0.0f, 0.0f, 0.0f)
+                [
+                    SNew(SButton)
+                    .ButtonStyle(&ButtonStyle)
+                    .Text(LOCTEXT("ResetLayout", "Reset layout"))
+                    .ToolTipText(LOCTEXT(
+                        "ResetLayoutTooltip",
+                        "Restore automatic neuron positions and the default camera framing."))
+                    .OnClicked(this, &SMiaIAEditorPanel::HandleResetLayout)
+                ]
+            ]
+            + SVerticalBox::Slot()
+            .AutoHeight()
+            .Padding(0.0f, 4.0f, 0.0f, 0.0f)
+            [
+                SNew(SButton)
+                .ButtonStyle(&ButtonStyle)
+                .Text(this, &SMiaIAEditorPanel::TopologyWorkspaceText)
+                .ToolTipText(LOCTEXT(
+                    "TopologyWorkspaceTooltip",
+                    "Expand the topology canvas or restore the surrounding panels."))
+                .OnClicked(
+                    this,
+                    &SMiaIAEditorPanel::HandleToggleTopologyWorkspace)
+            ]
+            + SVerticalBox::Slot()
+            .AutoHeight()
+            .Padding(0.0f, 10.0f, 0.0f, 4.0f)
+            [
+                SNew(STextBlock)
+                .Font(FAppStyle::GetFontStyle(TEXT("NormalFontBold")))
+                .Text(this, &SMiaIAEditorPanel::LayoutModeText)
             ]
             + SVerticalBox::Slot()
             .AutoHeight()
@@ -6079,6 +6115,14 @@ FReply SMiaIAEditorPanel::SelectLayoutMode(
     MiaIA::Studio::StudioLayoutMode InMode)
 {
     VisualizationSettings.Layout.Mode = InMode;
+
+    if (ViewMode == EMiaIAStudioViewMode::ThreeDimensional &&
+        InMode == MiaIA::Studio::StudioLayoutMode::Packed)
+    {
+        VisualizationSettings.ThreeDimensionalVisualization =
+            EMiaIAVisualizationMode::Classic;
+    }
+
     SaveVisualizationSettings(VisualizationSettings);
     NetworkView->SetVisualizationSettings(VisualizationSettings);
     Network3DView->SetVisualizationSettings(VisualizationSettings);
@@ -6089,6 +6133,16 @@ FReply SMiaIAEditorPanel::SelectLayoutMode(
 FReply SMiaIAEditorPanel::SelectLayoutOrientation(
     MiaIA::Studio::StudioLayoutOrientation InOrientation)
 {
+    if (ViewMode == EMiaIAStudioViewMode::ThreeDimensional &&
+        VisualizationSettings.ThreeDimensionalVisualization !=
+            EMiaIAVisualizationMode::Classic &&
+        InOrientation ==
+            MiaIA::Studio::StudioLayoutOrientation::Vertical)
+    {
+        VisualizationSettings.ThreeDimensionalVisualization =
+            EMiaIAVisualizationMode::Classic;
+    }
+
     if (VisualizationSettings.Layout.Orientation == InOrientation)
     {
         VisualizationSettings.Layout.Direction =
@@ -7122,6 +7176,23 @@ FReply SMiaIAEditorPanel::SelectViewMode(
 {
     ViewMode = InViewMode;
 
+    if (ViewMode == EMiaIAStudioViewMode::ThreeDimensional &&
+        VisualizationSettings.ThreeDimensionalVisualization !=
+            EMiaIAVisualizationMode::Classic &&
+        (VisualizationSettings.Layout.Mode ==
+            MiaIA::Studio::StudioLayoutMode::Packed ||
+            VisualizationSettings.Layout.Orientation !=
+                MiaIA::Studio::StudioLayoutOrientation::Horizontal))
+    {
+        VisualizationSettings.Layout.Mode =
+            MiaIA::Studio::StudioLayoutMode::Expanded;
+        VisualizationSettings.Layout.Orientation =
+            MiaIA::Studio::StudioLayoutOrientation::Horizontal;
+        SaveVisualizationSettings(VisualizationSettings);
+        NetworkView->SetVisualizationSettings(VisualizationSettings);
+        Network3DView->SetVisualizationSettings(VisualizationSettings);
+    }
+
     if (TopologySwitcher.IsValid())
     {
         TopologySwitcher->SetActiveWidgetIndex(
@@ -7134,6 +7205,106 @@ FReply SMiaIAEditorPanel::SelectViewMode(
         Network3DView.IsValid())
     {
         Network3DView->FitView();
+    }
+
+    FSlateApplication::Get().DismissAllMenus();
+    return FReply::Handled();
+}
+
+TSharedRef<SWidget> SMiaIAEditorPanel::BuildVisualizationMenu()
+{
+    TSharedRef<SVerticalBox> menu = SNew(SVerticalBox);
+    menu->AddSlot()
+    .AutoHeight()
+    [
+        SNew(SButton)
+        .ButtonStyle(&ButtonStyle)
+        .Text(LOCTEXT("ClassicVisualization", "Classic"))
+        .ToolTipText(LOCTEXT(
+            "ClassicVisualizationTooltip",
+            "Display the familiar layered topology in the active view."))
+        .OnClicked(
+            this,
+            &SMiaIAEditorPanel::SelectVisualization,
+            EMiaIAVisualizationMode::Classic)
+    ];
+
+    if (ViewMode == EMiaIAStudioViewMode::ThreeDimensional)
+    {
+        menu->AddSlot()
+        .AutoHeight()
+        [
+            SNew(SButton)
+            .ButtonStyle(&ButtonStyle)
+            .Text(LOCTEXT(
+                "CoaxialRingsVisualization",
+                "Coaxial Rings"))
+            .ToolTipText(LOCTEXT(
+                "CoaxialRingsVisualizationTooltip",
+                "Place parallel neuron rings along one shared horizontal axis. Ring radii grow automatically to prevent neuron overlap."))
+            .OnClicked(
+                this,
+                &SMiaIAEditorPanel::SelectVisualization,
+                EMiaIAVisualizationMode::CoaxialRings)
+        ];
+
+        menu->AddSlot()
+        .AutoHeight()
+        [
+            SNew(SButton)
+            .ButtonStyle(&ButtonStyle)
+            .Text(LOCTEXT(
+                "SpiralTokensVisualization",
+                "Spiral Tokens"))
+            .ToolTipText(LOCTEXT(
+                "SpiralTokensVisualizationTooltip",
+                "Represent each layer as a lightweight token with concentric input and output terminal rings on opposite faces. Only real connections between layers are drawn."))
+            .OnClicked(
+                this,
+                &SMiaIAEditorPanel::SelectVisualization,
+                EMiaIAVisualizationMode::SpiralTokens)
+        ];
+    }
+
+    return menu;
+}
+
+FReply SMiaIAEditorPanel::SelectVisualization(
+    EMiaIAVisualizationMode InMode)
+{
+    if (ViewMode == EMiaIAStudioViewMode::TwoDimensional)
+    {
+        VisualizationSettings.TwoDimensionalVisualization =
+            EMiaIAVisualizationMode::Classic;
+    }
+    else
+    {
+        VisualizationSettings.ThreeDimensionalVisualization = InMode;
+
+        if (InMode != EMiaIAVisualizationMode::Classic)
+        {
+            VisualizationSettings.Layout.Mode =
+                MiaIA::Studio::StudioLayoutMode::Expanded;
+            VisualizationSettings.Layout.Orientation =
+                MiaIA::Studio::StudioLayoutOrientation::Horizontal;
+        }
+    }
+
+    SaveVisualizationSettings(VisualizationSettings);
+
+    if (NetworkView.IsValid())
+    {
+        NetworkView->SetVisualizationSettings(VisualizationSettings);
+    }
+
+    if (Network3DView.IsValid())
+    {
+        Network3DView->SetVisualizationSettings(VisualizationSettings);
+
+        if (ViewMode == EMiaIAStudioViewMode::ThreeDimensional)
+        {
+            Network3DView->FitView();
+        }
     }
 
     FSlateApplication::Get().DismissAllMenus();
@@ -7367,6 +7538,63 @@ TSharedRef<SWidget> SMiaIAEditorPanel::BuildColorsMenu()
     ];
 
     return menu;
+}
+
+TSharedRef<SWidget> SMiaIAEditorPanel::BuildAppearanceMenu()
+{
+    return SNew(SBox)
+        .WidthOverride(280.0f)
+        .Padding(10.0f)
+        [
+            SNew(SVerticalBox)
+            + SVerticalBox::Slot()
+            .AutoHeight()
+            .Padding(0.0f, 0.0f, 0.0f, 4.0f)
+            [
+                SNew(STextBlock)
+                .Font(FAppStyle::GetFontStyle(TEXT("NormalFontBold")))
+                .Text(LOCTEXT("AppearanceThemeHeading", "Theme"))
+            ]
+            + SVerticalBox::Slot()
+            .AutoHeight()
+            [
+                SNew(SComboButton)
+                .ComboButtonStyle(&ComboButtonStyle)
+                .ButtonContent()
+                [
+                    SNew(STextBlock)
+                    .Text(this, &SMiaIAEditorPanel::ThemeText)
+                ]
+                .OnGetMenuContent(
+                    this,
+                    &SMiaIAEditorPanel::BuildThemeMenu)
+            ]
+            + SVerticalBox::Slot()
+            .AutoHeight()
+            .Padding(0.0f, 10.0f, 0.0f, 4.0f)
+            [
+                SNew(STextBlock)
+                .Font(FAppStyle::GetFontStyle(TEXT("NormalFontBold")))
+                .Text(LOCTEXT("AppearanceColorsHeading", "Colors"))
+            ]
+            + SVerticalBox::Slot()
+            .AutoHeight()
+            [
+                SNew(SComboButton)
+                .ComboButtonStyle(&ComboButtonStyle)
+                .ToolTipText(LOCTEXT(
+                    "ColorsTooltip",
+                    "Choose the shared semantic colors used by topology, traces, legends, and the training timeline."))
+                .ButtonContent()
+                [
+                    SNew(STextBlock)
+                    .Text(this, &SMiaIAEditorPanel::ColorsText)
+                ]
+                .OnGetMenuContent(
+                    this,
+                    &SMiaIAEditorPanel::BuildColorsMenu)
+            ]
+        ];
 }
 
 FReply SMiaIAEditorPanel::SelectVisualizationPalette(
@@ -7714,6 +7942,70 @@ TSharedRef<SWidget> SMiaIAEditorPanel::BuildTopologyLimitsMenu()
                         this,
                         &SMiaIAEditorPanel::HandleResetTopologyLimits)
                 ]
+            ]
+        ];
+}
+
+TSharedRef<SWidget> SMiaIAEditorPanel::BuildPerformanceMenu()
+{
+    return SNew(SBox)
+        .WidthOverride(300.0f)
+        .Padding(10.0f)
+        [
+            SNew(SVerticalBox)
+            + SVerticalBox::Slot()
+            .AutoHeight()
+            .Padding(0.0f, 0.0f, 0.0f, 4.0f)
+            [
+                SNew(STextBlock)
+                .Font(FAppStyle::GetFontStyle(TEXT("NormalFontBold")))
+                .Text(LOCTEXT(
+                    "PerformanceRefreshHeading",
+                    "Data refresh"))
+            ]
+            + SVerticalBox::Slot()
+            .AutoHeight()
+            [
+                SNew(SComboButton)
+                .ComboButtonStyle(&ComboButtonStyle)
+                .ToolTipText(LOCTEXT(
+                    "DataRefreshTooltip",
+                    "Control automatic model-data polling. Commands and debug controls always refresh immediately."))
+                .ButtonContent()
+                [
+                    SNew(STextBlock)
+                    .Text(this, &SMiaIAEditorPanel::DataRefreshText)
+                ]
+                .OnGetMenuContent(
+                    this,
+                    &SMiaIAEditorPanel::BuildDataRefreshMenu)
+            ]
+            + SVerticalBox::Slot()
+            .AutoHeight()
+            .Padding(0.0f, 10.0f, 0.0f, 4.0f)
+            [
+                SNew(STextBlock)
+                .Font(FAppStyle::GetFontStyle(TEXT("NormalFontBold")))
+                .Text(LOCTEXT(
+                    "PerformanceLimitsHeading",
+                    "Detail limits"))
+            ]
+            + SVerticalBox::Slot()
+            .AutoHeight()
+            [
+                SNew(SComboButton)
+                .ComboButtonStyle(&ComboButtonStyle)
+                .ToolTipText(LOCTEXT(
+                    "TopologyLimitsTooltip",
+                    "Set the largest neuron and connection counts rendered in detailed mode. Larger networks use compact mode."))
+                .ButtonContent()
+                [
+                    SNew(STextBlock)
+                    .Text(this, &SMiaIAEditorPanel::TopologyLimitsText)
+                ]
+                .OnGetMenuContent(
+                    this,
+                    &SMiaIAEditorPanel::BuildTopologyLimitsMenu)
             ]
         ];
 }
@@ -8227,6 +8519,8 @@ FReply SMiaIAEditorPanel::HandleQuickHelp()
             "Click the topology, then use the arrow keys in the visible direction; their layer/neuron meaning follows Horizontal or Vertical flow and its Forward or Reverse direction.\n"
             "Mouse wheel: zoom. Middle drag: pan. Right drag pans in 2D and orbits in 3D.\n"
             "Use Layout for Expanded or Packed placement, Horizontal or Vertical flow, uniform neuron size, minimum gaps, and All or Selected connections. Click the active orientation again to mirror the layer direction. Packed with zero gaps makes symmetric nodes adjacent without overlap. The primary-selection cursor is adaptive by default; enable Always show selection cursor to retain a readable marker at every zoom and density level.\n\n"
+            "3D VISUALIZATIONS\n"
+            "Classic preserves the familiar layered plane. Coaxial Rings places parallel layer rings along one shared horizontal axis. Spiral Tokens represents every layer as a lightweight token with the same neuron terminals arranged on concentric rings across its input and output faces; visible connections run only between layer faces. Both additional visualizations use Expanded Horizontal placement; Packed or Vertical returns to Classic.\n\n"
             "COLORS\n"
             "Theme controls interface surfaces and text. Colors independently selects MiaIA Classic, High Contrast, Color-blind Safe, Monochrome, or Custom semantic colors shared by 2D, 3D, traces, legends, selection, debug emphasis, and the training timeline. Choose a Customize row to edit one custom role with the Unreal color picker.\n\n"
             "INSPECTION AND DEBUG\n"
@@ -9899,6 +10193,29 @@ FText SMiaIAEditorPanel::ViewModeText() const
     return ViewMode == EMiaIAStudioViewMode::TwoDimensional
         ? LOCTEXT("CurrentTwoDimensionalView", "2D")
         : LOCTEXT("CurrentThreeDimensionalView", "3D");
+}
+
+FText SMiaIAEditorPanel::VisualizationText() const
+{
+    const EMiaIAVisualizationMode mode = ViewMode ==
+        EMiaIAStudioViewMode::TwoDimensional
+        ? VisualizationSettings.TwoDimensionalVisualization
+        : VisualizationSettings.ThreeDimensionalVisualization;
+    if (mode == EMiaIAVisualizationMode::CoaxialRings)
+    {
+        return LOCTEXT(
+            "CurrentCoaxialRingsVisualization",
+            "Coaxial Rings");
+    }
+
+    if (mode == EMiaIAVisualizationMode::SpiralTokens)
+    {
+        return LOCTEXT(
+            "CurrentSpiralTokensVisualization",
+            "Spiral Tokens");
+    }
+
+    return LOCTEXT("CurrentClassicVisualization", "Classic");
 }
 
 FText SMiaIAEditorPanel::LayoutModeText() const

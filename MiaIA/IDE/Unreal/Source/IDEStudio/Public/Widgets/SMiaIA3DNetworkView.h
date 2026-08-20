@@ -106,6 +106,9 @@ private:
     {
         int64 Id{-1};
         FVector Position{FVector::ZeroVector};
+        FVector SecondaryPosition{FVector::ZeroVector};
+        float VisualRadius{};
+        bool bHasSecondaryPosition{};
     };
 
     struct FConnectionRenderData
@@ -113,6 +116,14 @@ private:
         int64 Id{-1};
         FVector From{FVector::ZeroVector};
         FVector To{FVector::ZeroVector};
+    };
+
+    struct FLayerRenderData
+    {
+        int64 Id{-1};
+        FVector Position{FVector::ZeroVector};
+        float Radius{};
+        float HalfThickness{};
     };
 
     void RebuildScene();
@@ -139,10 +150,16 @@ private:
         const FVector2D& ViewportPosition) const;
     const FConnectionRenderData* FindConnectionAt(
         const FVector2D& ViewportPosition) const;
+    const FLayerRenderData* FindLayerTokenAt(
+        const FVector2D& ViewportPosition) const;
     bool BeginNodeDrag(
         const FVector2D& ViewportPosition,
         const FNodeRenderData& Node);
+    bool BeginLayerDrag(
+        const FVector2D& ViewportPosition,
+        const FLayerRenderData& Layer);
     void UpdateNodeDrag(const FVector2D& ViewportPosition);
+    void UpdateLayerDrag(const FVector2D& ViewportPosition);
     void CompleteMarqueeSelection(const FGeometry& Geometry);
     void NotifyNeuronSelectionChanged();
     float SphereRadius() const;
@@ -179,8 +196,10 @@ private:
     TMap<int64, EMiaIASignalHealthVisualState> SignalHealthNeurons;
     TMap<int64, EMiaIASignalHealthVisualState> SignalHealthConnections;
     TMap<int64, FVector> ManualNodePositions;
+    TMap<int64, FVector> ManualLayerOffsets;
     TArray<FNodeRenderData> RenderedNodes;
     TArray<FConnectionRenderData> RenderedConnections;
+    TArray<FLayerRenderData> RenderedLayers;
     TUniquePtr<FPreviewScene> PreviewScene;
     TSharedPtr<FMiaIAViewportClient> ViewportClient;
     TSharedPtr<FSceneViewport> SceneViewport;
@@ -197,9 +216,11 @@ private:
     FVector DragPlaneOrigin{FVector::ZeroVector};
     FVector DragPlaneNormal{FVector::ForwardVector};
     FVector DragStartIntersection{FVector::ZeroVector};
+    FVector DragStartLayerOffset{FVector::ZeroVector};
     FVector2D LastPointerPosition{FVector2D::ZeroVector};
     FVector2D MarqueeStart{FVector2D::ZeroVector};
     FVector2D MarqueeEnd{FVector2D::ZeroVector};
+    FVector2D PendingLayerDragStart{FVector2D::ZeroVector};
     TMap<int64, FVector> DragStartPositions;
     TSet<int64> SelectedNeuronIds;
     double MaximumNeuronMetric{1.0};
@@ -214,6 +235,9 @@ private:
     int64 SelectedConnectionId{-1};
     int64 SelectedLayerId{-1};
     int64 DraggedNeuronId{-1};
+    int64 DraggedLayerId{-1};
+    int64 PendingLayerDragId{-1};
+    int64 PendingLayerClickNeuronId{-1};
     int32 SelectionBlinkFrame{-1};
     bool bCompactMode{};
     bool bSignalHealthActive{};
@@ -225,6 +249,9 @@ private:
     bool bOrbiting{};
     bool bPanning{};
     bool bDraggingNode{};
+    bool bDraggingLayer{};
+    bool bPendingLayerDrag{};
+    bool bPendingLayerClickAdditive{};
     bool bMarqueeSelecting{};
     bool bMarqueeAdditive{};
     FSlateRoundedBoxBrush NeuronLabelBrush{FLinearColor::White, 4.0f};

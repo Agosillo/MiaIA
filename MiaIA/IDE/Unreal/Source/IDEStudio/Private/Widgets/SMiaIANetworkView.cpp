@@ -20,6 +20,9 @@ namespace
     constexpr float NetworkAggregateDiameter = 104.0f;
     constexpr float NetworkIndicatorLength = 84.0f;
     constexpr float NetworkIndicatorGap = 8.0f;
+    constexpr float CompactLayerIndicatorLength = 42.0f;
+    constexpr float CompactLayerIndicatorGap = 3.0f;
+    constexpr float CompactLayerBlockGap = 16.0f;
     constexpr float SelectionCursorGap = 2.0f;
     constexpr float SelectionCursorThickness = 3.0f;
     constexpr int32 MaximumNetworkIndicators = 512;
@@ -83,6 +86,23 @@ void SMiaIANetworkView::SetOverview(
     const bool aggregateDimensionsChanged =
         previousInputCount != nextInputCount ||
         previousOutputCount != nextOutputCount;
+    bool compactDimensionsChanged =
+        Overview.Layers.Num() != InOverview.Layers.Num();
+
+    if (!compactDimensionsChanged)
+    {
+        for (int32 layerIndex = 0;
+            layerIndex < Overview.Layers.Num();
+            ++layerIndex)
+        {
+            if (Overview.Layers[layerIndex].NeuronCount !=
+                InOverview.Layers[layerIndex].NeuronCount)
+            {
+                compactDimensionsChanged = true;
+                break;
+            }
+        }
+    }
     const bool modeChanged = bCompactMode != bInCompactMode ||
         bNetworkAggregateMode != bInNetworkAggregateMode;
     Overview = InOverview;
@@ -91,7 +111,9 @@ void SMiaIANetworkView::SetOverview(
         bInNetworkAggregateMode;
 
     if (modeChanged ||
-        (bNetworkAggregateMode && aggregateDimensionsChanged))
+        (bNetworkAggregateMode && aggregateDimensionsChanged) ||
+        (bCompactMode && !bNetworkAggregateMode &&
+            compactDimensionsChanged))
     {
         ManualNeuronPositions.Reset();
         ViewOffset = FVector2D::ZeroVector;
@@ -347,6 +369,64 @@ void SMiaIANetworkView::FitView()
             const float contentHeight = FMath::Max(
                 NetworkAggregateDiameter,
                 indicatorSpan);
+            const float availableWidth = FMath::Max(
+                1.0f,
+                ViewportSize.X - HorizontalPadding * 2.0f);
+            const float availableHeight = FMath::Max(
+                1.0f,
+                ViewportSize.Y - VerticalPadding * 2.0f);
+            Zoom = FMath::Clamp(
+                FMath::Min(1.0f, FMath::Min(
+                    availableWidth / FMath::Max(1.0f, contentWidth),
+                    availableHeight / FMath::Max(1.0f, contentHeight))),
+                MinimumZoom,
+                MaximumZoom);
+        }
+        else if (ViewportSize.X > 0.0f && ViewportSize.Y > 0.0f &&
+            !Overview.Layers.IsEmpty())
+        {
+            int32 maximumVisibleTerminals{};
+
+            for (int32 layerIndex = 0;
+                layerIndex < Overview.Layers.Num();
+                ++layerIndex)
+            {
+                const int64 inputCount = layerIndex == 0
+                    ? Overview.Layers[layerIndex].NeuronCount
+                    : Overview.Layers[layerIndex - 1].NeuronCount;
+                const int64 outputCount =
+                    Overview.Layers[layerIndex].NeuronCount;
+                maximumVisibleTerminals = FMath::Max(
+                    maximumVisibleTerminals,
+                    static_cast<int32>(FMath::Min<int64>(
+                        FMath::Max(inputCount, outputCount),
+                        MaximumNetworkIndicators)));
+            }
+
+            const float indicatorSpan = maximumVisibleTerminals <= 1
+                ? 0.0f
+                : static_cast<float>(maximumVisibleTerminals - 1) *
+                    CompactLayerIndicatorGap;
+            const float layerStride = BaseNeuronDiameter +
+                CompactLayerIndicatorLength * 2.0f +
+                CompactLayerBlockGap;
+            const float axisSpan = BaseNeuronDiameter +
+                CompactLayerIndicatorLength * 2.0f +
+                static_cast<float>(FMath::Max(
+                    Overview.Layers.Num() - 1,
+                    0)) * layerStride;
+            const float crossSpan = FMath::Max(
+                BaseNeuronDiameter,
+                indicatorSpan);
+            const bool isVertical =
+                VisualizationSettings.Layout.Orientation ==
+                    MiaIA::Studio::StudioLayoutOrientation::Vertical;
+            const float contentWidth = isVertical
+                ? crossSpan
+                : axisSpan;
+            const float contentHeight = isVertical
+                ? axisSpan
+                : crossSpan;
             const float availableWidth = FMath::Max(
                 1.0f,
                 ViewportSize.X - HorizontalPadding * 2.0f);
@@ -684,30 +764,80 @@ int32 SMiaIANetworkView::PaintCompactOverview(
 
     const bool isVertical = VisualizationSettings.Layout.Orientation ==
         MiaIA::Studio::StudioLayoutOrientation::Vertical;
-    const float axisMargin = isVertical
-        ? FMath::Min(VerticalPadding, size.Y * 0.5f)
-        : FMath::Min(HorizontalPadding, size.X * 0.5f);
-    const float axisLength = FMath::Max(
-        0.0f,
-        (isVertical ? size.Y : size.X) - axisMargin * 2.0f);
-    const float layerSpacing = layerCount <= 1
-        ? axisLength
-        : axisLength * Zoom / static_cast<float>(layerCount - 1);
+    const bool isReverse = VisualizationSettings.Layout.Direction ==
+        MiaIA::Studio::StudioLayoutDirection::Reverse;
+    const FVector2D flowAxis = isVertical
+        ? FVector2D(0.0f, isReverse ? -1.0f : 1.0f)
+        : FVector2D(isReverse ? -1.0f : 1.0f, 0.0f);
+    const FVector2D spreadAxis(-flowAxis.Y, flowAxis.X);
+    const float compactDiameter = BaseNeuronDiameter * Zoom;
+    const float compactRadius = compactDiameter * 0.5f;
+    const float indicatorLength = CompactLayerIndicatorLength * Zoom;
+    const float indicatorGap = CompactLayerIndicatorGap * Zoom;
+    const float layerSpacing = (BaseNeuronDiameter +
+        CompactLayerIndicatorLength * 2.0f +
+        CompactLayerBlockGap) * Zoom;
     const bool showLabels = layerCount <= 40 &&
         layerSpacing >= (isVertical ? 24.0f : 80.0f);
     const int32 nodeLayer = LayerId + 1;
+
+    const auto drawIndicators = [&](int64 count,
+        const FVector2D& center,
+        const FVector2D& direction,
+        const FLinearColor& color)
+    {
+        const int32 visibleCount = static_cast<int32>(FMath::Min<int64>(
+            FMath::Max<int64>(0, count),
+            MaximumNetworkIndicators));
+
+        for (int32 indicatorIndex = 0;
+            indicatorIndex < visibleCount;
+            ++indicatorIndex)
+        {
+            const float offset =
+                (static_cast<float>(indicatorIndex) -
+                    static_cast<float>(visibleCount - 1) * 0.5f) *
+                indicatorGap;
+            const FVector2D start = center +
+                direction * compactRadius + spreadAxis * offset;
+            const FVector2D end = start + direction * indicatorLength;
+            FSlateDrawElement::MakeLines(
+                OutDrawElements,
+                nodeLayer,
+                AllottedGeometry.ToPaintGeometry(),
+                TArray<FVector2D>{start, end},
+                ESlateDrawEffect::None,
+                color.CopyWithNewOpacity(0.82f),
+                true,
+                FMath::Clamp(1.25f * Zoom, 0.6f, 2.0f));
+        }
+    };
 
     for (int32 index = 0; index < layerCount; ++index)
     {
         const FVector2D position = positions[index];
         const FMiaIALayerOverview& layer = Overview.Layers[index];
         CompactLayerPositions.Add(layer.Id, position);
+        const int64 inputCount = index == 0
+            ? layer.NeuronCount
+            : Overview.Layers[index - 1].NeuronCount;
+
+        drawIndicators(
+            inputCount,
+            position,
+            -flowAxis,
+            palette.Debug);
+        drawIndicators(
+            layer.NeuronCount,
+            position,
+            flowAxis,
+            palette.ActiveNeuron);
 
         if (layer.Id == SelectedLayerId && bSelectionCursorVisible)
         {
-            const float cursorWidth = BaseNeuronDiameter;
+            const float cursorWidth = compactDiameter;
             const float cursorY = position.Y +
-                BaseNeuronDiameter * 0.5f + SelectionCursorGap;
+                compactRadius + SelectionCursorGap;
             const TArray<FVector2D> cursorPoints{
                 FVector2D(position.X - cursorWidth * 0.5f, cursorY),
                 FVector2D(position.X + cursorWidth * 0.5f, cursorY)
@@ -728,11 +858,11 @@ int32 SMiaIANetworkView::PaintCompactOverview(
             OutDrawElements,
             nodeLayer + 1,
             AllottedGeometry.ToPaintGeometry(
-                FVector2D(BaseNeuronDiameter, BaseNeuronDiameter),
+                FVector2D(compactDiameter, compactDiameter),
                 FSlateLayoutTransform(
                     position - FVector2D(
-                        BaseNeuronDiameter * 0.5f,
-                        BaseNeuronDiameter * 0.5f))),
+                        compactRadius,
+                        compactRadius))),
             &NeuronBrush,
             ESlateDrawEffect::None,
             palette.ActiveNeuron);
@@ -746,8 +876,8 @@ int32 SMiaIANetworkView::PaintCompactOverview(
                     FVector2D(90.0f, 18.0f),
                     FSlateLayoutTransform(
                         position + (isVertical
-                            ? FVector2D(21.0f, -9.0f)
-                            : FVector2D(-45.0f, 21.0f)))),
+                            ? FVector2D(compactRadius + 4.0f, -9.0f)
+                            : FVector2D(-45.0f, compactRadius + 4.0f)))),
                 FText::Format(
                     NSLOCTEXT(
                         "MiaIAStudio",
@@ -854,23 +984,18 @@ FVector2D SMiaIANetworkView::CompactLayerPosition(
         progress = 1.0f - progress;
     }
 
-    const float horizontalMargin = FMath::Min(
-        HorizontalPadding,
-        Size.X * 0.5f);
-    const float verticalMargin = FMath::Min(
-        VerticalPadding,
-        Size.Y * 0.5f);
-    const FVector2D start(horizontalMargin, verticalMargin);
-    const FVector2D end(
-        Size.X - horizontalMargin,
-        Size.Y - verticalMargin);
-    const FVector2D basePosition =
-        VisualizationSettings.Layout.Orientation ==
-            MiaIA::Studio::StudioLayoutOrientation::Vertical
-        ? FVector2D(Size.X * 0.5f, FMath::Lerp(start.Y, end.Y, progress))
-        : FVector2D(FMath::Lerp(start.X, end.X, progress), Size.Y * 0.5f);
-    const FVector2D center = Size * 0.5f;
-    return center + ViewOffset + (basePosition - center) * Zoom;
+    const float centeredLayer = layerCount <= 1
+        ? 0.0f
+        : (progress - 0.5f) * static_cast<float>(layerCount - 1);
+    const float layerStride = BaseNeuronDiameter +
+        CompactLayerIndicatorLength * 2.0f +
+        CompactLayerBlockGap;
+    const float offset = centeredLayer * layerStride * Zoom;
+    const FVector2D center = Size * 0.5f + ViewOffset;
+    return VisualizationSettings.Layout.Orientation ==
+        MiaIA::Studio::StudioLayoutOrientation::Vertical
+        ? center + FVector2D(0.0f, offset)
+        : center + FVector2D(offset, 0.0f);
 }
 
 FVector2D SMiaIANetworkView::AutomaticPosition(
@@ -1478,7 +1603,7 @@ FReply SMiaIANetworkView::OnMouseButtonDown(
         int64 closestLayerId = -1;
         float closestDistance = FMath::Max(
             10.0f,
-            BaseNeuronDiameter * 0.75f);
+            BaseNeuronDiameter * Zoom * 0.75f);
 
         for (const TPair<int64, FVector2D>& entry : CompactLayerPositions)
         {
@@ -1666,7 +1791,7 @@ FReply SMiaIANetworkView::OnMouseButtonDoubleClick(
 
     const float selectionRadius = FMath::Max(
         10.0f,
-        BaseNeuronDiameter * 0.75f);
+        BaseNeuronDiameter * Zoom * 0.75f);
     int64 closestLayerId = -1;
     float closestDistance = selectionRadius;
 

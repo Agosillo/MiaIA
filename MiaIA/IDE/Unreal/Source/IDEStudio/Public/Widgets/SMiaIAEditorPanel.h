@@ -144,9 +144,12 @@ private:
     FReply HandleCancelProjectPath();
     TSharedRef<SWidget> BuildViewModeMenu();
     FReply SelectViewMode(EMiaIAStudioViewMode InViewMode);
+    TSharedRef<SWidget> BuildVisualizationMenu();
+    FReply SelectVisualization(EMiaIAVisualizationMode InMode);
     TSharedRef<SWidget> BuildThemeMenu();
     FReply SelectTheme(EMiaIAEditorTheme InTheme);
     TSharedRef<SWidget> BuildColorsMenu();
+    TSharedRef<SWidget> BuildAppearanceMenu();
     FReply SelectVisualizationPalette(
         EMiaIAVisualizationPalettePreset InPreset);
     FReply HandleEditVisualizationColor(
@@ -160,6 +163,7 @@ private:
     TSharedRef<SWidget> BuildDataRefreshMenu();
     FReply SelectDataRefreshMode(EMiaIADataRefreshMode InMode);
     TSharedRef<SWidget> BuildTopologyLimitsMenu();
+    TSharedRef<SWidget> BuildPerformanceMenu();
     void HandlePendingNeuronLimitChanged(int32 InValue);
     void HandlePendingConnectionLimitChanged(int32 InValue);
     void HandlePendingInspectorConnectionLimitChanged(int32 InValue);
@@ -283,6 +287,7 @@ private:
     FSlateColor PanelColor() const;
     FSlateColor TextColor() const;
     FText ViewModeText() const;
+    FText VisualizationText() const;
     FText LayoutModeText() const;
     FText ThemeText() const;
     FText ColorsText() const;

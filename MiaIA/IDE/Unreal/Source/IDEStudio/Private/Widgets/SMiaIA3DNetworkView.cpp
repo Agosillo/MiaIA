@@ -22,6 +22,7 @@ namespace
 {
     constexpr float SelectionCursorGap = 2.0f;
     constexpr float SelectionCursorThickness = 3.0f;
+    constexpr float LayerDragActivationDistance = 4.0f;
 
     struct FMiaIAViewportSphere
     {
@@ -36,6 +37,16 @@ namespace
         FVector To{FVector::ZeroVector};
         FLinearColor Color{FLinearColor::White};
         float Radius{};
+    };
+
+    struct FMiaIAViewportDisc
+    {
+        FVector Position{FVector::ZeroVector};
+        FVector Normal{FVector::ForwardVector};
+        FLinearColor Color{FLinearColor::White};
+        float Radius{};
+        float HalfThickness{};
+        int32 Sides{16};
     };
 }
 
@@ -69,12 +80,17 @@ public:
     {
         Spheres.Reset();
         Lines.Reset();
+        Discs.Reset();
     }
 
-    void ReservePrimitives(int32 PointCount, int32 LineCount)
+    void ReservePrimitives(
+        int32 PointCount,
+        int32 LineCount,
+        int32 DiscCount = 0)
     {
         Spheres.Reserve(PointCount);
         Lines.Reserve(LineCount);
+        Discs.Reserve(DiscCount);
     }
 
     void AddSphere(
@@ -104,6 +120,24 @@ public:
         Lines.Add({From, To, opaqueColor, radius});
     }
 
+    void AddDisc(
+        const FVector& Position,
+        const FVector& Normal,
+        const FLinearColor& Color,
+        float Radius,
+        float HalfThickness,
+        int32 Sides)
+    {
+        Discs.Add({
+            Position,
+            Normal.GetSafeNormal(),
+            Color.CopyWithNewOpacity(1.0f),
+            Radius,
+            HalfThickness,
+            FMath::Max(Sides, 6)
+        });
+    }
+
     using FUMGViewportClient::Draw;
 
     virtual void Draw(
@@ -112,7 +146,7 @@ public:
     {
         UMaterial* vertexColorMaterial = ResolveVertexColorMaterial();
 
-        if ((Spheres.IsEmpty() && Lines.IsEmpty()) ||
+        if ((Spheres.IsEmpty() && Lines.IsEmpty() && Discs.IsEmpty()) ||
             !vertexColorMaterial)
         {
             return;
@@ -125,14 +159,25 @@ public:
                 : 10;
         const int32 sphereRings = FMath::Max(5, sphereSides / 2);
         const int32 cylinderSides = Lines.Num() <= 1000 ? 10 : 6;
+        int32 discVertexCount{};
+        int32 discTriangleCount{};
+
+        for (const FMiaIAViewportDisc& disc : Discs)
+        {
+            discVertexCount += disc.Sides * 4 + 6;
+            discTriangleCount += disc.Sides * 4;
+        }
+
         FDynamicMeshBuilder meshBuilder(PDI->View->GetFeatureLevel());
         meshBuilder.ReserveVertices(
             Spheres.Num() *
                 (sphereSides + 1) * (sphereRings + 1) +
-            Lines.Num() * (cylinderSides + 1) * 2);
+            Lines.Num() * (cylinderSides + 1) * 2 +
+            discVertexCount);
         meshBuilder.ReserveTriangles(
             Spheres.Num() * sphereSides * sphereRings * 2 +
-            Lines.Num() * cylinderSides * 2);
+            Lines.Num() * cylinderSides * 2 +
+            discTriangleCount);
 
         for (const FMiaIAViewportLine& line : Lines)
         {
@@ -149,6 +194,11 @@ public:
                 sphere,
                 sphereSides,
                 sphereRings);
+        }
+
+        for (const FMiaIAViewportDisc& disc : Discs)
+        {
+            AddDiscGeometry(meshBuilder, disc);
         }
 
         meshBuilder.Draw(
@@ -321,6 +371,141 @@ private:
         }
     }
 
+    static void AddDiscGeometry(
+        FDynamicMeshBuilder& MeshBuilder,
+        const FMiaIAViewportDisc& Disc)
+    {
+        const FVector normal = Disc.Normal.GetSafeNormal();
+
+        if (normal.IsNearlyZero() || Disc.Radius <= 0.0f)
+        {
+            return;
+        }
+
+        const FVector reference = FMath::Abs(normal.Z) < 0.9
+            ? FVector::UpVector
+            : FVector::ForwardVector;
+        const FVector axisX = FVector::CrossProduct(
+            reference,
+            normal).GetSafeNormal();
+        const FVector axisY = FVector::CrossProduct(
+            normal,
+            axisX).GetSafeNormal();
+        const FVector frontCenter = Disc.Position +
+            normal * Disc.HalfThickness;
+        const FVector backCenter = Disc.Position -
+            normal * Disc.HalfThickness;
+        int32 firstSideVertex = INDEX_NONE;
+
+        for (int32 endpoint = 0; endpoint < 2; ++endpoint)
+        {
+            const FVector center = endpoint == 0
+                ? frontCenter
+                : backCenter;
+
+            for (int32 side = 0; side <= Disc.Sides; ++side)
+            {
+                const float angle = static_cast<float>(side) /
+                    Disc.Sides * 2.0f * UE_PI;
+                const FVector radial =
+                    axisX * FMath::Cos(angle) +
+                    axisY * FMath::Sin(angle);
+                const int32 vertexIndex = MeshBuilder.AddVertex(
+                    FVector3f(center + radial * Disc.Radius),
+                    FVector2f(
+                        static_cast<float>(side) / Disc.Sides,
+                        static_cast<float>(endpoint)),
+                    FVector3f(normal),
+                    FVector3f(FVector::CrossProduct(
+                        radial,
+                        normal).GetSafeNormal()),
+                    FVector3f(radial),
+                    ShadedColor(Disc.Color, radial));
+
+                if (firstSideVertex == INDEX_NONE)
+                {
+                    firstSideVertex = vertexIndex;
+                }
+            }
+        }
+
+        const int32 secondSideVertex = firstSideVertex + Disc.Sides + 1;
+
+        for (int32 side = 0; side < Disc.Sides; ++side)
+        {
+            const int32 front = firstSideVertex + side;
+            const int32 back = secondSideVertex + side;
+            MeshBuilder.AddTriangle(front, front + 1, back);
+            MeshBuilder.AddTriangle(front + 1, back + 1, back);
+        }
+
+        const int32 frontCapCenter = MeshBuilder.AddVertex(
+            FVector3f(frontCenter),
+            FVector2f(0.5f, 0.5f),
+            FVector3f(axisX),
+            FVector3f(axisY),
+            FVector3f(normal),
+            ShadedColor(Disc.Color, normal));
+        const int32 firstFrontCapVertex = frontCapCenter + 1;
+
+        for (int32 side = 0; side <= Disc.Sides; ++side)
+        {
+            const float angle = static_cast<float>(side) /
+                Disc.Sides * 2.0f * UE_PI;
+            const FVector radial =
+                axisX * FMath::Cos(angle) +
+                axisY * FMath::Sin(angle);
+            MeshBuilder.AddVertex(
+                FVector3f(frontCenter + radial * Disc.Radius),
+                FVector2f(
+                    0.5f + FMath::Cos(angle) * 0.5f,
+                    0.5f + FMath::Sin(angle) * 0.5f),
+                FVector3f(axisX),
+                FVector3f(axisY),
+                FVector3f(normal),
+                ShadedColor(Disc.Color, normal));
+        }
+
+        const int32 backCapCenter = MeshBuilder.AddVertex(
+            FVector3f(backCenter),
+            FVector2f(0.5f, 0.5f),
+            FVector3f(axisX),
+            FVector3f(-axisY),
+            FVector3f(-normal),
+            ShadedColor(Disc.Color, -normal));
+        const int32 firstBackCapVertex = backCapCenter + 1;
+
+        for (int32 side = 0; side <= Disc.Sides; ++side)
+        {
+            const float angle = static_cast<float>(side) /
+                Disc.Sides * 2.0f * UE_PI;
+            const FVector radial =
+                axisX * FMath::Cos(angle) +
+                axisY * FMath::Sin(angle);
+            MeshBuilder.AddVertex(
+                FVector3f(backCenter + radial * Disc.Radius),
+                FVector2f(
+                    0.5f + FMath::Cos(angle) * 0.5f,
+                    0.5f + FMath::Sin(angle) * 0.5f),
+                FVector3f(axisX),
+                FVector3f(-axisY),
+                FVector3f(-normal),
+                ShadedColor(Disc.Color, -normal));
+        }
+
+        for (int32 side = 0; side < Disc.Sides; ++side)
+        {
+            MeshBuilder.AddTriangle(
+                frontCapCenter,
+                firstFrontCapVertex + side,
+                firstFrontCapVertex + side + 1);
+            MeshBuilder.AddTriangle(
+                backCapCenter,
+                firstBackCapVertex + side + 1,
+                firstBackCapVertex + side);
+        }
+    }
+
     static FColor ShadedColor(
         const FLinearColor& Color,
         const FVector& Normal)
@@ -345,6 +530,7 @@ private:
 
     TArray<FMiaIAViewportSphere> Spheres;
     TArray<FMiaIAViewportLine> Lines;
+    TArray<FMiaIAViewportDisc> Discs;
     TStrongObjectPtr<UMaterial> RuntimeVertexColorMaterial;
     bool bAttemptedRuntimeMaterialLoad{};
 };
@@ -353,7 +539,9 @@ namespace
 {
     constexpr float BaseNeuronSphereRadius = 24.0f;
     constexpr float CompactSphereRadius = 34.0f;
-    constexpr float CompactSphereGap = 12.0f;
+    constexpr float CompactLayerIndicatorLength = 80.0f;
+    constexpr float CompactLayerIndicatorGap = 8.0f;
+    constexpr float CompactLayerBlockGap = 18.0f;
     constexpr float NetworkAggregateSphereRadius = 52.0f;
     constexpr float NetworkIndicatorLength = 120.0f;
     constexpr float NetworkIndicatorGap = 12.0f;
@@ -361,7 +549,7 @@ namespace
     constexpr float NodeSelectionDistance = 17.0f;
     constexpr float ConnectionSelectionDistance = 7.0f;
     constexpr float MinimumCameraDistance = 80.0f;
-    constexpr float MaximumCameraDistance = 12000.0f;
+    constexpr float MaximumCameraDistance = 100000.0f;
     constexpr float OrbitSpeed = 0.28f;
     constexpr float PanSpeed = 0.0015f;
     constexpr float ZoomStep = 1.15f;
@@ -376,6 +564,207 @@ namespace
             -LayoutPosition.Y * LayoutUnit);
     }
 
+    FVector CoaxialRingWorldPosition(
+        int32 LayerIndex,
+        int32 LayerCount,
+        int32 NeuronIndex,
+        int32 NeuronCount,
+        const FMiaIAVisualizationSettings& Settings)
+    {
+        const float neuronRadius = BaseNeuronSphereRadius * FMath::Clamp(
+            Settings.NeuronScale,
+            0.25f,
+            3.0f);
+        const float neuronDiameter = neuronRadius * 2.0f;
+        const float neuronGap = FMath::Max(
+            0.0f,
+            static_cast<float>(Settings.Layout.NeuronGap));
+        const float layerGap = FMath::Max(
+            0.0f,
+            static_cast<float>(Settings.Layout.LayerGap));
+        const float minimumNeuronSpacing = neuronDiameter *
+            (1.0f + neuronGap);
+        const float layerStep = FMath::Max(
+            BaseNeuronSphereRadius * 10.0f,
+            neuronDiameter * (1.0f + layerGap));
+        const float centeredLayer = static_cast<float>(LayerIndex) -
+            static_cast<float>(FMath::Max(LayerCount - 1, 0)) * 0.5f;
+        const float direction = Settings.Layout.Direction ==
+            MiaIA::Studio::StudioLayoutDirection::Reverse
+            ? -1.0f
+            : 1.0f;
+        const float axisPosition = centeredLayer * layerStep * direction;
+
+        if (NeuronCount <= 1)
+        {
+            return FVector(axisPosition, 0.0f, 0.0f);
+        }
+
+        const float angleStep = 2.0f * UE_PI /
+            static_cast<float>(NeuronCount);
+        const float halfChordAngle = UE_PI /
+            static_cast<float>(NeuronCount);
+        const float chordRadius = minimumNeuronSpacing /
+            (2.0f * FMath::Max(FMath::Sin(halfChordAngle), 0.001f));
+        const float ringRadius = FMath::Max(
+            BaseNeuronSphereRadius * 4.0f,
+            chordRadius);
+        const float stagger = LayerIndex % 2 == 0
+            ? 0.0f
+            : angleStep * 0.5f;
+        const float angle = -UE_PI * 0.5f + stagger +
+            angleStep * static_cast<float>(NeuronIndex);
+
+        return FVector(
+            axisPosition,
+            FMath::Cos(angle) * ringRadius,
+            FMath::Sin(angle) * ringRadius);
+    }
+
+    constexpr float SpiralTokenHalfThickness = 4.0f;
+    constexpr float SpiralTerminalHalfThickness = 1.5f;
+    constexpr float SpiralTerminalSurfaceGap = 0.75f;
+    constexpr float SpiralTokenMinimumRadiusFactor = 2.5f;
+    constexpr float SpiralTokenPadding = 8.0f;
+    constexpr float SpiralTokenMinimumLayerStep = 220.0f;
+    constexpr int32 SpiralRingBaseCapacity = 8;
+
+    float SpiralTerminalRadius(
+        const FMiaIAVisualizationSettings& Settings)
+    {
+        return BaseNeuronSphereRadius * 0.32f * FMath::Clamp(
+            Settings.NeuronScale,
+            0.25f,
+            3.0f);
+    }
+
+    int32 SpiralRingForNeuron(int32 NeuronIndex)
+    {
+        const int32 safeIndex = FMath::Max(NeuronIndex, 0);
+        int32 ring = 1;
+
+        while (safeIndex >=
+            SpiralRingBaseCapacity * ring * (ring + 1) / 2)
+        {
+            ++ring;
+        }
+
+        return ring;
+    }
+
+    void SpiralRingLocation(
+        int32 NeuronIndex,
+        int32& OutRing,
+        int32& OutSlot,
+        int32& OutCapacity)
+    {
+        const int32 safeIndex = FMath::Max(NeuronIndex, 0);
+        OutRing = SpiralRingForNeuron(safeIndex);
+        OutCapacity = SpiralRingBaseCapacity * OutRing;
+        const int32 precedingCapacity =
+            SpiralRingBaseCapacity * OutRing * (OutRing - 1) / 2;
+        OutSlot = safeIndex - precedingCapacity;
+    }
+
+    float SpiralTokenRadius(
+        int32 NeuronCount,
+        const FMiaIAVisualizationSettings& Settings)
+    {
+        const float terminalRadius = SpiralTerminalRadius(Settings);
+        const float terminalGap = FMath::Max(
+            0.0f,
+            static_cast<float>(Settings.Layout.NeuronGap));
+        const float terminalSpacing = terminalRadius * 2.0f *
+            (1.0f + terminalGap);
+        const float ringStep = terminalSpacing /
+            (2.0f * FMath::Sin(
+                UE_PI / SpiralRingBaseCapacity));
+        const int32 outerRing = NeuronCount > 0
+            ? SpiralRingForNeuron(NeuronCount - 1)
+            : 0;
+
+        const float outerTerminalCenter = NeuronCount <= 0
+            ? 0.0f
+            : ringStep * static_cast<float>(outerRing);
+        return FMath::Max(
+            terminalRadius * SpiralTokenMinimumRadiusFactor,
+            outerTerminalCenter + terminalRadius + SpiralTokenPadding);
+    }
+
+    float SpiralTokenLayerPosition(
+        int32 LayerIndex,
+        int32 LayerCount,
+        const FMiaIAVisualizationSettings& Settings)
+    {
+        const float terminalDiameter = SpiralTerminalRadius(Settings) *
+            2.0f;
+        const float layerGap = FMath::Max(
+            0.0f,
+            static_cast<float>(Settings.Layout.LayerGap));
+        const float layerStep = FMath::Max(
+            SpiralTokenMinimumLayerStep,
+            SpiralTokenHalfThickness * 2.0f +
+                terminalDiameter * (4.0f + layerGap));
+        const float centeredLayer = static_cast<float>(LayerIndex) -
+            static_cast<float>(FMath::Max(LayerCount - 1, 0)) * 0.5f;
+        const float direction = Settings.Layout.Direction ==
+            MiaIA::Studio::StudioLayoutDirection::Reverse
+            ? -1.0f
+            : 1.0f;
+        return centeredLayer * layerStep * direction;
+    }
+
+    FVector SpiralTerminalPosition(
+        int32 LayerIndex,
+        int32 LayerCount,
+        int32 NeuronIndex,
+        const FMiaIAVisualizationSettings& Settings,
+        bool bOutputFace)
+    {
+        const float terminalRadius = SpiralTerminalRadius(Settings);
+        const float terminalGap = FMath::Max(
+            0.0f,
+            static_cast<float>(Settings.Layout.NeuronGap));
+        const float terminalSpacing = terminalRadius * 2.0f *
+            (1.0f + terminalGap);
+        const float ringStep = terminalSpacing /
+            (2.0f * FMath::Sin(
+                UE_PI / SpiralRingBaseCapacity));
+        int32 ring{};
+        int32 slot{};
+        int32 capacity{};
+        SpiralRingLocation(
+            NeuronIndex,
+            ring,
+            slot,
+            capacity);
+        const float spiralRadius = ringStep * static_cast<float>(ring);
+        const float angleStep = 2.0f * UE_PI /
+            static_cast<float>(capacity);
+        const float ringOffset = ring % 2 == 0
+            ? angleStep * 0.5f
+            : 0.0f;
+        const float angle = static_cast<float>(slot) * angleStep +
+            ringOffset;
+        const float direction = Settings.Layout.Direction ==
+            MiaIA::Studio::StudioLayoutDirection::Reverse
+            ? -1.0f
+            : 1.0f;
+        const float faceOffset =
+            SpiralTokenHalfThickness + SpiralTerminalHalfThickness +
+                SpiralTerminalSurfaceGap;
+        const float axisPosition = SpiralTokenLayerPosition(
+            LayerIndex,
+            LayerCount,
+            Settings) + direction * faceOffset *
+                (bOutputFace ? 1.0f : -1.0f);
+
+        return FVector(
+            axisPosition,
+            FMath::Cos(angle) * spiralRadius,
+            FMath::Sin(angle) * spiralRadius);
+    }
+
     FVector CompactLayerWorldPosition(
         int32 LayerIndex,
         int32 LayerCount,
@@ -387,7 +776,8 @@ namespace
             ? LayerCount - LayerIndex - 1
             : LayerIndex;
         const float spacing = CompactSphereRadius * 2.0f +
-            CompactSphereGap;
+            CompactLayerIndicatorLength * 2.0f +
+            CompactLayerBlockGap;
         const float offset = LayerCount <= 1
             ? 0.0f
             : (static_cast<float>(directedIndex) -
@@ -450,9 +840,12 @@ void SMiaIA3DNetworkView::SetSnapshot(
     Snapshot = InSnapshot;
 
     TSet<int64> currentNeuronIds;
+    TSet<int64> currentLayerIds;
 
     for (const FMiaIALayerSnapshot& layer : Snapshot.Layers)
     {
+        currentLayerIds.Add(layer.Id);
+
         for (const FMiaIANeuronSnapshot& neuron : layer.Neurons)
         {
             currentNeuronIds.Add(neuron.Id);
@@ -462,6 +855,15 @@ void SMiaIA3DNetworkView::SetSnapshot(
     for (auto iterator = ManualNodePositions.CreateIterator(); iterator; ++iterator)
     {
         if (!currentNeuronIds.Contains(iterator.Key()))
+        {
+            iterator.RemoveCurrent();
+        }
+    }
+
+    for (auto iterator = ManualLayerOffsets.CreateIterator(); iterator;
+        ++iterator)
+    {
+        if (!currentLayerIds.Contains(iterator.Key()))
         {
             iterator.RemoveCurrent();
         }
@@ -490,6 +892,23 @@ void SMiaIA3DNetworkView::SetOverview(
     const bool aggregateDimensionsChanged =
         previousInputCount != nextInputCount ||
         previousOutputCount != nextOutputCount;
+    bool compactDimensionsChanged =
+        Overview.Layers.Num() != InOverview.Layers.Num();
+
+    if (!compactDimensionsChanged)
+    {
+        for (int32 layerIndex = 0;
+            layerIndex < Overview.Layers.Num();
+            ++layerIndex)
+        {
+            if (Overview.Layers[layerIndex].NeuronCount !=
+                InOverview.Layers[layerIndex].NeuronCount)
+            {
+                compactDimensionsChanged = true;
+                break;
+            }
+        }
+    }
     const bool modeChanged = bCompactMode != bInCompactMode ||
         bNetworkAggregateMode != bInNetworkAggregateMode;
     Overview = InOverview;
@@ -499,7 +918,9 @@ void SMiaIA3DNetworkView::SetOverview(
     bSceneDirty = true;
 
     if (modeChanged ||
-        (bNetworkAggregateMode && aggregateDimensionsChanged))
+        (bNetworkAggregateMode && aggregateDimensionsChanged) ||
+        (bCompactMode && !bNetworkAggregateMode &&
+            compactDimensionsChanged))
     {
         FitView();
     }
@@ -678,6 +1099,8 @@ void SMiaIA3DNetworkView::SetVisualizationSettings(
     const FMiaIAVisualizationSettings& InSettings)
 {
     const bool layoutChanged =
+        VisualizationSettings.ThreeDimensionalVisualization !=
+            InSettings.ThreeDimensionalVisualization ||
         VisualizationSettings.Layout.Mode != InSettings.Layout.Mode ||
         VisualizationSettings.Layout.Orientation !=
             InSettings.Layout.Orientation ||
@@ -699,6 +1122,7 @@ void SMiaIA3DNetworkView::SetVisualizationSettings(
     if (layoutChanged || scaleChanged)
     {
         ManualNodePositions.Reset();
+        ManualLayerOffsets.Reset();
     }
 
     bSceneDirty = true;
@@ -712,7 +1136,11 @@ void SMiaIA3DNetworkView::FitView()
     }
 
     FBox sceneBounds(EForceInit::ForceInit);
-    float primitiveRadius = SphereRadius();
+    float primitiveRadius =
+        VisualizationSettings.ThreeDimensionalVisualization ==
+            EMiaIAVisualizationMode::SpiralTokens && !bCompactMode
+        ? SpiralTerminalRadius(VisualizationSettings)
+        : SphereRadius();
 
     if (bCompactMode)
     {
@@ -749,11 +1177,50 @@ void SMiaIA3DNetworkView::FitView()
                 layerIndex < Overview.Layers.Num();
                 ++layerIndex)
             {
-                sceneBounds += CompactLayerWorldPosition(
+                const FVector position = CompactLayerWorldPosition(
                     layerIndex,
                     Overview.Layers.Num(),
                     VisualizationSettings.Layout.Orientation,
                     VisualizationSettings.Layout.Direction);
+                const int64 inputCount = layerIndex == 0
+                    ? Overview.Layers[layerIndex].NeuronCount
+                    : Overview.Layers[layerIndex - 1].NeuronCount;
+                const int64 outputCount =
+                    Overview.Layers[layerIndex].NeuronCount;
+                const int32 visibleCount = static_cast<int32>(
+                    FMath::Min<int64>(
+                        FMath::Max(inputCount, outputCount),
+                        MaximumNetworkIndicators));
+                const float halfIndicatorSpan = visibleCount <= 1
+                    ? 0.0f
+                    : static_cast<float>(visibleCount - 1) *
+                        CompactLayerIndicatorGap * 0.5f;
+                const float axisExtent = CompactSphereRadius +
+                    CompactLayerIndicatorLength;
+
+                if (VisualizationSettings.Layout.Orientation ==
+                    MiaIA::Studio::StudioLayoutOrientation::Vertical)
+                {
+                    sceneBounds += position + FVector(
+                        -halfIndicatorSpan,
+                        0.0f,
+                        -axisExtent);
+                    sceneBounds += position + FVector(
+                        halfIndicatorSpan,
+                        0.0f,
+                        axisExtent);
+                }
+                else
+                {
+                    sceneBounds += position + FVector(
+                        -axisExtent,
+                        0.0f,
+                        -halfIndicatorSpan);
+                    sceneBounds += position + FVector(
+                        axisExtent,
+                        0.0f,
+                        halfIndicatorSpan);
+                }
             }
         }
     }
@@ -762,13 +1229,37 @@ void SMiaIA3DNetworkView::FitView()
         for (const FNodeRenderData& node : RenderedNodes)
         {
             sceneBounds += node.Position;
+
+            if (node.bHasSecondaryPosition)
+            {
+                sceneBounds += node.SecondaryPosition;
+            }
+        }
+
+        if (VisualizationSettings.ThreeDimensionalVisualization ==
+            EMiaIAVisualizationMode::SpiralTokens)
+        {
+            for (const FLayerRenderData& layer : RenderedLayers)
+            {
+                sceneBounds += layer.Position - FVector(
+                    layer.HalfThickness,
+                    layer.Radius,
+                    layer.Radius);
+                sceneBounds += layer.Position + FVector(
+                    layer.HalfThickness,
+                    layer.Radius,
+                    layer.Radius);
+            }
         }
     }
 
     LookAt = sceneBounds.IsValid
         ? sceneBounds.GetCenter()
         : FVector::ZeroVector;
-    CameraYaw = -90.0f;
+    CameraYaw = VisualizationSettings.ThreeDimensionalVisualization !=
+        EMiaIAVisualizationMode::Classic && !bCompactMode
+        ? -45.0f
+        : -90.0f;
     CameraPitch = 0.0f;
 
     if (sceneBounds.IsValid && ViewportClient.IsValid())
@@ -816,6 +1307,7 @@ void SMiaIA3DNetworkView::FitView()
 void SMiaIA3DNetworkView::ResetView()
 {
     ManualNodePositions.Reset();
+    ManualLayerOffsets.Reset();
     bSceneDirty = true;
     FitView();
 }
@@ -957,9 +1449,14 @@ int32 SMiaIA3DNetworkView::OnPaint(
         const float compactRadius = bNetworkAggregateMode
             ? NetworkAggregateSphereRadius
             : CompactSphereRadius;
+        const float nodeRadius = bCompactMode
+            ? compactRadius
+            : node.VisualRadius > 0.0f
+                ? node.VisualRadius
+                : SphereRadius();
         const float projectedViewportRadius = ProjectedSphereRadius(
             node.Position,
-            bCompactMode ? compactRadius : SphereRadius());
+            nodeRadius);
         const float projectedRadiusX = projectedViewportRadius *
             static_cast<float>(viewportToLocal.X);
         const float projectedRadiusY = projectedViewportRadius *
@@ -1031,7 +1528,7 @@ int32 SMiaIA3DNetworkView::OnPaint(
             FVector2D projectedMaximum;
             const bool hasProjectedBounds = ProjectedSphereBounds(
                 node.Position,
-                SphereRadius(),
+                nodeRadius,
                 projectedMinimum,
                 projectedMaximum);
             const float cursorX = hasProjectedBounds
@@ -1237,6 +1734,34 @@ FReply SMiaIA3DNetworkView::OnMouseButtonDown(
             {
                 const FNodeRenderData nodeValue = *node;
                 const bool additive = MouseEvent.IsControlDown();
+                const FMiaIALayerSnapshot* selectedLayer =
+                    VisualizationSettings.ThreeDimensionalVisualization ==
+                            EMiaIAVisualizationMode::SpiralTokens &&
+                        SelectedLayerId >= 0
+                    ? Snapshot.Layers.FindByPredicate(
+                        [this](const FMiaIALayerSnapshot& layer)
+                        {
+                            return layer.Id == SelectedLayerId;
+                        })
+                    : nullptr;
+                const bool nodeBelongsToSelectedLayer = selectedLayer &&
+                    selectedLayer->Neurons.ContainsByPredicate(
+                        [&nodeValue](
+                            const FMiaIANeuronSnapshot& neuron)
+                        {
+                            return neuron.Id == nodeValue.Id;
+                        });
+
+                if (nodeBelongsToSelectedLayer)
+                {
+                    PendingLayerDragId = SelectedLayerId;
+                    PendingLayerClickNeuronId = nodeValue.Id;
+                    PendingLayerDragStart = viewportPosition;
+                    bPendingLayerClickAdditive = additive;
+                    bPendingLayerDrag = true;
+                    return FReply::Handled().CaptureMouse(
+                        SharedThis(this));
+                }
 
                 if (additive)
                 {
@@ -1284,6 +1809,27 @@ FReply SMiaIA3DNetworkView::OnMouseButtonDown(
                 const bool startedDrag = BeginNodeDrag(
                     viewportPosition,
                     nodeValue);
+                FReply reply = FReply::Handled();
+
+                if (startedDrag)
+                {
+                    reply.CaptureMouse(SharedThis(this));
+                }
+
+                return reply;
+            }
+
+            if (const FLayerRenderData* layer =
+                FindLayerTokenAt(viewportPosition))
+            {
+                const FLayerRenderData layerValue = *layer;
+                SelectedConnectionId = -1;
+                OnLayerSelected.ExecuteIfBound(layerValue.Id);
+                RebuildScene();
+
+                const bool startedDrag = BeginLayerDrag(
+                    viewportPosition,
+                    layerValue);
                 FReply reply = FReply::Handled();
 
                 if (startedDrag)
@@ -1373,11 +1919,16 @@ FReply SMiaIA3DNetworkView::OnMouseButtonUp(
         button == EKeys::MiddleMouseButton && bPanning;
     const bool finishesNodeDrag =
         button == EKeys::LeftMouseButton && bDraggingNode;
+    const bool finishesLayerDrag =
+        button == EKeys::LeftMouseButton && bDraggingLayer;
+    const bool finishesPendingLayerDrag =
+        button == EKeys::LeftMouseButton && bPendingLayerDrag;
     const bool finishesMarquee =
         button == EKeys::LeftMouseButton && bMarqueeSelecting;
 
     if (!finishesOrbit && !finishesPan &&
-        !finishesNodeDrag && !finishesMarquee)
+        !finishesNodeDrag && !finishesLayerDrag &&
+        !finishesPendingLayerDrag && !finishesMarquee)
     {
         return SViewport::OnMouseButtonUp(MyGeometry, MouseEvent);
     }
@@ -1387,11 +1938,56 @@ FReply SMiaIA3DNetworkView::OnMouseButtonUp(
         CompleteMarqueeSelection(MyGeometry);
     }
 
+    if (finishesPendingLayerDrag &&
+        PendingLayerClickNeuronId >= 0)
+    {
+        if (bPendingLayerClickAdditive)
+        {
+            if (SelectedNeuronIds.Contains(PendingLayerClickNeuronId))
+            {
+                SelectedNeuronIds.Remove(PendingLayerClickNeuronId);
+            }
+            else
+            {
+                SelectedNeuronIds.Add(PendingLayerClickNeuronId);
+            }
+        }
+        else
+        {
+            SelectedNeuronIds.Reset();
+            SelectedNeuronIds.Add(PendingLayerClickNeuronId);
+        }
+
+        SelectedNeuronId = SelectedNeuronIds.Contains(
+            PendingLayerClickNeuronId)
+            ? PendingLayerClickNeuronId
+            : -1;
+
+        if (SelectedNeuronId < 0)
+        {
+            for (const int64 selectedId : SelectedNeuronIds)
+            {
+                SelectedNeuronId = selectedId;
+                break;
+            }
+        }
+
+        SelectedConnectionId = -1;
+        NotifyNeuronSelectionChanged();
+        RebuildScene();
+    }
+
     bOrbiting = false;
     bPanning = false;
     bDraggingNode = false;
+    bDraggingLayer = false;
+    bPendingLayerDrag = false;
     bMarqueeSelecting = false;
     DraggedNeuronId = -1;
+    DraggedLayerId = -1;
+    PendingLayerDragId = -1;
+    PendingLayerClickNeuronId = -1;
+    bPendingLayerClickAdditive = false;
     DragStartPositions.Reset();
     return FReply::Handled().ReleaseMouseCapture();
 }
@@ -1402,7 +1998,8 @@ FReply SMiaIA3DNetworkView::OnMouseMove(
 {
     if (!HasMouseCapture() ||
         (!bOrbiting && !bPanning &&
-            !bDraggingNode && !bMarqueeSelecting))
+            !bDraggingNode && !bDraggingLayer &&
+            !bPendingLayerDrag && !bMarqueeSelecting))
     {
         return SViewport::OnMouseMove(MyGeometry, MouseEvent);
     }
@@ -1419,6 +2016,43 @@ FReply SMiaIA3DNetworkView::OnMouseMove(
         return FReply::Handled();
     }
 
+    if (bPendingLayerDrag && SceneViewport.IsValid())
+    {
+        const FVector2D localSize = MyGeometry.GetLocalSize();
+        const FIntPoint viewportSize = SceneViewport->GetSizeXY();
+
+        if (localSize.X > 0.0f && localSize.Y > 0.0f)
+        {
+            const FVector2D viewportPosition(
+                localPosition.X * viewportSize.X / localSize.X,
+                localPosition.Y * viewportSize.Y / localSize.Y);
+
+            if (FVector2D::Distance(
+                    viewportPosition,
+                    PendingLayerDragStart) >=
+                LayerDragActivationDistance)
+            {
+                const FLayerRenderData* layer =
+                    RenderedLayers.FindByPredicate(
+                        [this](const FLayerRenderData& candidate)
+                        {
+                            return candidate.Id == PendingLayerDragId;
+                        });
+
+                if (layer && BeginLayerDrag(
+                    PendingLayerDragStart,
+                    *layer))
+                {
+                    bPendingLayerDrag = false;
+                    PendingLayerClickNeuronId = -1;
+                    UpdateLayerDrag(viewportPosition);
+                }
+            }
+        }
+
+        return FReply::Handled();
+    }
+
     if (bDraggingNode && SceneViewport.IsValid())
     {
         const FVector2D localSize = MyGeometry.GetLocalSize();
@@ -1427,6 +2061,18 @@ FReply SMiaIA3DNetworkView::OnMouseMove(
         if (localSize.X > 0.0f && localSize.Y > 0.0f)
         {
             UpdateNodeDrag(FVector2D(
+                localPosition.X * viewportSize.X / localSize.X,
+                localPosition.Y * viewportSize.Y / localSize.Y));
+        }
+    }
+    else if (bDraggingLayer && SceneViewport.IsValid())
+    {
+        const FVector2D localSize = MyGeometry.GetLocalSize();
+        const FIntPoint viewportSize = SceneViewport->GetSizeXY();
+
+        if (localSize.X > 0.0f && localSize.Y > 0.0f)
+        {
+            UpdateLayerDrag(FVector2D(
                 localPosition.X * viewportSize.X / localSize.X,
                 localPosition.Y * viewportSize.Y / localSize.Y));
         }
@@ -1550,8 +2196,14 @@ void SMiaIA3DNetworkView::OnMouseCaptureLost(
     bOrbiting = false;
     bPanning = false;
     bDraggingNode = false;
+    bDraggingLayer = false;
+    bPendingLayerDrag = false;
     bMarqueeSelecting = false;
     DraggedNeuronId = -1;
+    DraggedLayerId = -1;
+    PendingLayerDragId = -1;
+    PendingLayerClickNeuronId = -1;
+    bPendingLayerClickAdditive = false;
     DragStartPositions.Reset();
     Invalidate(EInvalidateWidgetReason::Paint);
     SViewport::OnMouseCaptureLost(CaptureLostEvent);
@@ -1628,6 +2280,7 @@ void SMiaIA3DNetworkView::RebuildScene()
     ViewportClient->ResetPrimitives();
     RenderedNodes.Reset();
     RenderedConnections.Reset();
+    RenderedLayers.Reset();
 
     if (bCompactMode)
     {
@@ -1658,6 +2311,10 @@ void SMiaIA3DNetworkView::RebuildDetailedScene()
     const FMiaIAEditorPalette palette =
         FMiaIAEditorTheme::StudioPalette(Theme);
     TMap<int64, FVector> positions;
+    TMap<int64, FVector> inputPositions;
+    const bool spiralTokens =
+        VisualizationSettings.ThreeDimensionalVisualization ==
+            EMiaIAVisualizationMode::SpiralTokens;
     int32 neuronCount = 0;
 
     for (const FMiaIALayerSnapshot& layer : Snapshot.Layers)
@@ -1666,14 +2323,19 @@ void SMiaIA3DNetworkView::RebuildDetailedScene()
     }
 
     positions.Reserve(neuronCount);
+    inputPositions.Reserve(neuronCount);
     RenderedNodes.Reserve(neuronCount);
+    RenderedLayers.Reserve(spiralTokens ? Snapshot.Layers.Num() : 0);
     const int32 visibleConnectionCount =
         VisualizationSettings.bShowConnections
             ? Snapshot.Connections.Num()
             : 0;
     ViewportClient->ReservePrimitives(
-        neuronCount,
-        visibleConnectionCount);
+        spiralTokens ? 0 : neuronCount,
+        visibleConnectionCount,
+        spiralTokens
+            ? Snapshot.Layers.Num() + neuronCount * 2
+            : 0);
 
     for (int32 layerIndex = 0;
         layerIndex < Snapshot.Layers.Num();
@@ -1681,29 +2343,112 @@ void SMiaIA3DNetworkView::RebuildDetailedScene()
     {
         const FMiaIALayerSnapshot& layer = Snapshot.Layers[layerIndex];
 
+        if (spiralTokens)
+        {
+            const float axisPosition = SpiralTokenLayerPosition(
+                layerIndex,
+                Snapshot.Layers.Num(),
+                VisualizationSettings);
+            const FVector layerOffset = ManualLayerOffsets.FindRef(
+                layer.Id);
+            const FVector layerPosition =
+                FVector(axisPosition, 0.0f, 0.0f) + layerOffset;
+            const float tokenRadius = SpiralTokenRadius(
+                layer.Neurons.Num(),
+                VisualizationSettings);
+            FLinearColor tokenColor(
+                palette.Background.R * 0.72f +
+                    palette.InactiveNeuron.R * 0.28f,
+                palette.Background.G * 0.72f +
+                    palette.InactiveNeuron.G * 0.28f,
+                palette.Background.B * 0.72f +
+                    palette.InactiveNeuron.B * 0.28f,
+                1.0f);
+
+            if (layer.Id == SelectedLayerId)
+            {
+                tokenColor = palette.Selection.CopyWithNewOpacity(1.0f);
+            }
+
+            RenderedLayers.Add({
+                layer.Id,
+                layerPosition,
+                tokenRadius,
+                SpiralTokenHalfThickness
+            });
+            ViewportClient->AddDisc(
+                layerPosition,
+                FVector::ForwardVector,
+                tokenColor,
+                tokenRadius,
+                SpiralTokenHalfThickness,
+                48);
+        }
+
         for (int32 neuronIndex = 0;
             neuronIndex < layer.Neurons.Num();
             ++neuronIndex)
         {
             const FMiaIANeuronSnapshot& neuron =
                 layer.Neurons[neuronIndex];
-            const MiaIA::Studio::StudioPosition layoutPosition =
-                MiaIA::Studio::StudioTopologyBuilder::DetailedLayoutPosition(
+            FVector automaticPosition;
+            FVector inputPosition;
+
+            if (spiralTokens)
+            {
+                const FVector layerOffset = ManualLayerOffsets.FindRef(
+                    layer.Id);
+                automaticPosition = SpiralTerminalPosition(
+                    layerIndex,
+                    Snapshot.Layers.Num(),
+                    neuronIndex,
+                    VisualizationSettings,
+                    true) + layerOffset;
+                inputPosition = SpiralTerminalPosition(
+                    layerIndex,
+                    Snapshot.Layers.Num(),
+                    neuronIndex,
+                    VisualizationSettings,
+                    false) + layerOffset;
+            }
+            else if (VisualizationSettings.ThreeDimensionalVisualization ==
+                EMiaIAVisualizationMode::CoaxialRings)
+            {
+                automaticPosition = CoaxialRingWorldPosition(
                     layerIndex,
                     Snapshot.Layers.Num(),
                     neuronIndex,
                     layer.Neurons.Num(),
-                    VisualizationSettings.Layout);
-            const FVector automaticPosition = DetailedWorldPosition(
-                layoutPosition,
-                LayoutUnitSize());
+                    VisualizationSettings);
+                inputPosition = automaticPosition;
+            }
+            else
+            {
+                const MiaIA::Studio::StudioPosition layoutPosition =
+                    MiaIA::Studio::StudioTopologyBuilder::
+                        DetailedLayoutPosition(
+                            layerIndex,
+                            Snapshot.Layers.Num(),
+                            neuronIndex,
+                            layer.Neurons.Num(),
+                            VisualizationSettings.Layout);
+                automaticPosition = DetailedWorldPosition(
+                    layoutPosition,
+                    LayoutUnitSize());
+                inputPosition = automaticPosition;
+            }
             const FVector* manualPosition =
-                ManualNodePositions.Find(neuron.Id);
+                spiralTokens
+                ? nullptr
+                : ManualNodePositions.Find(neuron.Id);
             const FVector position = manualPosition
                 ? *manualPosition
                 : automaticPosition;
+            const FVector resolvedInputPosition = manualPosition
+                ? *manualPosition
+                : inputPosition;
             positions.Add(neuron.Id, position);
-            RenderedNodes.Add({neuron.Id, position});
+            inputPositions.Add(neuron.Id, resolvedInputPosition);
 
             const FMiaIADebugNeuronTelemetry* telemetry =
                 NeuronTelemetry.Find(neuron.Id);
@@ -1742,10 +2487,46 @@ void SMiaIA3DNetworkView::RebuildDetailedScene()
                         ? telemetry->CandidateActivation
                         : neuron.Activation);
 
-            ViewportClient->AddSphere(
-                position,
-                color,
-                SphereRadius());
+            if (spiralTokens)
+            {
+                const float terminalRadius = SpiralTerminalRadius(
+                    VisualizationSettings);
+                RenderedNodes.Add({
+                    neuron.Id,
+                    position,
+                    resolvedInputPosition,
+                    terminalRadius,
+                    true
+                });
+                ViewportClient->AddDisc(
+                    position,
+                    FVector::ForwardVector,
+                    color,
+                    terminalRadius,
+                    SpiralTerminalHalfThickness,
+                    12);
+                ViewportClient->AddDisc(
+                    resolvedInputPosition,
+                    FVector::ForwardVector,
+                    color,
+                    terminalRadius,
+                    SpiralTerminalHalfThickness,
+                    12);
+            }
+            else
+            {
+                RenderedNodes.Add({
+                    neuron.Id,
+                    position,
+                    FVector::ZeroVector,
+                    SphereRadius(),
+                    false
+                });
+                ViewportClient->AddSphere(
+                    position,
+                    color,
+                    SphereRadius());
+            }
         }
     }
 
@@ -1764,7 +2545,7 @@ void SMiaIA3DNetworkView::RebuildDetailedScene()
         }
 
         const FVector* from = positions.Find(connection.FromNeuron);
-        const FVector* to = positions.Find(connection.ToNeuron);
+        const FVector* to = inputPositions.Find(connection.ToNeuron);
 
         if (!from || !to)
         {
@@ -1870,12 +2651,65 @@ void SMiaIA3DNetworkView::RebuildCompactScene()
     const FMiaIAEditorPalette palette =
         FMiaIAEditorTheme::StudioPalette(Theme);
     const int32 layerCount = Overview.Layers.Num();
+    const auto visibleCount = [](int64 count)
+    {
+        return static_cast<int32>(FMath::Min<int64>(
+            FMath::Max<int64>(0, count),
+            MaximumNetworkIndicators));
+    };
+    int32 indicatorCount{};
+
+    for (int32 layerIndex = 0;
+        layerIndex < layerCount;
+        ++layerIndex)
+    {
+        const int64 inputCount = layerIndex == 0
+            ? Overview.Layers[layerIndex].NeuronCount
+            : Overview.Layers[layerIndex - 1].NeuronCount;
+        indicatorCount += visibleCount(inputCount) +
+            visibleCount(Overview.Layers[layerIndex].NeuronCount);
+    }
+
+    const bool isVertical = VisualizationSettings.Layout.Orientation ==
+        MiaIA::Studio::StudioLayoutOrientation::Vertical;
+    const bool isReverse = VisualizationSettings.Layout.Direction ==
+        MiaIA::Studio::StudioLayoutDirection::Reverse;
+    const FVector flowAxis = isVertical
+        ? FVector(0.0f, 0.0f, isReverse ? 1.0f : -1.0f)
+        : FVector(isReverse ? -1.0f : 1.0f, 0.0f, 0.0f);
+    const FVector spreadAxis = isVertical
+        ? FVector(1.0f, 0.0f, 0.0f)
+        : FVector(0.0f, 0.0f, 1.0f);
     FVector previousPosition = FVector::ZeroVector;
     bool hasPrevious = false;
 
     ViewportClient->ReservePrimitives(
         layerCount,
-        FMath::Max(0, layerCount - 1));
+        FMath::Max(0, layerCount - 1) + indicatorCount);
+
+    const auto addIndicators = [this, &spreadAxis](
+        int32 count,
+        const FVector& center,
+        const FVector& direction,
+        const FLinearColor& color)
+    {
+        for (int32 indicatorIndex = 0;
+            indicatorIndex < count;
+            ++indicatorIndex)
+        {
+            const float offset =
+                (static_cast<float>(indicatorIndex) -
+                    static_cast<float>(count - 1) * 0.5f) *
+                CompactLayerIndicatorGap;
+            const FVector start = center +
+                direction * CompactSphereRadius + spreadAxis * offset;
+            ViewportClient->AddLine(
+                start,
+                start + direction * CompactLayerIndicatorLength,
+                color.CopyWithNewOpacity(0.82f),
+                3.0f);
+        }
+    };
 
     for (int32 layerIndex = 0;
         layerIndex < layerCount;
@@ -1891,6 +2725,20 @@ void SMiaIA3DNetworkView::RebuildCompactScene()
             palette.ActiveNeuron,
             CompactSphereRadius);
         RenderedNodes.Add({Overview.Layers[layerIndex].Id, position});
+        const int64 inputCount = layerIndex == 0
+            ? Overview.Layers[layerIndex].NeuronCount
+            : Overview.Layers[layerIndex - 1].NeuronCount;
+
+        addIndicators(
+            visibleCount(inputCount),
+            position,
+            -flowAxis,
+            palette.Debug);
+        addIndicators(
+            visibleCount(Overview.Layers[layerIndex].NeuronCount),
+            position,
+            flowAxis,
+            palette.ActiveNeuron);
 
         if (hasPrevious && VisualizationSettings.bShowConnections)
         {
@@ -2166,42 +3014,174 @@ SMiaIA3DNetworkView::FindNodeAt(
 
     for (const FNodeRenderData& node : RenderedNodes)
     {
-        FVector2D projected;
-
-        if (!ProjectToViewport(node.Position, projected))
+        const float nodeRadius = bNetworkAggregateMode
+            ? NetworkAggregateSphereRadius
+            : bCompactMode
+                ? CompactSphereRadius
+                : node.VisualRadius > 0.0f
+                    ? node.VisualRadius
+                    : SphereRadius();
+        const auto considerPosition = [&](const FVector& position)
         {
-            continue;
-        }
+            FVector2D projected;
 
-        const double distance = FVector2D::Distance(
-            ViewportPosition,
-            projected);
+            if (!ProjectToViewport(position, projected))
+            {
+                return;
+            }
 
-        const double selectionDistance = FMath::Max(
-            static_cast<double>(NodeSelectionDistance),
-            static_cast<double>(ProjectedSphereRadius(
-                node.Position,
-                bNetworkAggregateMode
-                    ? NetworkAggregateSphereRadius
-                    : bCompactMode
-                        ? CompactSphereRadius
-                        : SphereRadius())));
+            const double distance = FVector2D::Distance(
+                ViewportPosition,
+                projected);
+            const double selectionDistance = FMath::Max(
+                static_cast<double>(NodeSelectionDistance),
+                static_cast<double>(ProjectedSphereRadius(
+                    position,
+                    nodeRadius)));
 
-        if (distance <= selectionDistance &&
-            distance <= closestDistance)
+            if (distance <= selectionDistance &&
+                distance <= closestDistance)
+            {
+                closestNode = &node;
+                closestDistance = distance;
+            }
+        };
+
+        considerPosition(node.Position);
+
+        if (node.bHasSecondaryPosition)
         {
-            closestNode = &node;
-            closestDistance = distance;
+            considerPosition(node.SecondaryPosition);
         }
     }
 
     return closestNode;
 }
 
+const SMiaIA3DNetworkView::FLayerRenderData*
+SMiaIA3DNetworkView::FindLayerTokenAt(
+    const FVector2D& ViewportPosition) const
+{
+    if (bCompactMode ||
+        VisualizationSettings.ThreeDimensionalVisualization !=
+            EMiaIAVisualizationMode::SpiralTokens)
+    {
+        return nullptr;
+    }
+
+    FVector rayOrigin;
+    FVector rayDirection;
+
+    if (!DeprojectFromViewport(
+            ViewportPosition,
+            rayOrigin,
+            rayDirection))
+    {
+        return nullptr;
+    }
+
+    const FLayerRenderData* closestLayer = nullptr;
+    double closestRayDistance = UE_DOUBLE_BIG_NUMBER;
+
+    for (const FLayerRenderData& layer : RenderedLayers)
+    {
+        const FVector localOrigin = rayOrigin - layer.Position;
+        const auto considerDistance = [&](double distance)
+        {
+            if (distance >= 0.0 && distance < closestRayDistance)
+            {
+                closestRayDistance = distance;
+                closestLayer = &layer;
+            }
+        };
+
+        if (!FMath::IsNearlyZero(rayDirection.X))
+        {
+            const float faceOffsets[2]{
+                -layer.HalfThickness,
+                layer.HalfThickness
+            };
+
+            for (const float faceOffset : faceOffsets)
+            {
+                const double distance =
+                    (faceOffset - localOrigin.X) / rayDirection.X;
+
+                if (distance < 0.0)
+                {
+                    continue;
+                }
+
+                const FVector hit = localOrigin +
+                    rayDirection * distance;
+
+                if (hit.Y * hit.Y + hit.Z * hit.Z <=
+                    layer.Radius * layer.Radius)
+                {
+                    considerDistance(distance);
+                }
+            }
+        }
+
+        const double radialDirectionSquared =
+            rayDirection.Y * rayDirection.Y +
+            rayDirection.Z * rayDirection.Z;
+
+        if (radialDirectionSquared > UE_DOUBLE_SMALL_NUMBER)
+        {
+            const double radialDot =
+                localOrigin.Y * rayDirection.Y +
+                localOrigin.Z * rayDirection.Z;
+            const double radialOriginSquared =
+                localOrigin.Y * localOrigin.Y +
+                localOrigin.Z * localOrigin.Z;
+            const double discriminant = radialDot * radialDot -
+                radialDirectionSquared *
+                    (radialOriginSquared -
+                        layer.Radius * layer.Radius);
+
+            if (discriminant >= 0.0)
+            {
+                const double squareRoot = FMath::Sqrt(discriminant);
+                const double distances[2]{
+                    (-radialDot - squareRoot) /
+                        radialDirectionSquared,
+                    (-radialDot + squareRoot) /
+                        radialDirectionSquared
+                };
+
+                for (const double distance : distances)
+                {
+                    if (distance < 0.0)
+                    {
+                        continue;
+                    }
+
+                    const double hitX = localOrigin.X +
+                        rayDirection.X * distance;
+
+                    if (FMath::Abs(hitX) <= layer.HalfThickness)
+                    {
+                        considerDistance(distance);
+                    }
+                }
+            }
+        }
+    }
+
+    return closestLayer;
+}
+
 bool SMiaIA3DNetworkView::BeginNodeDrag(
     const FVector2D& ViewportPosition,
     const FNodeRenderData& Node)
 {
+    if (VisualizationSettings.ThreeDimensionalVisualization ==
+        EMiaIAVisualizationMode::SpiralTokens)
+    {
+        return false;
+    }
+
     FVector rayOrigin;
     FVector rayDirection;
 
@@ -2245,6 +3225,43 @@ bool SMiaIA3DNetworkView::BeginNodeDrag(
     return true;
 }
 
+bool SMiaIA3DNetworkView::BeginLayerDrag(
+    const FVector2D& ViewportPosition,
+    const FLayerRenderData& Layer)
+{
+    if (VisualizationSettings.ThreeDimensionalVisualization !=
+            EMiaIAVisualizationMode::SpiralTokens ||
+        bCompactMode)
+    {
+        return false;
+    }
+
+    FVector rayOrigin;
+    FVector rayDirection;
+
+    if (!DeprojectFromViewport(
+            ViewportPosition,
+            rayOrigin,
+            rayDirection))
+    {
+        return false;
+    }
+
+    DraggedLayerId = Layer.Id;
+    DragPlaneOrigin = Layer.Position;
+    DragPlaneNormal = FRotator(
+        CameraPitch,
+        CameraYaw,
+        0.0f).Vector();
+    DragStartIntersection = FMath::RayPlaneIntersection(
+        rayOrigin,
+        rayDirection,
+        FPlane(DragPlaneOrigin, DragPlaneNormal));
+    DragStartLayerOffset = ManualLayerOffsets.FindRef(Layer.Id);
+    bDraggingLayer = true;
+    return true;
+}
+
 void SMiaIA3DNetworkView::UpdateNodeDrag(
     const FVector2D& ViewportPosition)
 {
@@ -2282,6 +3299,35 @@ void SMiaIA3DNetworkView::UpdateNodeDrag(
             entry.Value + translation);
     }
 
+    RebuildScene();
+}
+
+void SMiaIA3DNetworkView::UpdateLayerDrag(
+    const FVector2D& ViewportPosition)
+{
+    if (!bDraggingLayer || DraggedLayerId < 0)
+    {
+        return;
+    }
+
+    FVector rayOrigin;
+    FVector rayDirection;
+
+    if (!DeprojectFromViewport(
+            ViewportPosition,
+            rayOrigin,
+            rayDirection))
+    {
+        return;
+    }
+
+    const FVector intersection = FMath::RayPlaneIntersection(
+        rayOrigin,
+        rayDirection,
+        FPlane(DragPlaneOrigin, DragPlaneNormal));
+    ManualLayerOffsets.Add(
+        DraggedLayerId,
+        DragStartLayerOffset + intersection - DragStartIntersection);
     RebuildScene();
 }
 
@@ -2352,24 +3398,74 @@ void SMiaIA3DNetworkView::CompleteMarqueeSelection(
 
     for (const FNodeRenderData& node : RenderedNodes)
     {
-        FVector2D projected;
-
-        if (!ProjectToViewport(node.Position, projected))
+        const auto positionIsInside = [&](const FVector& position)
         {
-            continue;
-        }
+            FVector2D projected;
 
-        const FVector2D localPosition(
-            projected.X * localSize.X / viewportSize.X,
-            projected.Y * localSize.Y / viewportSize.Y);
+            if (!ProjectToViewport(position, projected))
+            {
+                return false;
+            }
 
-        if (localPosition.X >= minimum.X &&
-            localPosition.X <= maximum.X &&
-            localPosition.Y >= minimum.Y &&
-            localPosition.Y <= maximum.Y)
+            const FVector2D localPosition(
+                projected.X * localSize.X / viewportSize.X,
+                projected.Y * localSize.Y / viewportSize.Y);
+            return localPosition.X >= minimum.X &&
+                localPosition.X <= maximum.X &&
+                localPosition.Y >= minimum.Y &&
+                localPosition.Y <= maximum.Y;
+        };
+
+        if (positionIsInside(node.Position) ||
+            (node.bHasSecondaryPosition &&
+                positionIsInside(node.SecondaryPosition)))
         {
             selection.Add(node.Id);
             primaryNeuronId = node.Id;
+        }
+    }
+
+    if (!bMarqueeAdditive &&
+        VisualizationSettings.ThreeDimensionalVisualization ==
+            EMiaIAVisualizationMode::SpiralTokens)
+    {
+        int64 completeLayerId = -1;
+        int32 completeLayerCount = 0;
+
+        for (const FMiaIALayerSnapshot& layer : Snapshot.Layers)
+        {
+            if (layer.Neurons.IsEmpty())
+            {
+                continue;
+            }
+
+            bool allNeuronsSelected = true;
+
+            for (const FMiaIANeuronSnapshot& neuron : layer.Neurons)
+            {
+                if (!selection.Contains(neuron.Id))
+                {
+                    allNeuronsSelected = false;
+                    break;
+                }
+            }
+
+            if (allNeuronsSelected)
+            {
+                completeLayerId = layer.Id;
+                ++completeLayerCount;
+            }
+        }
+
+        if (completeLayerCount == 1)
+        {
+            SelectedNeuronIds.Reset();
+            SelectedNeuronId = -1;
+            SelectedConnectionId = -1;
+            SelectedLayerId = completeLayerId;
+            OnLayerSelected.ExecuteIfBound(completeLayerId);
+            RebuildScene();
+            return;
         }
     }
 

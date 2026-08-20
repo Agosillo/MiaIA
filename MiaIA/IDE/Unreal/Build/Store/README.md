@@ -38,15 +38,16 @@ Convert that archive to an unsigned Store-ready MSIX:
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass `
     -File .\Build\Package-StoreMsix.ps1 `
-    -PackageVersion 1.0.0.0 `
+    -PackageVersion 1.0.2.0 `
     -SourceDirectory "D:\MiaIA-Releases\Windows-Shipping" `
-    -OutputDirectory "D:\MiaIA-Releases\Store-1.0.0.0"
+    -OutputDirectory "D:\MiaIA-Releases\Store-1.0.2.0"
 ```
 
 The Store package version is independent from the user-facing **MiaIA Studio
 0.1 Alpha** version. It has four numeric parts, its first part cannot be zero,
 and its fourth part must be zero because Microsoft Store reserves that part.
-Every later submission must use a higher version, for example `1.0.1.0`.
+The `1.0.2.0` package is the Store package for this release. Every later
+submission should use a higher version, for example `1.0.3.0`.
 
 The script copies the Shipping runtime into an MSIX layout while omitting the
 Unreal bootstrap launcher, prerequisite installers, symbols, archive manifests,
@@ -72,7 +73,7 @@ Add-AppxPackage `
     "C:\Program Files (x86)\Microsoft SDKs\Windows Kits\10\ExtensionSDKs\Microsoft.VCLibs.Desktop\14.0\Appx\Retail\x64\Microsoft.VCLibs.x64.14.00.Desktop.appx"
 
 Add-AppxPackage `
-    -Register "D:\MiaIA-Releases\Store-1.0.0.0\Layout\AppxManifest.xml"
+    -Register "D:\MiaIA-Releases\Store-1.0.2.0\Layout\AppxManifest.xml"
 ```
 
 Remove the local development registration before installing a Store-delivered
