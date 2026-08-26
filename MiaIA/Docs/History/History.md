@@ -212,7 +212,7 @@ Compact layer summaries in both Unreal renderers now reuse the whole-network pre
 
 The primary Studio toolbar now keeps Project, Refresh, View, Visualization, and Help concise and directly accessible. Canvas actions moved into Layout, interface theme and semantic palettes moved into Appearance, and polling frequency plus topology limits moved into Performance. The grouped menus retain the same commands and persisted settings while preventing narrow editor or standalone windows from clipping later controls.
 
-The trace integration also introduced the first explicit Unreal instance boundary. An opaque handle identifies the initial `default` instance, while a runtime service in `IDE.dll` owns and invokes its `StudioController`. The Slate module therefore shares the exact process-local SDK state used by Blueprint and the integrated CLI instead of acquiring a second static-library copy. True simultaneous model contexts remain future native SDK work behind this boundary.
+The trace integration also introduced the first explicit Unreal instance boundary. An opaque handle identifies the initial `default` instance, while a runtime service in `IDE.dll` owns and invokes its `StudioController`. The Slate module therefore shares the exact process-local SDK state used by Blueprint and the integrated CLI instead of acquiring a second static-library copy. Independently executing client contexts remained future native SDK work behind this boundary.
 
 ### Selectable training timeline
 
@@ -220,8 +220,14 @@ The former static six-label Training Timeline became a live controlled-session i
 
 The shared Unreal editor and standalone panel display session progress, learning configuration, phase state, breakpoint context, newest-first history, loss transitions, targets, predictions, errors, and parameter-update counts. Selecting a history row requests the existing Engine-owned `TrainingStepSnapshot` by its stable step index. No loss, prediction, gradient, or update value is recalculated by Slate, and the explicit instance service keeps this state aligned with Blueprint and the integrated Console across Unreal module boundaries.
 
+### Multi-model project state
+
+The SDK's former single network, dataset, training/debug sessions, and checkpoint store were grouped into an explicit `ModelInstance`. A process-local `ProjectState` now owns multiple such models under stable runtime IDs and maintains one active selection. Existing SDK operations therefore remain compatible while targeting the active model, and new SDK plus shared CLI operations create, list, select, rename, and remove isolated models.
+
+Model selection is protected by the same synchronization and mutation boundary as training: a Running session or active phase-debug transaction must be paused or cancelled before creating, selecting, or removing a model. The single cooperative worker still prevents parallel model training. `.mai` v1 intentionally remains a one-model format, so saving a multi-model runtime project is rejected rather than losing inactive models; a later version must define their persistence and active selection explicitly.
+
 ## Current position
 
-MiaIA can now create dense networks with explicit initialization choices, reconfigure existing parameters transactionally, represent, execute, interchange, persist a `.mai` v1 project, inspect individual network relationships, evaluate, differentiate, debug one training step phase by phase, train through controlled foreground or background sessions, and navigate or compare the complete history of successful steps. It cannot yet persist visualization layouts or training history inside that project, retain complete hidden-neuron activations for every step, or deliver the planned complete graphical debugging experience.
+MiaIA can now host multiple isolated model instances in one process-local project, switch the active model through the SDK or shared CLI, create dense networks with explicit initialization choices, reconfigure existing parameters transactionally, represent, execute, interchange, persist a single-model `.mai` v1 project, inspect individual network relationships, evaluate, differentiate, debug one training step phase by phase, train through controlled foreground or background sessions, and navigate or compare the complete history of successful steps. It cannot yet persist multi-model project state, visualization layouts, checkpoints, or training history, expose model selection in the graphical Studio UI, retain complete hidden-neuron activations for every step, or execute independent models concurrently.
 
 Those next steps are tracked in the [Roadmap](../Roadmap/Roadmap.md).

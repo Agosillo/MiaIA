@@ -65,9 +65,11 @@ This separation allows a mathematical subsystem to evolve without requiring clie
 
 ### SDK
 
-`MiaIAClient` is the public facade used by clients. It exposes network creation and editing, complete and focused inspection snapshots, immutable forward execution and backward gradient-flow traces, dataset-wide signal-health diagnostics, ONNX interchange, versioned `.mai` project persistence, datasets, forward execution, sample and full-dataset evaluation, gradient evaluation, atomic sample training, and an ordered dataset epoch.
+`MiaIAClient` is the public facade used by clients. It exposes project and model-instance management, network creation and editing, complete and focused inspection snapshots, immutable forward execution and backward gradient-flow traces, dataset-wide signal-health diagnostics, ONNX interchange, versioned `.mai` project persistence, datasets, forward execution, sample and full-dataset evaluation, gradient evaluation, atomic sample training, and an ordered dataset epoch.
 
-The current SDK owns one process-local network and one process-local dataset through its internal client state. This is sufficient for the present console and integration tests. Multiple sessions, explicit contexts, concurrency, and persisted workspace state are future concerns and should not be assumed to exist today.
+The process-local SDK state is now represented by one `ProjectState`. It owns one or more `ModelInstance` values with stable runtime IDs and exactly one active selection. Each model instance owns an independent network, dataset, controlled training session, phase-debug session, and checkpoint store. Existing network, dataset, training, debug, and checkpoint APIs remain source-compatible and operate on the active model. The explicit model API can create and select an empty model, list lightweight summaries, rename a model, or remove it while retaining at least one instance.
+
+This is multi-model project state, not parallel execution. One process-wide client mutex and one cooperative background worker still serialize SDK access. Creating, selecting, or removing models is rejected while the active model is Running or owns an active phase-debug transaction; renaming only changes model metadata. Independent concurrently executing client contexts remain future work.
 
 ### CLI command processor
 
@@ -75,7 +77,7 @@ The CLI module is a reusable static library that parses one textual command and 
 
 The module also owns the structured command catalog used for contextual discovery. A client supplies the partially entered text and receives bounded suggestions containing a completion, complete syntax, and short description. Command paths are filtered one level at a time, while an active parameter sequence retains the complete syntax as guidance. This keeps command knowledge out of Unreal-specific widgets and makes the same catalog available to future clients.
 
-`Console.exe` and the Unreal editor console use this same processor in the same process as their SDK state. Unreal does not launch `Console.exe`: a separate process would own a separate process-local network, dataset, and training session. Command execution is serialized because the current processor captures the existing command handlers' standard output during dispatch.
+`Console.exe` and the Unreal editor console use this same processor in the same process as their SDK state. Unreal does not launch `Console.exe`: a separate process would own a separate process-local project and its model instances. Command execution is serialized because the current processor captures the existing command handlers' standard output during dispatch.
 
 ### StudioCore
 
@@ -257,7 +259,7 @@ A session starts Active at a safe step boundary. `next` executes exactly one sam
 
 `resume` changes an Active session to Running and launches one SDK-owned background worker. `pause` requests cooperative stop, waits for the current atomic sample step to finish, joins the worker, and returns the session to Active. The network is therefore never exposed halfway through an update. Completion occurs after the configured number of ordered epochs. Cancellation stops and joins a running worker but does not roll back successful steps.
 
-All SDK access to the process-local network, dataset, and session is serialized by one client-state mutex. Snapshot and inspection calls remain available while Running and observe a coherent step boundary. Operations that would mutate the network, dataset, or activations are rejected until the session is paused. Worker stop reasons distinguish a requested pause, a breakpoint hit, requested cancellation, and a failed step.
+All SDK access to the process-local project and its active model is serialized by one client-state mutex. Snapshot and inspection calls remain available while Running and observe a coherent step boundary. Operations that would mutate the active network, dataset, or activations, or change the active model, are rejected until the session is paused. Worker stop reasons distinguish a requested pause, a breakpoint hit, requested cancellation, and a failed step.
 
 `TrainingBreakpointController` owns validated breakpoint definitions and evaluates them against either a committed `TrainingStepSnapshot` or an intermediate `TrainingDebugSnapshot`. Breakpoint configuration is retained across new controlled sessions while hit state is reset. Automatic execution evaluates only fully committed sample results, changes a Running session back to Active, and records structured trigger telemetry. Phase stepping can additionally evaluate the internal forward, backward, update, and verification boundaries without moving breakpoint logic into a client.
 
@@ -325,9 +327,9 @@ CSV contains samples, not MiaIA editor or debug metadata.
 
 ### `.mai` project format
 
-`ProjectArchive` implements the versioned `.mai` container independently of any frontend. Version 1 embeds the supported ONNX model and tagged metadata sections for a CSV dataset reference, training configuration, and breakpoint definitions. Writes use a sibling temporary file followed by replacement, and reads construct validated replacement state before `MiaIAClient` publishes it.
+`ProjectArchive` implements the versioned `.mai` container independently of any frontend. Version 1 embeds exactly one supported ONNX model and tagged metadata sections for its CSV dataset reference, training configuration, and breakpoint definitions. Writes use a sibling temporary file followed by replacement, and reads construct validated replacement state before `MiaIAClient` publishes it as a new `ProjectState` containing the default model instance.
 
-Dataset samples remain external. If their recorded path is unavailable, opening still restores the model, training configuration, and breakpoints while reporting the dataset as unavailable. Current training progress, retained history, active phase-debug state, visualization layout, and user preferences are not part of version 1. See the [project format contract](../Project/Project.md).
+Dataset samples remain external. If their recorded path is unavailable, opening still restores the model, training configuration, and breakpoints while reporting the dataset as unavailable. Current training progress, retained history, active phase-debug state, additional model instances, checkpoint stores, visualization layout, and user preferences are not part of version 1. Saving is rejected while more than one runtime model exists, preventing silent loss until a later format version defines multi-model persistence. See the [project format contract](../Project/Project.md).
 
 ## Validation and failure behavior
 
@@ -337,14 +339,14 @@ Clients should treat a `false` result as a rejected operation and should not inf
 
 ## Current constraints
 
-- one process-local network and dataset;
+- one process-local `ProjectState` with multiple isolated models and one active model at a time;
 - feed-forward execution only;
 - dense factory and a limited ONNX graph subset;
 - MSE is the only loss type;
 - SGD is the only optimizer;
 - background execution uses one cooperative worker and one process-local state lock;
-- no mini-batches, checkpoints, or configurable sample ordering yet;
-- `.mai` v1 does not yet persist training progress, history, or visualization layout;
+- no mini-batches or configurable sample ordering yet;
+- `.mai` v1 persists exactly one model and does not yet persist additional model instances, checkpoints, training progress, history, or visualization layout;
 - Unreal visualization and Blueprint coverage are incomplete.
 
 These constraints describe the current implementation, not the intended final scope.

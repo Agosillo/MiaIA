@@ -6,7 +6,7 @@ The MiaIA Console is an interactive SDK client. Every command translates user in
 
 Command parsing and dispatch live in the reusable CLI command processor. `Console.exe` is only its terminal host; the Unreal editor panel calls the same processor directly. A command therefore has the same syntax and behavior in both interfaces and operates on the host process's shared `MiaIAClient` state.
 
-The state is process-local. A host contains one current MiaIA project state; save it as `.mai` to restore the supported model, dataset reference, training configuration, and breakpoints in a later process. Starting `Console.exe` beside Unreal does not connect it to the editor: the two processes own independent state and must open or save projects explicitly. Remote sessions are not implemented.
+The state is process-local. A host contains one current MiaIA project with one or more isolated model instances and one active model. Existing commands operate on that active model. `.mai` v1 restores one supported model, dataset reference, training configuration, and breakpoint collection; it cannot yet persist multiple runtime models. Starting `Console.exe` beside Unreal does not connect it to the editor: the two processes own independent state and must open or save projects explicitly. Remote sessions are not implemented.
 
 Relative paths are resolved from the host working directory. For `Console.exe`, this is the directory from which it was launched. In the Unreal editor console, it is the Unreal project directory that contains `IDE.uproject`. Absolute paths work in both hosts.
 
@@ -34,6 +34,13 @@ project
     -> project open <path.mai>
     -> project save [path.mai]
     -> project info
+
+model
+    -> model create <name>
+    -> model list
+    -> model select <id>
+    -> model rename <id> <name>
+    -> model remove <id>
 ```
 
 Once a command starts accepting values, its complete syntax remains visible while the values are entered. For example, `create 2` continues to display the four required shape arguments and every optional initialization argument.
@@ -114,6 +121,20 @@ exit
 ```
 
 Closes the Console. The current in-memory network and dataset are discarded.
+
+## Model instances
+
+Every project retains at least one model. Model IDs are stable during the current process and reset when a new project is created or a `.mai` v1 project is opened. Creating a model selects it immediately. The network, dataset, controlled training session, phase-debug transaction, and checkpoints are isolated per model.
+
+```text
+model create Experiment B
+model list
+model select 1
+model rename 2 Comparison model
+model remove 2
+```
+
+`model list` marks the active model with `*` and prints its topology, dataset-sample, and checkpoint counts. Create, select, and remove are rejected while the active model is Running or phase debugging is active. At least one model must remain. Rename changes only metadata.
 
 ## Network creation and input
 
@@ -417,7 +438,7 @@ Use this command only with a valid current network. It is a lightweight local ti
 project new
 ```
 
-Clears the current network, dataset, training session, debug transaction, breakpoints, and saved project path. The command is rejected while background training is running or phase debugging is active.
+Replaces the complete current project with one empty model named `Model 1` and runtime ID `1`, clearing its network, dataset, training/debug state, checkpoints, breakpoints, and saved project path. The command is rejected while background training is running or phase debugging is active.
 
 ### `project open`
 
@@ -434,7 +455,7 @@ project open experiment.mai
 project open "C:\MiaIA Projects\xor.mai"
 ```
 
-If the recorded CSV source is unavailable, opening still restores the model, training configuration, and breakpoints. The command prints a warning and `project info` reports the dataset as unavailable.
+If the recorded CSV source is unavailable, opening still restores the model, training configuration, and breakpoints. The command prints a warning and `project info` reports the dataset as unavailable. Opening replaces the runtime project with one model named `Model 1` because `.mai` v1 contains exactly one model.
 
 ### `project save`
 
@@ -449,7 +470,7 @@ project save "C:\MiaIA Projects\xor.mai"
 project save
 ```
 
-The destination must use `.mai`. The current network must be representable by the supported ONNX subset. Dataset samples remain in their CSV file; the project stores their source reference and schema.
+The destination must use `.mai`. The project must currently contain exactly one model and its network must be representable by the supported ONNX subset. A multi-model project is rejected rather than silently losing inactive models. Dataset samples remain in their CSV file; the project stores their source reference and schema.
 
 ### `project info`
 
@@ -457,7 +478,7 @@ The destination must use `.mai`. The current network must be representable by th
 project info
 ```
 
-Prints the current path and format version, model availability, dataset source and status, training configuration, and breakpoint count.
+Prints the current path and format version, model count, active model identity and availability, dataset source and status, training configuration, and breakpoint count.
 
 The [MiaIA project format](../Project/Project.md) documents the precise version 1 contents, exclusions, and failure behavior.
 
@@ -1065,10 +1086,10 @@ Check the path, header option, column counts, row widths, and numeric values. `n
 ## Current limitations
 
 - SGD is the only optimizer and background execution uses one cooperative worker;
-- state is not persisted as a MiaIA workspace;
+- `.mai` v1 persists only a project containing one model and does not retain runtime model names or checkpoints;
 - MSE is the only loss;
 - dataset preprocessing and categorical values are not supported;
 - detailed structured error diagnostics are not yet exposed;
-- commands operate on one process-local network and dataset.
+- commands operate on the selected model in one process-local project, with one cooperative background worker across the project.
 
 See the [Roadmap](../Roadmap/Roadmap.md) for the planned training and debugging workflow.

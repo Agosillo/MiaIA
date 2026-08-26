@@ -87,6 +87,9 @@
     <ClInclude Include="Public\ModelCheckpointSnapshot.h">
       <Filter>File di intestazione</Filter>
     </ClInclude>
+    <ClInclude Include="Public\ModelInstanceSnapshot.h">
+      <Filter>File di intestazione</Filter>
+    </ClInclude>
     <ClInclude Include="Public\SampleEvaluationSnapshot.h">
       <Filter>File di intestazione</Filter>
     </ClInclude>

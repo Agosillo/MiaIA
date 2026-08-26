@@ -16,6 +16,7 @@
 #include "../../Core/Public/ForwardTraceSnapshot.h"
 #include "../../Core/Public/LossType.h"
 #include "../../Core/Public/ModelCheckpointSnapshot.h"
+#include "../../Core/Public/ModelInstanceSnapshot.h"
 #include "../../Core/Public/OptimizerType.h"
 #include "../../Core/Public/PredictionSnapshot.h"
 #include "../../Core/Public/ProjectInfoSnapshot.h"
@@ -118,6 +119,19 @@ namespace MiaIA::SDK
         static bool SaveProject(const std::string& path);
         [[nodiscard]]
         static Core::ProjectInfoSnapshot GetProjectInfo();
+        static bool CreateModelInstance(
+            const std::string& name,
+            Core::ModelInstanceSnapshot& result);
+        [[nodiscard]]
+        static std::vector<Core::ModelInstanceSnapshot>
+            GetModelInstances();
+        [[nodiscard]]
+        static Core::ModelInstanceSnapshot GetActiveModelInstance();
+        static bool SelectModelInstance(std::uint64_t modelId);
+        static bool RenameModelInstance(
+            std::uint64_t modelId,
+            const std::string& name);
+        static bool RemoveModelInstance(std::uint64_t modelId);
         static bool ImportCsvDataset(
             const std::string& path,
             std::size_t inputCount,

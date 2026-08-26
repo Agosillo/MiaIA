@@ -1,5 +1,6 @@
 #include "../Include/MiaIAClient.h"
 #include "MiaIAClientState.h"
+#include "ProjectState.h"
 #include "../../Engine/Runtime/NetworkRuntime.h"
 #include "../../Engine/Runtime/NetworkFactory.h"
 #include "../../Engine/Inspection/NetworkInspector.h"
@@ -18,47 +19,48 @@
 
 namespace
 {
-    MiaIA::Core::Dataset CurrentDataset;
-    MiaIA::Core::Network CurrentNetwork;
-    MiaIA::Core::ProjectInfoSnapshot CurrentProjectInfo;
-    MiaIA::Core::TrainingSession CurrentTrainingSession;
-    MiaIA::Core::TrainingDebugSession CurrentTrainingDebugSession;
-    MiaIA::Engine::ModelCheckpointStore CurrentCheckpointStore;
+    MiaIA::SDK::Detail::ProjectState CurrentProjectState;
     std::mutex CurrentClientMutex;
+}
+
+MiaIA::SDK::Detail::ProjectState&
+MiaIA::SDK::Detail::ClientProjectState()
+{
+    return CurrentProjectState;
 }
 
 MiaIA::Core::Dataset& MiaIA::SDK::Detail::ClientDataset()
 {
-    return CurrentDataset;
+    return CurrentProjectState.ActiveModel().Dataset;
 }
 
 MiaIA::Core::Network& MiaIA::SDK::Detail::ClientNetwork()
 {
-    return CurrentNetwork;
+    return CurrentProjectState.ActiveModel().Network;
 }
 
 MiaIA::Core::ProjectInfoSnapshot&
 MiaIA::SDK::Detail::ClientProjectInfo()
 {
-    return CurrentProjectInfo;
+    return CurrentProjectState.Info;
 }
 
 MiaIA::Core::TrainingSession&
 MiaIA::SDK::Detail::ClientTrainingSession()
 {
-    return CurrentTrainingSession;
+    return CurrentProjectState.ActiveModel().TrainingSession;
 }
 
 MiaIA::Core::TrainingDebugSession&
 MiaIA::SDK::Detail::ClientTrainingDebugSession()
 {
-    return CurrentTrainingDebugSession;
+    return CurrentProjectState.ActiveModel().TrainingDebugSession;
 }
 
 MiaIA::Engine::ModelCheckpointStore&
 MiaIA::SDK::Detail::ClientCheckpointStore()
 {
-    return CurrentCheckpointStore;
+    return CurrentProjectState.ActiveModel().Checkpoints;
 }
 
 std::mutex& MiaIA::SDK::Detail::ClientMutex()
@@ -68,15 +70,15 @@ std::mutex& MiaIA::SDK::Detail::ClientMutex()
 
 bool MiaIA::SDK::Detail::IsTrainingSessionRunning()
 {
-    return CurrentTrainingSession.Status ==
+    return ClientTrainingSession().Status ==
         MiaIA::Core::TrainingSessionStatus::Running;
 }
 
 bool MiaIA::SDK::Detail::IsTrainingDebugActive()
 {
-    return CurrentTrainingDebugSession.Phase >=
+    return ClientTrainingDebugSession().Phase >=
         MiaIA::Core::TrainingDebugPhase::BeforeForward &&
-        CurrentTrainingDebugSession.Phase <
+        ClientTrainingDebugSession().Phase <
         MiaIA::Core::TrainingDebugPhase::Committed;
 }
 
@@ -90,7 +92,8 @@ namespace MiaIA::SDK
     Core::NetworkOverviewSnapshot MiaIAClient::GetNetworkOverview()
     {
         const std::scoped_lock lock(Detail::ClientMutex());
-        return Engine::NetworkInspector::Overview(CurrentNetwork);
+        return Engine::NetworkInspector::Overview(
+            Detail::ClientNetwork());
     }
 
     bool MiaIAClient::ClearNetwork()
@@ -102,7 +105,7 @@ namespace MiaIA::SDK
             return false;
         }
 
-        Engine::NetworkEditor::Clear(CurrentNetwork);
+        Engine::NetworkEditor::Clear(Detail::ClientNetwork());
         return true;
     }
 
@@ -116,7 +119,7 @@ namespace MiaIA::SDK
         }
 
         return Engine::NetworkEditor::AddLayer(
-            CurrentNetwork,
+            Detail::ClientNetwork(),
             id,
             name,
             order);
@@ -136,7 +139,7 @@ namespace MiaIA::SDK
         }
 
         return Engine::NetworkEditor::AddNeuron(
-            CurrentNetwork,
+            Detail::ClientNetwork(),
             layerId,
             neuronId,
             bias,
@@ -157,7 +160,7 @@ namespace MiaIA::SDK
         }
 
         return Engine::NetworkEditor::AddConnection(
-            CurrentNetwork,
+            Detail::ClientNetwork(),
             id,
             fromNeuron,
             toNeuron,
@@ -176,7 +179,7 @@ namespace MiaIA::SDK
         }
 
         return Engine::NetworkInput::SetActivation(
-            CurrentNetwork,
+            Detail::ClientNetwork(),
             neuronId,
             activation);
     }
@@ -192,7 +195,7 @@ namespace MiaIA::SDK
         }
 
         return Engine::NetworkInput::SetValues(
-            CurrentNetwork,
+            Detail::ClientNetwork(),
             values);
     }
 
@@ -208,7 +211,7 @@ namespace MiaIA::SDK
         }
 
         return Engine::NetworkParameters::SetBias(
-            CurrentNetwork,
+            Detail::ClientNetwork(),
             neuronId,
             bias);
     }
@@ -225,7 +228,7 @@ namespace MiaIA::SDK
         }
 
         return Engine::NetworkWeights::SetWeight(
-            CurrentNetwork,
+            Detail::ClientNetwork(),
             connectionId,
             weight);
     }
@@ -236,7 +239,7 @@ namespace MiaIA::SDK
     {
         const std::scoped_lock lock(Detail::ClientMutex());
         return Engine::NetworkInspector::TryGetNeuron(
-            CurrentNetwork,
+            Detail::ClientNetwork(),
             neuronId,
             result);
     }
@@ -247,7 +250,7 @@ namespace MiaIA::SDK
     {
         const std::scoped_lock lock(Detail::ClientMutex());
         return Engine::NetworkInspector::TryGetConnection(
-            CurrentNetwork,
+            Detail::ClientNetwork(),
             connectionId,
             result);
     }
@@ -336,7 +339,7 @@ namespace MiaIA::SDK
     {
         const std::scoped_lock lock(Detail::ClientMutex());
         return Engine::NetworkInspector::TryGetLayer(
-            CurrentNetwork,
+            Detail::ClientNetwork(),
             layerId,
             result);
     }
@@ -352,7 +355,7 @@ namespace MiaIA::SDK
         }
 
         return Engine::NetworkEditor::RemoveConnection(
-            CurrentNetwork,
+            Detail::ClientNetwork(),
             id);
     }
 
@@ -367,7 +370,7 @@ namespace MiaIA::SDK
         }
 
         return Engine::NetworkEditor::RemoveNeuron(
-            CurrentNetwork,
+            Detail::ClientNetwork(),
             neuronId);
     }
 
@@ -382,7 +385,7 @@ namespace MiaIA::SDK
         }
 
         return Engine::NetworkEditor::RemoveLayer(
-            CurrentNetwork,
+            Detail::ClientNetwork(),
             layerId);
     }
 
@@ -398,7 +401,7 @@ namespace MiaIA::SDK
         }
 
         return Engine::NetworkParameters::SetLayerActivation(
-            CurrentNetwork,
+            Detail::ClientNetwork(),
             layerId,
             activation);
     }
@@ -415,7 +418,7 @@ namespace MiaIA::SDK
         }
 
         return Engine::NetworkParameters::ApplyUpdate(
-            CurrentNetwork,
+            Detail::ClientNetwork(),
             update,
             result);
     }
@@ -429,13 +432,15 @@ namespace MiaIA::SDK
             return false;
         }
 
-        return Engine::NetworkRuntime::Forward(CurrentNetwork);
+        return Engine::NetworkRuntime::Forward(
+            Detail::ClientNetwork());
     }
 
     Core::NetworkSnapshot MiaIAClient::GetSnapshot()
     {
         const std::scoped_lock lock(Detail::ClientMutex());
-        return Engine::NetworkInspector::Snapshot(CurrentNetwork);
+        return Engine::NetworkInspector::Snapshot(
+            Detail::ClientNetwork());
     }
 
     bool MiaIAClient::GetConnectionWeight(
@@ -444,7 +449,7 @@ namespace MiaIA::SDK
     {
         const std::scoped_lock lock(Detail::ClientMutex());
         return Engine::NetworkWeights::GetWeight(
-            CurrentNetwork,
+            Detail::ClientNetwork(),
             connectionId,
             weight);
     }
@@ -478,7 +483,7 @@ namespace MiaIA::SDK
         }
 
         return Engine::NetworkFactory::CreateDense(
-            CurrentNetwork,
+            Detail::ClientNetwork(),
             inputCount,
             hiddenCount,
             hiddenLayers,

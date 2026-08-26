@@ -66,7 +66,10 @@ The roadmap is organized by dependency rather than by a fixed release date. Math
 - immutable dataset-wide signal-health diagnostics for inactive and saturated neurons plus vanishing and exploding neuron/connection gradients, shared by Engine, SDK, CLI, StudioCore, and 2D/3D Studio views;
 - engine-owned training breakpoints for debug phases, neuron activations and gradients, and connection updates;
 - safe automatic worker pause with structured trigger telemetry;
-- shared CLI, SDK, Blueprint, and MiaIA Studio breakpoint authoring.
+- shared CLI, SDK, Blueprint, and MiaIA Studio breakpoint authoring;
+- process-local `ProjectState` ownership of multiple stable-ID `ModelInstance` values;
+- isolated per-model networks, datasets, training/debug sessions, and checkpoint stores;
+- active-model SDK and shared CLI create, list, select, rename, and remove operations.
 
 ## Implemented optimizer foundation
 
@@ -140,6 +143,8 @@ The debugging experience should next evolve toward:
 - saved dataset references and schemas without silently embedding external samples;
 - saved training configuration and breakpoint definitions;
 - added atomic save, transactional open, SDK/CLI/Blueprint access, and MiaIA Studio project controls;
+- retain the explicit `.mai` v1 single-model save boundary until a later version can persist every model without data loss;
+- persist multi-model instances, their names, active selection, and checkpoint stores in a later tagged format version;
 - persist editor layout, annotations, selected checkpoints, and training history in later tagged format versions;
 - export the representable model graph to ONNX;
 - broaden ONNX support incrementally with explicit compatibility tests.
@@ -165,6 +170,7 @@ The precise version 1 boundary is documented in the [MiaIA project format](../Pr
 
 The platform-neutral Studio application foundation, shared Unreal runtime host, Win64 packaging workflow, user-selectable 2D/3D topology mode, and first interactive runtime 3D renderer are implemented. The next delivery steps are:
 
+- expose the native project model list and active-model selection in the Studio UI;
 - extend the current sphere-and-cylinder 3D scene with filtering, paged compact-scene relationships, and richer layout tools;
 - persist user visualization layouts in future MiaIA workspace metadata rather than ONNX;
 - retain StudioCore as the shared application boundary for a possible future Qt frontend.
@@ -174,7 +180,7 @@ The platform-neutral Studio application foundation, shared Unreal runtime host, 
 Once the SDK contract and session model are stable:
 
 - support another client such as Unity or a lightweight desktop viewer;
-- introduce explicit engine/session contexts instead of one process-global state;
+- introduce independently owned engine/session client contexts instead of one process-global `ProjectState`;
 - define thread-safety and lifetime rules;
 - consider language bindings only where the SDK boundary is sufficiently stable.
 

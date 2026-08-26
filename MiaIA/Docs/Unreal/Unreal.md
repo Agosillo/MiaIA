@@ -10,9 +10,9 @@ The complete Unreal project lives under `MiaIA/IDE/Unreal`. Future graphical IDE
 
 ## Runtime instance boundary
 
-Unreal compiles the runtime API and the reusable Studio panel into separate DLL modules. Linking `StudioController` independently into both modules would duplicate the static SDK's process-local network state: a network created by Blueprint or the integrated CLI could then appear empty to the panel. The public `FMiaIAInstanceHandle` and `FMiaIAInstanceService` prevent that split. The panel holds only an opaque handle, and the service executes refresh and graphical forward-trace operations inside `IDE.dll`, beside the Blueprint and CLI adapters.
+Unreal compiles the runtime API and the reusable Studio panel into separate DLL modules. Linking `StudioController` independently into both modules would duplicate the static SDK's process-local project state: a model created by Blueprint or the integrated CLI could then appear empty to the panel. The public `FMiaIAInstanceHandle` and `FMiaIAInstanceService` prevent that split. The panel holds only an opaque handle, and the service executes refresh and graphical forward-trace operations inside `IDE.dll`, beside the Blueprint and CLI adapters.
 
-The registry currently contains one lazily created `default` instance. This is a multi-module ownership boundary, not yet a multi-model runtime. Future independent instances require an explicit native MiaIA context below the SDK; that context can later be stored behind the same handle without returning controller ownership to Slate or another frontend.
+The registry currently contains one lazily created `default` frontend instance. Its native `ProjectState` can own multiple isolated `ModelInstance` values, and the integrated CLI can manage and select them; all existing Blueprint and Studio operations then address the active model. The Unreal toolbar and Model Explorer do not yet expose a graphical model selector. The handle remains a multi-module ownership boundary rather than an independent concurrently executing SDK context.
 
 ## Blueprint types
 

@@ -27,6 +27,12 @@
     <ClInclude Include="Source\MiaIAClientState.h">
       <Filter>File di intestazione</Filter>
     </ClInclude>
+    <ClInclude Include="Source\ModelInstance.h">
+      <Filter>File di intestazione</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\ProjectState.h">
+      <Filter>File di intestazione</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="SDK.cpp">
@@ -62,7 +68,13 @@
     <ClCompile Include="Source\MiaIAClientInference.cpp">
       <Filter>File di origine</Filter>
     </ClCompile>
+    <ClCompile Include="Source\MiaIAClientModels.cpp">
+      <Filter>File di origine</Filter>
+    </ClCompile>
     <ClCompile Include="Source\MiaIAClientTrainingDebug.cpp">
+      <Filter>File di origine</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\ProjectState.cpp">
       <Filter>File di origine</Filter>
     </ClCompile>
   </ItemGroup>

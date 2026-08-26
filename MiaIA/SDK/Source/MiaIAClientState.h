@@ -18,6 +18,9 @@ namespace MiaIA::Engine
 
 namespace MiaIA::SDK::Detail
 {
+    class ProjectState;
+
+    ProjectState& ClientProjectState();
     Core::Dataset& ClientDataset();
     Core::Network& ClientNetwork();
     Core::ProjectInfoSnapshot& ClientProjectInfo();

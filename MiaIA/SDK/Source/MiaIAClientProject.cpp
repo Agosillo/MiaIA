@@ -1,5 +1,6 @@
 #include "../Include/MiaIAClient.h"
 #include "MiaIAClientState.h"
+#include "ProjectState.h"
 
 #include "../../Engine/Project/ProjectArchive.h"
 #include "../../Core/Model/Dataset.h"
@@ -20,12 +21,7 @@ namespace MiaIA::SDK
             return false;
         }
 
-        Detail::ClientNetwork() = Core::Network{};
-        Detail::ClientDataset() = Core::Dataset{};
-        Detail::ClientTrainingSession() = Core::TrainingSession{};
-        Detail::ClientTrainingDebugSession() =
-            Core::TrainingDebugSession{};
-        Detail::ClientProjectInfo() = Core::ProjectInfoSnapshot{};
+        Detail::ClientProjectState().Reset();
         return true;
     }
 
@@ -53,12 +49,13 @@ namespace MiaIA::SDK
             return false;
         }
 
-        Detail::ClientNetwork() = std::move(network);
-        Detail::ClientDataset() = std::move(dataset);
-        Detail::ClientTrainingSession() = std::move(trainingSession);
-        Detail::ClientTrainingDebugSession() =
-            Core::TrainingDebugSession{};
-        Detail::ClientProjectInfo() = std::move(info);
+        Detail::ProjectState project;
+        Detail::ModelInstance& model = project.ActiveModel();
+        model.Network = std::move(network);
+        model.Dataset = std::move(dataset);
+        model.TrainingSession = std::move(trainingSession);
+        project.Info = std::move(info);
+        Detail::ClientProjectState() = std::move(project);
         return true;
     }
 
@@ -66,7 +63,8 @@ namespace MiaIA::SDK
     {
         const std::scoped_lock lock(Detail::ClientMutex());
 
-        if (Detail::IsClientMutationBlocked())
+        if (Detail::IsClientMutationBlocked() ||
+            Detail::ClientProjectState().ModelCount() != 1)
         {
             return false;
         }
