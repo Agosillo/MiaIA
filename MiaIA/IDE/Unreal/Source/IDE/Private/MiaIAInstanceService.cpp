@@ -75,6 +75,63 @@ void FMiaIAInstanceService::Refresh(FMiaIAInstanceHandle Instance)
     }
 }
 
+bool FMiaIAInstanceService::CreateContext(
+    FMiaIAInstanceHandle Instance,
+    const FString& Name)
+{
+    MiaIA::Studio::StudioController* controller = Resolve(Instance);
+    return controller && controller->CreateContext(TCHAR_TO_UTF8(*Name));
+}
+
+bool FMiaIAInstanceService::SelectContext(
+    FMiaIAInstanceHandle Instance,
+    uint64 ContextId)
+{
+    MiaIA::Studio::StudioController* controller = Resolve(Instance);
+    return controller && controller->SelectContext(ContextId);
+}
+
+bool FMiaIAInstanceService::RenameContext(
+    FMiaIAInstanceHandle Instance,
+    uint64 ContextId,
+    const FString& Name)
+{
+    MiaIA::Studio::StudioController* controller = Resolve(Instance);
+    return controller && controller->RenameContext(
+        ContextId,
+        TCHAR_TO_UTF8(*Name));
+}
+
+bool FMiaIAInstanceService::RemoveContext(
+    FMiaIAInstanceHandle Instance,
+    uint64 ContextId)
+{
+    MiaIA::Studio::StudioController* controller = Resolve(Instance);
+    return controller && controller->RemoveContext(ContextId);
+}
+
+std::vector<MiaIA::Core::ModelContextSnapshot>
+FMiaIAInstanceService::Contexts(FMiaIAInstanceHandle Instance)
+{
+    MiaIA::Studio::StudioController* controller = Resolve(Instance);
+    if (controller)
+    {
+        controller->RefreshContexts();
+    }
+    return controller
+        ? controller->State().Contexts
+        : std::vector<MiaIA::Core::ModelContextSnapshot>{};
+}
+
+MiaIA::Core::ModelContextSnapshot FMiaIAInstanceService::ActiveContext(
+    FMiaIAInstanceHandle Instance)
+{
+    const MiaIA::Studio::StudioController* controller = Resolve(Instance);
+    return controller
+        ? controller->State().ActiveContext
+        : MiaIA::Core::ModelContextSnapshot{};
+}
+
 bool FMiaIAInstanceService::RunForwardTrace(
     FMiaIAInstanceHandle Instance,
     const TArray<double>& Inputs)

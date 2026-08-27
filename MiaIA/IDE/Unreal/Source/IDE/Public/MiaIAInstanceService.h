@@ -20,6 +20,23 @@ public:
     static bool IsValid(FMiaIAInstanceHandle Instance);
 
     static void Refresh(FMiaIAInstanceHandle Instance);
+    static bool CreateContext(
+        FMiaIAInstanceHandle Instance,
+        const FString& Name);
+    static bool SelectContext(
+        FMiaIAInstanceHandle Instance,
+        uint64 ContextId);
+    static bool RenameContext(
+        FMiaIAInstanceHandle Instance,
+        uint64 ContextId,
+        const FString& Name);
+    static bool RemoveContext(
+        FMiaIAInstanceHandle Instance,
+        uint64 ContextId);
+    static std::vector<MiaIA::Core::ModelContextSnapshot> Contexts(
+        FMiaIAInstanceHandle Instance);
+    static MiaIA::Core::ModelContextSnapshot ActiveContext(
+        FMiaIAInstanceHandle Instance);
     static bool RunForwardTrace(
         FMiaIAInstanceHandle Instance,
         const TArray<double>& Inputs);

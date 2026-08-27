@@ -67,9 +67,11 @@ The roadmap is organized by dependency rather than by a fixed release date. Math
 - engine-owned training breakpoints for debug phases, neuron activations and gradients, and connection updates;
 - safe automatic worker pause with structured trigger telemetry;
 - shared CLI, SDK, Blueprint, and MiaIA Studio breakpoint authoring;
-- process-local `ProjectState` ownership of multiple stable-ID `ModelInstance` values;
-- isolated per-model networks, datasets, training/debug sessions, and checkpoint stores;
-- active-model SDK and shared CLI create, list, select, rename, and remove operations.
+- process-local `ProjectState` ownership of multiple stable-ID `ModelContext` values;
+- isolated per-context networks, datasets, training/debug sessions, and checkpoint stores;
+- active-context SDK, shared CLI, Unreal Blueprint, StudioCore, and graphical Studio create, list, select, rename, and remove operations;
+- atomic `.mai` v2 persistence of every context, active selection, context-local metadata, and checkpoint store;
+- transactional `.mai` v1 reading and in-memory migration to the multi-context project contract.
 
 ## Implemented optimizer foundation
 
@@ -111,16 +113,15 @@ Building on trustworthy single steps and one explicit epoch, the current session
 
 ## Debugging experience
 
-Implemented process-local checkpoint foundation:
+Implemented model-checkpoint foundation:
 
-- capture named model states with stable process-local IDs;
+- capture named model states with stable model-local IDs;
 - list and inspect topology summaries;
 - compare bias and weight deltas by stable neuron and connection ID;
 - reject scalar comparison when topologies are incompatible;
 - transactionally restore a validated checkpoint outside active training/debug;
-- share operations across SDK, CLI, StudioCore, and the Unreal `Checkpoints` tab.
-
-Checkpoint persistence remains a later `.mai` format-version feature.
+- share operations across SDK, CLI, StudioCore, and the Unreal `Checkpoints` tab;
+- persist checkpoint IDs, names, complete supported networks, and next identifiers in `.mai` v2.
 
 The first debugger-like training workflow is implemented for one sample: clients can stop before forward propagation, advance through forward, backward, candidate update and verification, then commit or cancel without changing the public network prematurely.
 
@@ -133,23 +134,24 @@ Backward differentiation now has the equivalent immutable gradient-flow trace. E
 The debugging experience should next evolve toward:
 
 - extend retained history with an explicit bounded policy for hidden-neuron activations;
-- preserve selected checkpoints for comparison;
+- persist the frontend's selected comparison pair only if it becomes durable project metadata;
 - compare diagnostic snapshots across datasets and checkpoints.
 
 ## Persistence and interchange
 
-- implemented the versioned `.mai` v1 project container;
+- implemented the versioned `.mai` v2 project container with v1 read compatibility;
+- persisted every context ID, name, order, active selection, and next identifier;
 - embedded model topology and parameters through the supported ONNX subset;
-- saved dataset references and schemas without silently embedding external samples;
-- saved training configuration and breakpoint definitions;
+- saved context-local dataset references and schemas without silently embedding external samples;
+- saved context-local training configurations and breakpoint definitions;
+- saved context-local checkpoint stores and their monotonic identifier state;
 - added atomic save, transactional open, SDK/CLI/Blueprint access, and MiaIA Studio project controls;
-- retain the explicit `.mai` v1 single-model save boundary until a later version can persist every model without data loss;
-- persist multi-model instances, their names, active selection, and checkpoint stores in a later tagged format version;
-- persist editor layout, annotations, selected checkpoints, and training history in later tagged format versions;
+- migrated version 1 projects in memory to context `1` named `Model 1` without weakening transactional open;
+- persist editor layout, annotations, frontend checkpoint selection, and training history only in later tagged format versions;
 - export the representable model graph to ONNX;
 - broaden ONNX support incrementally with explicit compatibility tests.
 
-The precise version 1 boundary is documented in the [MiaIA project format](../Project/Project.md).
+The precise version 2 contract and version 1 migration boundary are documented in the [MiaIA project format](../Project/Project.md).
 
 ## Unreal Engine IDE
 
@@ -158,6 +160,8 @@ The precise version 1 boundary is documented in the [MiaIA project format](../Pr
 - exposed reusable SDK and shared CLI operations through Unreal C++ wrappers;
 - added a dockable topology panel with neuron and connection selection, candidate values, phase controls, and a shared interactive command console;
 - added a lightweight network overview and automatic compact layer rendering for large topologies;
+- added reflected project/model-context snapshots and Blueprint context lifecycle operations;
+- added one graphical model-context selector shared by the editor and standalone Studio hosts;
 - broaden Blueprint coverage to the remaining appropriate SDK operations;
 - refine the IDE command console with persistent history and asynchronous long-running execution;
 - render paged cross-layer relationship results directly on compact topology scenes;
@@ -168,9 +172,8 @@ The precise version 1 boundary is documented in the [MiaIA project format](../Pr
 
 ## MiaIA Studio delivery
 
-The platform-neutral Studio application foundation, shared Unreal runtime host, Win64 packaging workflow, user-selectable 2D/3D topology mode, and first interactive runtime 3D renderer are implemented. The next delivery steps are:
+The platform-neutral Studio application foundation, shared Unreal runtime host, Win64 packaging workflow, graphical multi-context selector, user-selectable 2D/3D topology mode, and first interactive runtime 3D renderer are implemented. The next delivery steps are:
 
-- expose the native project model list and active-model selection in the Studio UI;
 - extend the current sphere-and-cylinder 3D scene with filtering, paged compact-scene relationships, and richer layout tools;
 - persist user visualization layouts in future MiaIA workspace metadata rather than ONNX;
 - retain StudioCore as the shared application boundary for a possible future Qt frontend.

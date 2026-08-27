@@ -560,6 +560,10 @@ namespace
         FMiaIAProjectInfo result;
         result.FormatVersion = static_cast<int32>(source.FormatVersion);
         result.Path = UTF8_TO_TCHAR(source.Path.c_str());
+        result.ContextCount = static_cast<int64>(source.ContextCount);
+        result.ActiveContextId = static_cast<int64>(source.ActiveContextId);
+        result.ActiveContextName = UTF8_TO_TCHAR(
+            source.ActiveContextName.c_str());
         result.bHasModel = source.HasModel;
         result.bHasDatasetReference = source.HasDatasetReference;
         result.bDatasetLoaded = source.DatasetLoaded;
@@ -575,6 +579,27 @@ namespace
         result.TrainingLearningRate = source.Training.LearningRate;
         result.BreakpointCount = static_cast<int64>(
             source.BreakpointCount);
+        result.CheckpointCount = static_cast<int64>(
+            source.CheckpointCount);
+        return result;
+    }
+
+    FMiaIAModelContext ToBlueprint(
+        const MiaIA::Core::ModelContextSnapshot& source)
+    {
+        FMiaIAModelContext result;
+        result.Id = static_cast<int64>(source.Id);
+        result.Name = UTF8_TO_TCHAR(source.Name.c_str());
+        result.bActive = source.Active;
+        result.LayerCount = static_cast<int64>(source.LayerCount);
+        result.NeuronCount = static_cast<int64>(source.NeuronCount);
+        result.ConnectionCount = static_cast<int64>(
+            source.ConnectionCount);
+        result.DatasetSampleCount = static_cast<int64>(
+            source.DatasetSampleCount);
+        result.TrainingStatus = ToBlueprint(source.TrainingStatus);
+        result.CheckpointCount = static_cast<int64>(
+            source.CheckpointCount);
         return result;
     }
 }
@@ -612,6 +637,59 @@ bool UMiaIABlueprintLibrary::SaveProject(const FString& Path)
 FMiaIAProjectInfo UMiaIABlueprintLibrary::GetProjectInfo()
 {
     return ToBlueprint(MiaIA::SDK::MiaIAClient::GetProjectInfo());
+}
+
+bool UMiaIABlueprintLibrary::CreateModelContext(
+    const FString& Name,
+    FMiaIAModelContext& OutContext)
+{
+    MiaIA::Core::ModelContextSnapshot context;
+    const bool created = MiaIA::SDK::MiaIAClient::CreateModelContext(
+        std::string(TCHAR_TO_UTF8(*Name)),
+        context);
+    if (created)
+    {
+        OutContext = ToBlueprint(context);
+    }
+    return created;
+}
+
+TArray<FMiaIAModelContext> UMiaIABlueprintLibrary::GetModelContexts()
+{
+    TArray<FMiaIAModelContext> result;
+    for (const MiaIA::Core::ModelContextSnapshot& context :
+        MiaIA::SDK::MiaIAClient::GetModelContexts())
+    {
+        result.Add(ToBlueprint(context));
+    }
+    return result;
+}
+
+FMiaIAModelContext UMiaIABlueprintLibrary::GetActiveModelContext()
+{
+    return ToBlueprint(
+        MiaIA::SDK::MiaIAClient::GetActiveModelContext());
+}
+
+bool UMiaIABlueprintLibrary::SelectModelContext(int64 ContextId)
+{
+    return ContextId > 0 && MiaIA::SDK::MiaIAClient::SelectModelContext(
+        static_cast<uint64>(ContextId));
+}
+
+bool UMiaIABlueprintLibrary::RenameModelContext(
+    int64 ContextId,
+    const FString& Name)
+{
+    return ContextId > 0 && MiaIA::SDK::MiaIAClient::RenameModelContext(
+        static_cast<uint64>(ContextId),
+        std::string(TCHAR_TO_UTF8(*Name)));
+}
+
+bool UMiaIABlueprintLibrary::RemoveModelContext(int64 ContextId)
+{
+    return ContextId > 0 && MiaIA::SDK::MiaIAClient::RemoveModelContext(
+        static_cast<uint64>(ContextId));
 }
 
 bool UMiaIABlueprintLibrary::ImportOnnx(const FString& Path)

@@ -9,7 +9,8 @@
 
 namespace MiaIA::Core
 {
-    inline constexpr std::uint32_t ProjectFormatVersion = 1;
+    inline constexpr std::uint32_t ProjectFormatVersion = 2;
+    inline constexpr std::uint32_t MinimumProjectFormatVersion = 1;
 
     struct ProjectTrainingConfigurationSnapshot
     {
@@ -26,6 +27,9 @@ namespace MiaIA::Core
     {
         std::uint32_t FormatVersion{};
         std::string Path;
+        std::size_t ContextCount{};
+        std::uint64_t ActiveContextId{};
+        std::string ActiveContextName;
         bool HasModel{};
         bool HasDatasetReference{};
         bool DatasetLoaded{};
@@ -35,5 +39,6 @@ namespace MiaIA::Core
         bool DatasetHasHeader{ true };
         ProjectTrainingConfigurationSnapshot Training;
         std::size_t BreakpointCount{};
+        std::size_t CheckpointCount{};
     };
 }

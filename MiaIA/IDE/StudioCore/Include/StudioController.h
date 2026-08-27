@@ -7,6 +7,7 @@
 #include "../../../Core/Public/NeuronInspectionSnapshot.h"
 #include "../../../Core/Public/SignalHealthSnapshot.h"
 #include "../../../Core/Public/ModelCheckpointSnapshot.h"
+#include "../../../Core/Public/ModelContextSnapshot.h"
 #include "../../../Core/Public/TrainingDebugSnapshot.h"
 #include "../../../Core/Public/TrainingHistoryEntrySnapshot.h"
 #include "../../../Core/Public/TrainingSessionSnapshot.h"
@@ -150,6 +151,8 @@ namespace MiaIA::Studio
 
     struct StudioState
     {
+        std::vector<Core::ModelContextSnapshot> Contexts;
+        Core::ModelContextSnapshot ActiveContext;
         Core::NetworkOverviewSnapshot Overview;
         Core::NetworkSnapshot Network;
         StudioTopologyScene Topology;
@@ -178,6 +181,13 @@ namespace MiaIA::Studio
         [[nodiscard]] std::size_t GetRelationshipLimit() const;
 
         void Refresh();
+        void RefreshContexts();
+        bool CreateContext(const std::string& name);
+        bool SelectContext(std::uint64_t contextId);
+        bool RenameContext(
+            std::uint64_t contextId,
+            const std::string& name);
+        bool RemoveContext(std::uint64_t contextId);
         [[nodiscard]] StudioCommandResult ExecuteCommand(
             const std::string& command);
         [[nodiscard]] std::vector<StudioCommandSuggestion>
@@ -246,6 +256,7 @@ namespace MiaIA::Studio
         void BuildForwardTracePlaybackFrames();
         bool ContainsBackwardTraceNeuron(std::uint64_t neuronId) const;
         void BuildBackwardTracePlaybackFrames();
+        void ResetContextPresentationState();
 
         std::string WorkingDirectory;
         StudioViewMode ViewMode{ StudioViewMode::TwoDimensional };

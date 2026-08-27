@@ -8,7 +8,7 @@
 
 namespace MiaIA::Core
 {
-    struct ModelInstanceSnapshot
+    struct ModelContextSnapshot
     {
         std::uint64_t Id{};
         std::string Name;

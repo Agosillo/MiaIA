@@ -33,10 +33,18 @@ namespace
     constexpr std::array<char, 4> DatasetSection{ 'D', 'A', 'T', 'A' };
     constexpr std::array<char, 4> TrainingSection{ 'T', 'R', 'N', 'G' };
     constexpr std::array<char, 4> BreakpointSection{ 'B', 'R', 'K', 'P' };
-    constexpr std::uint32_t MaximumSectionCount = 64;
+    constexpr std::array<char, 4> ProjectSection{ 'P', 'R', 'J', 'T' };
+    constexpr std::array<char, 4> ContextStateSection{ 'M', 'O', 'D', 'L' };
+    constexpr std::array<char, 4> CheckpointSection{ 'C', 'K', 'P', 'T' };
+    constexpr std::uint32_t Version1 = 1;
+    constexpr std::uint32_t Version2 = 2;
+    constexpr std::uint64_t MaximumSectionCount = 4000000;
+    constexpr std::uint64_t MaximumContextCount = 100000;
     constexpr std::uint64_t MaximumMetadataSectionSize = 64ull * 1024 * 1024;
     constexpr std::uint64_t MaximumStringSize = 1024ull * 1024;
+    constexpr std::size_t MaximumContextNameLength = 128;
     constexpr std::uint64_t MaximumBreakpointCount = 1000000;
+    constexpr std::uint64_t MaximumCheckpointCount = 1000000;
 
     using MiaIA::Core::Dataset;
     using MiaIA::Core::LossType;
@@ -47,6 +55,12 @@ namespace
     using MiaIA::Core::TrainingBreakpointSpec;
     using MiaIA::Core::TrainingDebugPhase;
     using MiaIA::Core::TrainingSession;
+    using MiaIA::Engine::ModelCheckpointArchiveEntry;
+    using MiaIA::Engine::ModelCheckpointArchiveEntryView;
+    using MiaIA::Engine::ProjectArchiveContextState;
+    using MiaIA::Engine::ProjectArchiveContextView;
+    using MiaIA::Engine::ProjectArchiveState;
+    using MiaIA::Engine::ProjectArchiveView;
 
     class ScopedTemporaryFile final
     {
@@ -689,15 +703,23 @@ namespace
 
     void FillSavedInfo(
         const std::filesystem::path& projectPath,
+        std::uint32_t formatVersion,
+        std::size_t contextCount,
+        std::uint64_t activeContextId,
+        const std::string& activeContextName,
+        bool hasActiveContextNetwork,
         const Dataset& dataset,
         const TrainingSession& session,
+        std::size_t checkpointCount,
         ProjectInfoSnapshot& info)
     {
         info = ProjectInfoSnapshot{};
-        info.FormatVersion = MiaIA::Engine::ProjectArchive::
-            CurrentFormatVersion;
+        info.FormatVersion = formatVersion;
         info.Path = projectPath.string();
-        info.HasModel = true;
+        info.ContextCount = contextCount;
+        info.ActiveContextId = activeContextId;
+        info.ActiveContextName = activeContextName;
+        info.HasModel = hasActiveContextNetwork;
         info.HasDatasetReference = !dataset.Source.empty();
         info.DatasetLoaded = !dataset.Samples.empty();
         info.DatasetSource = dataset.Source;
@@ -705,6 +727,7 @@ namespace
         info.DatasetTargetCount = dataset.TargetCount;
         info.DatasetHasHeader = dataset.HasHeader;
         info.BreakpointCount = session.Breakpoints.size();
+        info.CheckpointCount = checkpointCount;
 
         if (HasTrainingConfiguration(session))
         {
@@ -717,7 +740,7 @@ namespace
     }
 }
 
-bool MiaIA::Engine::ProjectArchive::Save(
+bool MiaIA::Engine::ProjectArchive::SaveVersion1(
     const Core::Network& network,
     const Core::Dataset& dataset,
     const Core::TrainingSession& trainingSession,
@@ -795,7 +818,7 @@ bool MiaIA::Engine::ProjectArchive::Save(
 
     output.write(ArchiveMagic.data(), ArchiveMagic.size());
 
-    if (!WriteUnsigned(output, CurrentFormatVersion, sizeof(std::uint32_t)) ||
+    if (!WriteUnsigned(output, Version1, sizeof(std::uint32_t)) ||
         !WriteUnsigned(output, sectionCount, sizeof(std::uint32_t)) ||
         !WriteFileSection(output, ModelSection, onnxPath) ||
         (hasDataset && !WritePayloadSection(
@@ -823,16 +846,28 @@ bool MiaIA::Engine::ProjectArchive::Save(
     }
 
     temporaryFile.Release();
-    FillSavedInfo(projectPath, dataset, trainingSession, result);
+    FillSavedInfo(
+        projectPath,
+        Version1,
+        1,
+        1,
+        "Model 1",
+        true,
+        dataset,
+        trainingSession,
+        0,
+        result);
     return true;
 }
 
-bool MiaIA::Engine::ProjectArchive::Load(
+namespace
+{
+bool LoadVersion1(
     const std::string& path,
-    Core::Network& network,
-    Core::Dataset& dataset,
-    Core::TrainingSession& trainingSession,
-    Core::ProjectInfoSnapshot& result)
+    Network& network,
+    Dataset& dataset,
+    TrainingSession& trainingSession,
+    ProjectInfoSnapshot& result)
 {
     if (path.empty())
     {
@@ -861,7 +896,7 @@ bool MiaIA::Engine::ProjectArchive::Load(
 
     if (!input || magic != ArchiveMagic ||
         !ReadUnsigned(input, version, sizeof(std::uint32_t)) ||
-        version != CurrentFormatVersion ||
+        version != Version1 ||
         !ReadUnsigned(input, sectionCount, sizeof(std::uint32_t)) ||
         sectionCount == 0 || sectionCount > MaximumSectionCount)
     {
@@ -968,7 +1003,9 @@ bool MiaIA::Engine::ProjectArchive::Load(
 
     Network importedNetwork;
 
-    if (!OnnxImporter::Import(importedNetwork, onnxPath.string()))
+    if (!MiaIA::Engine::OnnxImporter::Import(
+            importedNetwork,
+            onnxPath.string()))
     {
         return false;
     }
@@ -981,8 +1018,11 @@ bool MiaIA::Engine::ProjectArchive::Load(
     }
 
     ProjectInfoSnapshot info;
-    info.FormatVersion = CurrentFormatVersion;
+    info.FormatVersion = Version1;
     info.Path = projectPath.string();
+    info.ContextCount = 1;
+    info.ActiveContextId = 1;
+    info.ActiveContextName = "Model 1";
     info.HasModel = true;
     info.BreakpointCount = importedSession.Breakpoints.size();
 
@@ -1018,7 +1058,7 @@ bool MiaIA::Engine::ProjectArchive::Load(
         info.DatasetInputCount = inputCount;
         info.DatasetTargetCount = targetCount;
         info.DatasetHasHeader = hasHeader;
-        info.DatasetLoaded = CsvDatasetImporter::Import(
+        info.DatasetLoaded = MiaIA::Engine::CsvDatasetImporter::Import(
             importedDataset,
             resolvedSource.string(),
             inputCount,
@@ -1035,6 +1075,791 @@ bool MiaIA::Engine::ProjectArchive::Load(
     network = std::move(importedNetwork);
     dataset = std::move(importedDataset);
     trainingSession = std::move(importedSession);
+    result = std::move(info);
+    return true;
+}
+}
+
+namespace
+{
+    constexpr std::uint8_t ContextHasDataset = 1u << 0;
+    constexpr std::uint8_t ContextHasTraining = 1u << 1;
+    constexpr std::uint8_t ContextHasNetwork = 1u << 2;
+    constexpr std::uint8_t KnownContextFlags =
+        ContextHasDataset | ContextHasTraining | ContextHasNetwork;
+
+    class ScopedTemporaryFiles final
+    {
+    public:
+        ~ScopedTemporaryFiles()
+        {
+            for (const std::filesystem::path& path : Paths)
+            {
+                std::error_code error;
+                std::filesystem::remove(path, error);
+            }
+        }
+
+        void Add(const std::filesystem::path& path)
+        {
+            Paths.push_back(path);
+        }
+
+    private:
+        std::vector<std::filesystem::path> Paths;
+    };
+
+    struct PreparedCheckpoint final
+    {
+        ModelCheckpointArchiveEntryView View;
+        std::filesystem::path OnnxPath;
+    };
+
+    struct PreparedContext final
+    {
+        const ProjectArchiveContextView* View{};
+        bool HasNetwork{};
+        bool HasDataset{};
+        bool HasTraining{};
+        std::filesystem::path OnnxPath;
+        std::vector<PreparedCheckpoint> Checkpoints;
+    };
+
+    bool HasText(const std::string& value)
+    {
+        return value.find_first_not_of(" \t\r\n") != std::string::npos;
+    }
+
+    bool ReadSectionHeader(
+        std::istream& input,
+        std::array<char, 4>& identifier,
+        std::uint64_t& payloadSize)
+    {
+        input.read(identifier.data(), identifier.size());
+        return input.good() && ReadUnsigned(
+            input,
+            payloadSize,
+            sizeof(payloadSize));
+    }
+
+    bool ReadExpectedPayloadSection(
+        std::istream& input,
+        const std::array<char, 4>& expected,
+        std::vector<std::uint8_t>& payload)
+    {
+        std::array<char, 4> identifier{};
+        std::uint64_t payloadSize{};
+        return ReadSectionHeader(input, identifier, payloadSize) &&
+            identifier == expected &&
+            ReadPayload(input, payloadSize, payload);
+    }
+
+    bool ImportNetworkSection(
+        std::istream& input,
+        const std::string& temporaryPrefix,
+        Network& network)
+    {
+        std::array<char, 4> identifier{};
+        std::uint64_t payloadSize{};
+
+        if (!ReadSectionHeader(input, identifier, payloadSize) ||
+            identifier != ModelSection || payloadSize == 0)
+        {
+            return false;
+        }
+
+        std::error_code error;
+        const std::filesystem::path temporaryPath = UniqueTemporaryPath(
+            std::filesystem::temp_directory_path(error),
+            temporaryPrefix,
+            ".onnx");
+
+        if (error || temporaryPath.empty())
+        {
+            return false;
+        }
+
+        ScopedTemporaryFile temporaryFile(temporaryPath);
+        std::ofstream output(
+            temporaryPath,
+            std::ios::binary | std::ios::trunc);
+
+        if (!output || !CopyBytes(input, output, payloadSize))
+        {
+            return false;
+        }
+
+        output.close();
+        return output.good() &&
+            MiaIA::Engine::OnnxImporter::Import(
+                network,
+                temporaryPath.string());
+    }
+
+    std::vector<std::uint8_t> BuildProjectPayload(
+        const ProjectArchiveView& project)
+    {
+        PayloadWriter writer;
+        writer.WriteUInt64(project.ActiveContextId);
+        writer.WriteUInt64(project.NextContextId);
+        writer.WriteUInt64(project.Contexts.size());
+        return writer.Data();
+    }
+
+    std::vector<std::uint8_t> BuildContextStatePayload(
+        const PreparedContext& model)
+    {
+        PayloadWriter writer;
+        std::uint8_t flags{};
+        flags |= model.HasDataset ? ContextHasDataset : 0;
+        flags |= model.HasTraining ? ContextHasTraining : 0;
+        flags |= model.HasNetwork ? ContextHasNetwork : 0;
+        writer.WriteUInt64(model.View->Id);
+        writer.WriteString(*model.View->Name);
+        writer.WriteUInt64(model.View->Checkpoints->NextIdentifier());
+        writer.WriteByte(flags);
+        writer.WriteUInt64(model.Checkpoints.size());
+        return writer.Data();
+    }
+
+    std::vector<std::uint8_t> BuildCheckpointPayload(
+        const ModelCheckpointArchiveEntryView& checkpoint)
+    {
+        PayloadWriter writer;
+        writer.WriteUInt64(checkpoint.Id);
+        writer.WriteString(*checkpoint.Name);
+        return writer.Data();
+    }
+
+    bool ParseProjectPayload(
+        const std::vector<std::uint8_t>& payload,
+        std::uint64_t& activeContextId,
+        std::uint64_t& nextContextId,
+        std::uint64_t& contextCount)
+    {
+        PayloadReader reader(payload);
+        return reader.ReadUInt64(activeContextId) && activeContextId != 0 &&
+            reader.ReadUInt64(nextContextId) && nextContextId != 0 &&
+            reader.ReadUInt64(contextCount) && contextCount > 0 &&
+            contextCount <= MaximumContextCount && reader.AtEnd();
+    }
+
+    bool ParseContextStatePayload(
+        const std::vector<std::uint8_t>& payload,
+        std::uint64_t& contextId,
+        std::string& name,
+        std::uint64_t& nextCheckpointId,
+        std::uint8_t& flags,
+        std::uint64_t& checkpointCount)
+    {
+        PayloadReader reader(payload);
+        return reader.ReadUInt64(contextId) && contextId != 0 &&
+            reader.ReadString(name) && HasText(name) &&
+            name.size() <= MaximumContextNameLength &&
+            reader.ReadUInt64(nextCheckpointId) && nextCheckpointId != 0 &&
+            reader.ReadByte(flags) && (flags & ~KnownContextFlags) == 0 &&
+            reader.ReadUInt64(checkpointCount) &&
+            checkpointCount <= MaximumCheckpointCount && reader.AtEnd();
+    }
+
+    bool ParseCheckpointPayload(
+        const std::vector<std::uint8_t>& payload,
+        std::uint64_t& checkpointId,
+        std::string& name)
+    {
+        PayloadReader reader(payload);
+        return reader.ReadUInt64(checkpointId) && checkpointId != 0 &&
+            reader.ReadString(name) && HasText(name) && reader.AtEnd();
+    }
+
+    bool RestoreDataset(
+        const std::vector<std::uint8_t>& payload,
+        const std::filesystem::path& projectPath,
+        Dataset& dataset)
+    {
+        std::string storedSource;
+        std::size_t inputCount{};
+        std::size_t targetCount{};
+        bool hasHeader{};
+
+        if (!ParseDatasetPayload(
+                payload,
+                storedSource,
+                inputCount,
+                targetCount,
+                hasHeader))
+        {
+            return false;
+        }
+
+        const std::filesystem::path resolvedSource =
+            ResolvedDatasetPath(storedSource, projectPath);
+
+        if (!MiaIA::Engine::CsvDatasetImporter::Import(
+                dataset,
+                resolvedSource.string(),
+                inputCount,
+                targetCount,
+                hasHeader))
+        {
+            dataset = Dataset{};
+            dataset.Name = resolvedSource.stem().string();
+            dataset.Source = resolvedSource.string();
+            dataset.InputCount = inputCount;
+            dataset.TargetCount = targetCount;
+            dataset.HasHeader = hasHeader;
+        }
+
+        return true;
+    }
+
+    bool ReadArchiveVersion(
+        const std::filesystem::path& projectPath,
+        std::uint32_t& version)
+    {
+        std::ifstream input(projectPath, std::ios::binary);
+        std::array<char, ArchiveMagic.size()> magic{};
+        std::uint64_t storedVersion{};
+
+        if (!input)
+        {
+            return false;
+        }
+
+        input.read(magic.data(), magic.size());
+        if (!input || magic != ArchiveMagic ||
+            !ReadUnsigned(input, storedVersion, sizeof(std::uint32_t)) ||
+            storedVersion > std::numeric_limits<std::uint32_t>::max())
+        {
+            return false;
+        }
+
+        version = static_cast<std::uint32_t>(storedVersion);
+        return true;
+    }
+
+    bool PrepareProject(
+        const ProjectArchiveView& project,
+        std::vector<PreparedContext>& prepared,
+        ScopedTemporaryFiles& temporaryFiles,
+        std::uint64_t& sectionCount)
+    {
+        if (project.Contexts.empty() ||
+            project.Contexts.size() > MaximumContextCount ||
+            project.ActiveContextId == 0 || project.NextContextId == 0)
+        {
+            return false;
+        }
+
+        std::unordered_set<std::uint64_t> contextIdentifiers;
+        bool activeFound{};
+        sectionCount = 1;
+        prepared.reserve(project.Contexts.size());
+
+        for (const ProjectArchiveContextView& view : project.Contexts)
+        {
+            if (view.Id == 0 || view.Id >= project.NextContextId ||
+                !contextIdentifiers.insert(view.Id).second ||
+                view.Name == nullptr || !HasText(*view.Name) ||
+                view.Name->size() > MaximumContextNameLength ||
+                view.Network == nullptr || view.Dataset == nullptr ||
+                view.TrainingSession == nullptr || view.Checkpoints == nullptr)
+            {
+                return false;
+            }
+
+            PreparedContext model;
+            model.View = &view;
+            model.HasNetwork = !view.Network->Layers.empty() ||
+                !view.Network->Connections.empty();
+            model.HasDataset = !view.Dataset->Source.empty();
+            model.HasTraining = HasTrainingConfiguration(
+                *view.TrainingSession);
+
+            if (model.HasDataset &&
+                (view.Dataset->InputCount == 0 ||
+                    view.Dataset->TargetCount == 0))
+            {
+                return false;
+            }
+
+            std::error_code error;
+            if (model.HasNetwork)
+            {
+                model.OnnxPath = UniqueTemporaryPath(
+                    std::filesystem::temp_directory_path(error),
+                    "miaia-project-model",
+                    ".onnx");
+                if (error || model.OnnxPath.empty() ||
+                    !MiaIA::Engine::OnnxExporter::Export(
+                        *view.Network,
+                        model.OnnxPath.string()))
+                {
+                    return false;
+                }
+                temporaryFiles.Add(model.OnnxPath);
+            }
+
+            const auto checkpoints = view.Checkpoints->ArchiveEntries();
+            if (checkpoints.size() > MaximumCheckpointCount)
+            {
+                return false;
+            }
+
+            std::unordered_set<std::uint64_t> checkpointIdentifiers;
+            for (const ModelCheckpointArchiveEntryView& checkpoint :
+                checkpoints)
+            {
+                if (checkpoint.Id == 0 ||
+                    checkpoint.Id >= view.Checkpoints->NextIdentifier() ||
+                    !checkpointIdentifiers.insert(checkpoint.Id).second ||
+                    checkpoint.Name == nullptr ||
+                    !HasText(*checkpoint.Name) ||
+                    checkpoint.Name->size() > MaximumStringSize ||
+                    checkpoint.Network == nullptr)
+                {
+                    return false;
+                }
+
+                PreparedCheckpoint preparedCheckpoint;
+                preparedCheckpoint.View = checkpoint;
+                preparedCheckpoint.OnnxPath = UniqueTemporaryPath(
+                    std::filesystem::temp_directory_path(error),
+                    "miaia-project-checkpoint",
+                    ".onnx");
+                if (error || preparedCheckpoint.OnnxPath.empty() ||
+                    !MiaIA::Engine::OnnxExporter::Export(
+                        *checkpoint.Network,
+                        preparedCheckpoint.OnnxPath.string()))
+                {
+                    return false;
+                }
+                temporaryFiles.Add(preparedCheckpoint.OnnxPath);
+                model.Checkpoints.push_back(std::move(preparedCheckpoint));
+            }
+
+            const std::uint64_t contextSections = 2 +
+                (model.HasNetwork ? 1ull : 0ull) +
+                (model.HasDataset ? 1ull : 0ull) +
+                (model.HasTraining ? 1ull : 0ull) +
+                static_cast<std::uint64_t>(model.Checkpoints.size()) * 2ull;
+            if (contextSections > MaximumSectionCount - sectionCount)
+            {
+                return false;
+            }
+            sectionCount += contextSections;
+            activeFound = activeFound || view.Id == project.ActiveContextId;
+            prepared.push_back(std::move(model));
+        }
+
+        return activeFound && sectionCount <= MaximumSectionCount;
+    }
+
+    bool LoadVersion2(
+        const std::string& path,
+        ProjectArchiveState& project,
+        ProjectInfoSnapshot& result)
+    {
+        const std::filesystem::path projectPath =
+            NormalizedAbsolutePath(path);
+        std::ifstream input(projectPath, std::ios::binary);
+        std::array<char, ArchiveMagic.size()> magic{};
+        std::uint64_t version{};
+        std::uint64_t sectionCount{};
+
+        if (!input)
+        {
+            return false;
+        }
+
+        input.read(magic.data(), magic.size());
+        if (!input || magic != ArchiveMagic ||
+            !ReadUnsigned(input, version, sizeof(std::uint32_t)) ||
+            version != Version2 ||
+            !ReadUnsigned(input, sectionCount, sizeof(std::uint32_t)) ||
+            sectionCount == 0 || sectionCount > MaximumSectionCount)
+        {
+            return false;
+        }
+
+        std::vector<std::uint8_t> payload;
+        if (!ReadExpectedPayloadSection(input, ProjectSection, payload))
+        {
+            return false;
+        }
+
+        ProjectArchiveState imported;
+        std::uint64_t contextCount{};
+        if (!ParseProjectPayload(
+                payload,
+                imported.ActiveContextId,
+                imported.NextContextId,
+                contextCount))
+        {
+            return false;
+        }
+
+        std::uint64_t consumedSections = 1;
+        std::unordered_set<std::uint64_t> contextIdentifiers;
+        imported.Contexts.reserve(static_cast<std::size_t>(contextCount));
+
+        for (std::uint64_t contextIndex = 0;
+            contextIndex < contextCount;
+            ++contextIndex)
+        {
+            if (!ReadExpectedPayloadSection(input, ContextStateSection, payload))
+            {
+                return false;
+            }
+            ++consumedSections;
+
+            ProjectArchiveContextState model;
+            std::uint64_t nextCheckpointId{};
+            std::uint64_t checkpointCount{};
+            std::uint8_t flags{};
+            if (!ParseContextStatePayload(
+                    payload,
+                    model.Id,
+                    model.Name,
+                    nextCheckpointId,
+                    flags,
+                    checkpointCount) ||
+                model.Id >= imported.NextContextId ||
+                !contextIdentifiers.insert(model.Id).second)
+            {
+                return false;
+            }
+
+            if ((flags & ContextHasNetwork) != 0)
+            {
+                if (!ImportNetworkSection(
+                        input,
+                        "miaia-project-model",
+                        model.Network))
+                {
+                    return false;
+                }
+                ++consumedSections;
+            }
+
+            if ((flags & ContextHasDataset) != 0)
+            {
+                if (!ReadExpectedPayloadSection(
+                        input,
+                        DatasetSection,
+                        payload) ||
+                    !RestoreDataset(payload, projectPath, model.Dataset))
+                {
+                    return false;
+                }
+                ++consumedSections;
+            }
+
+            if ((flags & ContextHasTraining) != 0)
+            {
+                ProjectInfoSnapshot ignoredInfo;
+                if (!ReadExpectedPayloadSection(
+                        input,
+                        TrainingSection,
+                        payload) ||
+                    !ParseTrainingPayload(
+                        payload,
+                        model.TrainingSession,
+                        ignoredInfo))
+                {
+                    return false;
+                }
+                ++consumedSections;
+            }
+
+            if (!ReadExpectedPayloadSection(
+                    input,
+                    BreakpointSection,
+                    payload) ||
+                !ParseBreakpointPayload(payload, model.TrainingSession))
+            {
+                return false;
+            }
+            ++consumedSections;
+
+            std::vector<ModelCheckpointArchiveEntry> checkpoints;
+            checkpoints.reserve(static_cast<std::size_t>(checkpointCount));
+            std::unordered_set<std::uint64_t> checkpointIdentifiers;
+            for (std::uint64_t checkpointIndex = 0;
+                checkpointIndex < checkpointCount;
+                ++checkpointIndex)
+            {
+                ModelCheckpointArchiveEntry checkpoint;
+                if (!ReadExpectedPayloadSection(
+                        input,
+                        CheckpointSection,
+                        payload) ||
+                    !ParseCheckpointPayload(
+                        payload,
+                        checkpoint.Id,
+                        checkpoint.Name) ||
+                    checkpoint.Id >= nextCheckpointId ||
+                    !checkpointIdentifiers.insert(checkpoint.Id).second ||
+                    !ImportNetworkSection(
+                        input,
+                        "miaia-project-checkpoint",
+                        checkpoint.Network))
+                {
+                    return false;
+                }
+                consumedSections += 2;
+                checkpoints.push_back(std::move(checkpoint));
+            }
+
+            if (!model.Checkpoints.ReplaceArchiveEntries(
+                    std::move(checkpoints),
+                    nextCheckpointId))
+            {
+                return false;
+            }
+
+            model.TrainingSession.SampleCount = model.Dataset.Samples.size();
+            imported.Contexts.push_back(std::move(model));
+        }
+
+        if (consumedSections != sectionCount ||
+            input.peek() != std::char_traits<char>::eof())
+        {
+            return false;
+        }
+
+        const auto active = std::find_if(
+            imported.Contexts.begin(),
+            imported.Contexts.end(),
+            [&imported](const ProjectArchiveContextState& model)
+            {
+                return model.Id == imported.ActiveContextId;
+            });
+        if (active == imported.Contexts.end())
+        {
+            return false;
+        }
+
+        ProjectInfoSnapshot info;
+        FillSavedInfo(
+            projectPath,
+            Version2,
+            imported.Contexts.size(),
+            active->Id,
+            active->Name,
+            !active->Network.Layers.empty() ||
+                !active->Network.Connections.empty(),
+            active->Dataset,
+            active->TrainingSession,
+            active->Checkpoints.List().size(),
+            info);
+        project = std::move(imported);
+        result = std::move(info);
+        return true;
+    }
+}
+
+bool MiaIA::Engine::ProjectArchive::Save(
+    const ProjectArchiveView& project,
+    const std::string& path,
+    Core::ProjectInfoSnapshot& result)
+{
+    if (path.empty())
+    {
+        return false;
+    }
+
+    const std::filesystem::path projectPath = NormalizedAbsolutePath(path);
+    if (!HasMaiExtension(projectPath))
+    {
+        return false;
+    }
+
+    std::filesystem::path directory = projectPath.parent_path();
+    if (directory.empty())
+    {
+        directory = std::filesystem::current_path();
+    }
+
+    std::error_code error;
+    std::filesystem::create_directories(directory, error);
+    if (error)
+    {
+        return false;
+    }
+
+    ScopedTemporaryFiles exportedFiles;
+    std::vector<PreparedContext> models;
+    std::uint64_t sectionCount{};
+    if (!PrepareProject(project, models, exportedFiles, sectionCount) ||
+        sectionCount > std::numeric_limits<std::uint32_t>::max())
+    {
+        return false;
+    }
+
+    const std::filesystem::path temporaryPath = UniqueTemporaryPath(
+        directory,
+        projectPath.filename().string(),
+        ".tmp");
+    if (temporaryPath.empty())
+    {
+        return false;
+    }
+
+    ScopedTemporaryFile temporaryFile(temporaryPath);
+    std::ofstream output(temporaryPath, std::ios::binary | std::ios::trunc);
+    if (!output)
+    {
+        return false;
+    }
+
+    output.write(ArchiveMagic.data(), ArchiveMagic.size());
+    if (!WriteUnsigned(output, Version2, sizeof(std::uint32_t)) ||
+        !WriteUnsigned(output, sectionCount, sizeof(std::uint32_t)) ||
+        !WritePayloadSection(output, ProjectSection, BuildProjectPayload(project)))
+    {
+        return false;
+    }
+
+    for (const PreparedContext& model : models)
+    {
+        if (!WritePayloadSection(
+                output,
+                ContextStateSection,
+                BuildContextStatePayload(model)) ||
+            (model.HasNetwork && !WriteFileSection(
+                output,
+                ModelSection,
+                model.OnnxPath)) ||
+            (model.HasDataset && !WritePayloadSection(
+                output,
+                DatasetSection,
+                BuildDatasetPayload(*model.View->Dataset, projectPath))) ||
+            (model.HasTraining && !WritePayloadSection(
+                output,
+                TrainingSection,
+                BuildTrainingPayload(*model.View->TrainingSession))) ||
+            !WritePayloadSection(
+                output,
+                BreakpointSection,
+                BuildBreakpointPayload(*model.View->TrainingSession)))
+        {
+            return false;
+        }
+
+        for (const PreparedCheckpoint& checkpoint : model.Checkpoints)
+        {
+            if (!WritePayloadSection(
+                    output,
+                    CheckpointSection,
+                    BuildCheckpointPayload(checkpoint.View)) ||
+                !WriteFileSection(
+                    output,
+                    ModelSection,
+                    checkpoint.OnnxPath))
+            {
+                return false;
+            }
+        }
+    }
+
+    output.flush();
+    output.close();
+    if (!output || !ReplaceAtomically(temporaryPath, projectPath))
+    {
+        return false;
+    }
+    temporaryFile.Release();
+
+    const auto active = std::find_if(
+        project.Contexts.begin(),
+        project.Contexts.end(),
+        [&project](const ProjectArchiveContextView& model)
+        {
+            return model.Id == project.ActiveContextId;
+        });
+    FillSavedInfo(
+        projectPath,
+        Version2,
+        project.Contexts.size(),
+        active->Id,
+        *active->Name,
+        !active->Network->Layers.empty() ||
+            !active->Network->Connections.empty(),
+        *active->Dataset,
+        *active->TrainingSession,
+        active->Checkpoints->List().size(),
+        result);
+    return true;
+}
+
+bool MiaIA::Engine::ProjectArchive::Load(
+    const std::string& path,
+    ProjectArchiveState& project,
+    Core::ProjectInfoSnapshot& result)
+{
+    if (path.empty())
+    {
+        return false;
+    }
+
+    const std::filesystem::path projectPath = NormalizedAbsolutePath(path);
+    if (!HasMaiExtension(projectPath))
+    {
+        return false;
+    }
+
+    std::uint32_t version{};
+    if (!ReadArchiveVersion(projectPath, version))
+    {
+        return false;
+    }
+
+    if (version == Version2)
+    {
+        return LoadVersion2(path, project, result);
+    }
+
+    if (version != Version1)
+    {
+        return false;
+    }
+
+    Network network;
+    Dataset dataset;
+    TrainingSession trainingSession;
+    ProjectInfoSnapshot info;
+    if (!LoadVersion1(
+            path,
+            network,
+            dataset,
+            trainingSession,
+            info))
+    {
+        return false;
+    }
+
+    if (info.HasDatasetReference && dataset.Source.empty())
+    {
+        dataset.Name = std::filesystem::path(
+            info.DatasetSource).stem().string();
+        dataset.Source = info.DatasetSource;
+        dataset.InputCount = info.DatasetInputCount;
+        dataset.TargetCount = info.DatasetTargetCount;
+        dataset.HasHeader = info.DatasetHasHeader;
+    }
+
+    ProjectArchiveState imported;
+    ProjectArchiveContextState model;
+    model.Id = 1;
+    model.Name = "Model 1";
+    model.Network = std::move(network);
+    model.Dataset = std::move(dataset);
+    model.TrainingSession = std::move(trainingSession);
+    imported.Contexts.push_back(std::move(model));
+    imported.ActiveContextId = 1;
+    imported.NextContextId = 2;
+    project = std::move(imported);
     result = std::move(info);
     return true;
 }

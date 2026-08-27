@@ -63,6 +63,7 @@ std::size_t MiaIA::Studio::StudioController::GetRelationshipLimit() const
 
 void MiaIA::Studio::StudioController::Refresh()
 {
+    RefreshContexts();
     CurrentState.Overview = SDK::MiaIAClient::GetNetworkOverview();
 
     if (StudioTopologyBuilder::ChooseDetail(CurrentState.Overview) ==
@@ -85,6 +86,86 @@ void MiaIA::Studio::StudioController::Refresh()
     RefreshSelectionInspection();
     RefreshTrainingTimeline();
     RefreshModelCheckpoints();
+}
+
+void MiaIA::Studio::StudioController::RefreshContexts()
+{
+    const Core::ModelContextSnapshot activeContext =
+        SDK::MiaIAClient::GetActiveModelContext();
+    const bool contextChanged = CurrentState.ActiveContext.Id != 0 &&
+        CurrentState.ActiveContext.Id != activeContext.Id;
+
+    if (contextChanged)
+    {
+        ResetContextPresentationState();
+    }
+
+    CurrentState.Contexts = SDK::MiaIAClient::GetModelContexts();
+    CurrentState.ActiveContext = activeContext;
+}
+
+bool MiaIA::Studio::StudioController::CreateContext(
+    const std::string& name)
+{
+    Core::ModelContextSnapshot created;
+    if (!SDK::MiaIAClient::CreateModelContext(name, created))
+    {
+        return false;
+    }
+
+    Refresh();
+    return true;
+}
+
+bool MiaIA::Studio::StudioController::SelectContext(
+    std::uint64_t contextId)
+{
+    if (!SDK::MiaIAClient::SelectModelContext(contextId))
+    {
+        return false;
+    }
+
+    Refresh();
+    return true;
+}
+
+bool MiaIA::Studio::StudioController::RenameContext(
+    std::uint64_t contextId,
+    const std::string& name)
+{
+    if (!SDK::MiaIAClient::RenameModelContext(contextId, name))
+    {
+        return false;
+    }
+
+    Refresh();
+    return true;
+}
+
+bool MiaIA::Studio::StudioController::RemoveContext(
+    std::uint64_t contextId)
+{
+    if (!SDK::MiaIAClient::RemoveModelContext(contextId))
+    {
+        return false;
+    }
+
+    Refresh();
+    return true;
+}
+
+void MiaIA::Studio::StudioController::ResetContextPresentationState()
+{
+    CurrentState.Selection = {};
+    CurrentState.HasNeuronInspection = false;
+    CurrentState.NeuronInspection = {};
+    CurrentState.HasConnectionInspection = false;
+    CurrentState.ConnectionInspection = {};
+    CurrentState.ForwardTrace = {};
+    CurrentState.BackwardTrace = {};
+    CurrentState.SignalHealth = {};
+    CurrentState.ModelCheckpoints = {};
+    CurrentState.TrainingTimeline = {};
 }
 
 void MiaIA::Studio::StudioController::RefreshModelCheckpoints()

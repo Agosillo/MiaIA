@@ -6,7 +6,7 @@ The MiaIA Console is an interactive SDK client. Every command translates user in
 
 Command parsing and dispatch live in the reusable CLI command processor. `Console.exe` is only its terminal host; the Unreal editor panel calls the same processor directly. A command therefore has the same syntax and behavior in both interfaces and operates on the host process's shared `MiaIAClient` state.
 
-The state is process-local. A host contains one current MiaIA project with one or more isolated model instances and one active model. Existing commands operate on that active model. `.mai` v1 restores one supported model, dataset reference, training configuration, and breakpoint collection; it cannot yet persist multiple runtime models. Starting `Console.exe` beside Unreal does not connect it to the editor: the two processes own independent state and must open or save projects explicitly. Remote sessions are not implemented.
+The state is process-local. A host contains one current MiaIA project with one or more isolated model contexts and one active context. Existing network, dataset, training, debug, and checkpoint commands operate inside that context. `.mai` v2 preserves every context, active selection, context-local dataset and training metadata, breakpoints, and checkpoints; version 1 remains readable and migrates to one default context named `Model 1`. Starting `Console.exe` beside Unreal does not connect it to the editor: the two processes own independent state and must open or save projects explicitly. Remote sessions are not implemented.
 
 Relative paths are resolved from the host working directory. For `Console.exe`, this is the directory from which it was launched. In the Unreal editor console, it is the Unreal project directory that contains `IDE.uproject`. Absolute paths work in both hosts.
 
@@ -122,9 +122,9 @@ exit
 
 Closes the Console. The current in-memory network and dataset are discarded.
 
-## Model instances
+## Model contexts
 
-Every project retains at least one model. Model IDs are stable during the current process and reset when a new project is created or a `.mai` v1 project is opened. Creating a model selects it immediately. The network, dataset, controlled training session, phase-debug transaction, and checkpoints are isolated per model.
+Every project retains at least one model context. Context IDs are stable and monotonic during the current process and across a `.mai` v2 round trip. A new project resets to context `1`, named `Model 1`; a version 1 archive migrates to the same default identity. Creating a context selects it immediately. The network, dataset, controlled training session, phase-debug transaction, and checkpoints are isolated per context.
 
 ```text
 model create Experiment B
@@ -134,7 +134,7 @@ model rename 2 Comparison model
 model remove 2
 ```
 
-`model list` marks the active model with `*` and prints its topology, dataset-sample, and checkpoint counts. Create, select, and remove are rejected while the active model is Running or phase debugging is active. At least one model must remain. Rename changes only metadata.
+`model list` marks the active context with `*` and prints `empty` immediately after its name when it has no network, followed by topology, dataset-sample, and checkpoint counts. Create, select, and remove are rejected while the active context is Running or phase debugging is active. At least one context must remain. Rename changes only context metadata. The short `model` command name is retained deliberately; it manages model contexts without exposing the longer architectural term in routine console use.
 
 ## Network creation and input
 
@@ -147,7 +147,7 @@ create <inputs> <neurons-per-hidden-layer> <hidden-layers> <outputs>
        [--weight <initial-weight>] [--bias <initial-bias>]
 ```
 
-Creates a new fully connected feed-forward network and replaces the current network.
+Creates a new fully connected feed-forward network and replaces the network in the active model context.
 
 Arguments:
 
@@ -438,7 +438,7 @@ Use this command only with a valid current network. It is a lightweight local ti
 project new
 ```
 
-Replaces the complete current project with one empty model named `Model 1` and runtime ID `1`, clearing its network, dataset, training/debug state, checkpoints, breakpoints, and saved project path. The command is rejected while background training is running or phase debugging is active.
+Replaces the complete current project with one empty model context named `Model 1` and runtime ID `1`, clearing its network, dataset, training/debug state, checkpoints, breakpoints, and saved project path. The command is rejected while background training is running or phase debugging is active.
 
 ### `project open`
 
@@ -446,7 +446,7 @@ Replaces the complete current project with one empty model named `Model 1` and r
 project open <path.mai>
 ```
 
-Transactionally opens a versioned MiaIA project. The current process state changes only after the complete archive and embedded ONNX model pass validation.
+Transactionally opens a versioned MiaIA project. The current process state changes only after the complete archive, every context, and every embedded current or checkpoint ONNX network pass validation.
 
 Examples:
 
@@ -455,7 +455,7 @@ project open experiment.mai
 project open "C:\MiaIA Projects\xor.mai"
 ```
 
-If the recorded CSV source is unavailable, opening still restores the model, training configuration, and breakpoints. The command prints a warning and `project info` reports the dataset as unavailable. Opening replaces the runtime project with one model named `Model 1` because `.mai` v1 contains exactly one model.
+If a recorded CSV source is unavailable, opening still restores the affected context, its training configuration, breakpoints, and checkpoints. The command prints a warning when the active context's reference is unavailable, and `project info` reports its schema. Version 2 restores every context and the active selection. Opening version 1 creates context `1` named `Model 1`; saving it writes version 2.
 
 ### `project save`
 
@@ -470,7 +470,7 @@ project save "C:\MiaIA Projects\xor.mai"
 project save
 ```
 
-The destination must use `.mai`. The project must currently contain exactly one model and its network must be representable by the supported ONNX subset. A multi-model project is rejected rather than silently losing inactive models. Dataset samples remain in their CSV file; the project stores their source reference and schema.
+The destination must use `.mai`. Version 2 stores every context, including intentionally empty contexts. Every current network and checkpoint network that is present must be representable by the supported ONNX subset. Dataset samples remain in their CSV file; each context stores only its source reference and schema.
 
 ### `project info`
 
@@ -478,9 +478,9 @@ The destination must use `.mai`. The project must currently contain exactly one 
 project info
 ```
 
-Prints the current path and format version, model count, active model identity and availability, dataset source and status, training configuration, and breakpoint count.
+Prints the current path and format version, context count, active context identity and network availability, dataset source and status, training configuration, breakpoint count, and checkpoint count.
 
-The [MiaIA project format](../Project/Project.md) documents the precise version 1 contents, exclusions, and failure behavior.
+The [MiaIA project format](../Project/Project.md) documents the precise version 2 contract, version 1 migration, exclusions, and failure behavior.
 
 ## ONNX interchange
 
@@ -687,12 +687,13 @@ dataset diagnose --vanishing-magnitude 1e-7 --exploding-magnitude 50
 
 The result is evidence about the selected dataset and thresholds, not an automatic proof that a neuron is permanently dead. A different input distribution can produce different classifications.
 
-## Process-local model checkpoints
+## Model checkpoints
 
-Model checkpoints capture a complete validated network in memory. They support
-before/after training inspection, safe experimentation, parameter comparison, and fast
-rollback during one MiaIA process. They are independent from the current dataset and
-are not yet persisted in `.mai` project archives.
+Model checkpoints capture a complete validated network inside the active model context. They
+support before/after training inspection, safe experimentation, parameter comparison,
+and fast rollback. They are independent from the current dataset. `.mai` v2 persists
+every checkpoint ID, name, supported network, and next identifier in its owning model;
+version 1 projects open with an empty checkpoint store.
 
 ```text
 checkpoint create <name>
@@ -705,7 +706,7 @@ checkpoint clear
 ```
 
 Names may contain spaces. Each checkpoint receives a stable, monotonically increasing
-ID for the process lifetime. Comparison matches neurons and connections by stable ID,
+context-local ID that survives a version 2 archive round trip. Comparison matches neurons and connections by stable ID,
 reports `second - first`, and orders the displayed bias and weight changes by absolute
 magnitude. A topology mismatch is reported instead of producing misleading deltas.
 
@@ -1086,7 +1087,7 @@ Check the path, header option, column counts, row widths, and numeric values. `n
 ## Current limitations
 
 - SGD is the only optimizer and background execution uses one cooperative worker;
-- `.mai` v1 persists only a project containing one model and does not retain runtime model names or checkpoints;
+- `.mai` v2 persists models and checkpoints but not current training progress, retained history, or visualization layout;
 - MSE is the only loss;
 - dataset preprocessing and categorical values are not supported;
 - detailed structured error diagnostics are not yet exposed;

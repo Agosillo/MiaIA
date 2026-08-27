@@ -1,16 +1,10 @@
 #pragma once
 
+#include "ProjectArchiveState.h"
 #include "../../Core/Public/ProjectInfoSnapshot.h"
 
 #include <cstdint>
 #include <string>
-
-namespace MiaIA::Core
-{
-    struct Dataset;
-    struct Network;
-    struct TrainingSession;
-}
 
 namespace MiaIA::Engine
 {
@@ -21,6 +15,11 @@ namespace MiaIA::Engine
             Core::ProjectFormatVersion;
 
         static bool Save(
+            const ProjectArchiveView& project,
+            const std::string& path,
+            Core::ProjectInfoSnapshot& result);
+
+        static bool SaveVersion1(
             const Core::Network& network,
             const Core::Dataset& dataset,
             const Core::TrainingSession& trainingSession,
@@ -29,9 +28,7 @@ namespace MiaIA::Engine
 
         static bool Load(
             const std::string& path,
-            Core::Network& network,
-            Core::Dataset& dataset,
-            Core::TrainingSession& trainingSession,
+            ProjectArchiveState& project,
             Core::ProjectInfoSnapshot& result);
     };
 }

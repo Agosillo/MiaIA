@@ -28,6 +28,28 @@ public:
     UFUNCTION(BlueprintPure, Category = "MiaIA|Project")
     static FMiaIAProjectInfo GetProjectInfo();
 
+    UFUNCTION(BlueprintCallable, Category = "MiaIA|Project|Model Context")
+    static bool CreateModelContext(
+        const FString& Name,
+        FMiaIAModelContext& OutContext);
+
+    UFUNCTION(BlueprintPure, Category = "MiaIA|Project|Model Context")
+    static TArray<FMiaIAModelContext> GetModelContexts();
+
+    UFUNCTION(BlueprintPure, Category = "MiaIA|Project|Model Context")
+    static FMiaIAModelContext GetActiveModelContext();
+
+    UFUNCTION(BlueprintCallable, Category = "MiaIA|Project|Model Context")
+    static bool SelectModelContext(int64 ContextId);
+
+    UFUNCTION(BlueprintCallable, Category = "MiaIA|Project|Model Context")
+    static bool RenameModelContext(
+        int64 ContextId,
+        const FString& Name);
+
+    UFUNCTION(BlueprintCallable, Category = "MiaIA|Project|Model Context")
+    static bool RemoveModelContext(int64 ContextId);
+
     UFUNCTION(BlueprintCallable, Category = "MiaIA|Interchange")
     static bool ImportOnnx(const FString& Path);
 

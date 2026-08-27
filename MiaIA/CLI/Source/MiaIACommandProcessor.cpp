@@ -128,21 +128,21 @@ const std::vector<CommandCatalogEntry>& CommandCatalog()
         { "project new", "project new", "Clear runtime state and begin an unsaved project.", true },
         { "project open", "project open <path.mai>", "Open a versioned MiaIA project archive.", true },
         { "project save", "project save [path.mai]", "Save to a new path or the current project path.", true },
-        { "project info", "project info", "Show current project, dataset, training, and breakpoint metadata.", true },
-        { "model", "model <create|list|select|rename|remove>", "Manage independent model instances in the current project.", false },
-        { "model create", "model create <name>", "Create and select an empty model instance.", true },
-        { "model list", "model list", "List model instances and the active model.", true },
-        { "model select", "model select <id>", "Select the model used by existing SDK and Console operations.", true },
-        { "model rename", "model rename <id> <name>", "Rename one model instance.", true },
-        { "model remove", "model remove <id>", "Remove one model instance while retaining at least one.", true },
-        { "checkpoint", "checkpoint <create|list|inspect|compare|restore|remove|clear>", "Manage process-local model checkpoints.", false },
-        { "checkpoint create", "checkpoint create <name>", "Capture the current validated model under a stable process-local ID.", true },
+        { "project info", "project info", "Show current project, active model context, dataset, training, breakpoint, and checkpoint metadata.", true },
+        { "model", "model <create|list|select|rename|remove>", "Manage independent model contexts in the current project.", false },
+        { "model create", "model create <name>", "Create and select an empty model context.", true },
+        { "model list", "model list", "List model contexts and the active context.", true },
+        { "model select", "model select <id>", "Select the model context used by existing SDK and Console operations.", true },
+        { "model rename", "model rename <id> <name>", "Rename one model context.", true },
+        { "model remove", "model remove <id>", "Remove one model context while retaining at least one.", true },
+        { "checkpoint", "checkpoint <create|list|inspect|compare|restore|remove|clear>", "Manage persistent model-local checkpoints.", false },
+        { "checkpoint create", "checkpoint create <name>", "Capture the current validated model under a stable model-local ID.", true },
         { "checkpoint list", "checkpoint list", "List captured model checkpoints.", true },
         { "checkpoint inspect", "checkpoint inspect <id>", "Inspect one captured model checkpoint.", true },
         { "checkpoint compare", "checkpoint compare <first-id> <second-id> [maximum-items]", "Compare biases and weights by stable element ID.", true },
         { "checkpoint restore", "checkpoint restore <id>", "Transactionally restore a captured model.", true },
-        { "checkpoint remove", "checkpoint remove <id>", "Remove one process-local checkpoint.", true },
-        { "checkpoint clear", "checkpoint clear", "Remove every process-local checkpoint.", true },
+        { "checkpoint remove", "checkpoint remove <id>", "Remove one model-local checkpoint.", true },
+        { "checkpoint clear", "checkpoint clear", "Remove every checkpoint from the active model.", true },
         { "dataset", "dataset <action>", "Import, inspect, evaluate, or clear samples.", false },
         { "dataset import", "dataset import csv <inputs> <targets> [--no-header] <path>", "Import dataset samples.", false },
         { "dataset import csv", "dataset import csv <inputs> <targets> [--no-header] <path>", "Import a numeric CSV dataset.", true },
@@ -297,8 +297,8 @@ void PrintHelp()
         << "      Clear the current state and begin an unsaved project\n\n"
 
         << "  project open <path.mai>\n"
-        << "      Open a MiaIA project containing an ONNX model, dataset reference,\n"
-        << "      training configuration, and safe breakpoints\n\n"
+        << "      Open a MiaIA project containing model contexts, optional networks,\n"
+        << "      context-local metadata, safe breakpoints, and checkpoints\n\n"
 
         << "  project save [path.mai]\n"
         << "      Save atomically to a new path or the current project path\n\n"
@@ -311,8 +311,8 @@ void PrintHelp()
         << "  model select <id>\n"
         << "  model rename <id> <name>\n"
         << "  model remove <id>\n"
-        << "      Manage isolated runtime models inside the current project\n"
-        << "      .mai v1 can be saved only while one model remains\n\n"
+        << "      Manage isolated model contexts inside the current project\n"
+        << "      .mai v2 preserves every context and the active selection\n\n"
 
         << "  dataset import csv <input-count> <output-count> <path>\n"
         << "      Import a numeric CSV dataset with a header\n"
@@ -548,7 +548,7 @@ void HandleCheckpointCommand(const std::string& command)
             MiaIA::SDK::MiaIAClient::GetModelCheckpoints();
         if (checkpoints.empty())
         {
-            std::cout << "No process-local model checkpoints.\n";
+            std::cout << "No checkpoints in the active model.\n";
             return;
         }
 
@@ -1144,8 +1144,8 @@ std::string UnquotePath(const std::string& value);
 void PrintProjectInfo(
     const MiaIA::Core::ProjectInfoSnapshot& info)
 {
-    const auto models = MiaIA::SDK::MiaIAClient::GetModelInstances();
-    const auto active = MiaIA::SDK::MiaIAClient::GetActiveModelInstance();
+    const auto contexts = MiaIA::SDK::MiaIAClient::GetModelContexts();
+    const auto active = MiaIA::SDK::MiaIAClient::GetActiveModelContext();
     std::cout
         << "\nMiaIA Project\n\n"
         << "Path: "
@@ -1153,11 +1153,12 @@ void PrintProjectInfo(
         << "\nFormat: .mai v" << (info.FormatVersion == 0
             ? MiaIA::Core::ProjectFormatVersion
             : info.FormatVersion)
-        << "\nModels: " << models.size()
-        << "\nActive model: #" << active.Id << " " << active.Name
-        << "\nActive model data: "
+        << "\nModel contexts: " << contexts.size()
+        << "\nActive context: #" << active.Id << " " << active.Name
+        << "\nActive context network: "
         << (info.HasModel || active.LayerCount > 0 ? "Available" : "Empty")
-        << "\nBreakpoints: " << info.BreakpointCount;
+        << "\nBreakpoints: " << info.BreakpointCount
+        << "\nCheckpoints: " << info.CheckpointCount;
 
     if (!info.HasDatasetReference)
     {
@@ -1268,7 +1269,8 @@ void HandleProjectCommand(const std::string& command)
         std::cout
             << "Project " << action
             << " failed. Use a valid .mai path, ensure training is not "
-               "running, and retain one model for the .mai v1 format.\n";
+               "running, and ensure every non-empty context network is "
+               "ONNX-compatible.\n";
         return;
     }
 
@@ -1322,19 +1324,24 @@ void HandleModelCommand(const std::string& command)
 
     if (action == "list" && tokens.size() == 2)
     {
-        const auto models = MiaIAClient::GetModelInstances();
-        std::cout << "Model Instances\n\n";
+        const auto contexts = MiaIAClient::GetModelContexts();
+        std::cout << "Model Contexts\n\n";
 
-        for (const auto& model : models)
+        for (const auto& context : contexts)
         {
             std::cout
-                << (model.Active ? "* " : "  ")
-                << "#" << model.Id << " | " << model.Name
-                << " | " << model.LayerCount << " layers"
-                << " | " << model.NeuronCount << " neurons"
-                << " | " << model.ConnectionCount << " connections"
-                << " | " << model.DatasetSampleCount << " samples"
-                << " | " << model.CheckpointCount << " checkpoints\n";
+                << (context.Active ? "* " : "  ")
+                << "#" << context.Id << " | " << context.Name;
+            if (context.LayerCount == 0 && context.ConnectionCount == 0)
+            {
+                std::cout << " | empty";
+            }
+            std::cout
+                << " | " << context.LayerCount << " layers"
+                << " | " << context.NeuronCount << " neurons"
+                << " | " << context.ConnectionCount << " connections"
+                << " | " << context.DatasetSampleCount << " samples"
+                << " | " << context.CheckpointCount << " checkpoints\n";
         }
 
         return;
@@ -1346,19 +1353,19 @@ void HandleModelCommand(const std::string& command)
         const std::string name = prefix == std::string::npos
             ? ""
             : UnquotePath(command.substr(prefix + 6));
-        MiaIA::Core::ModelInstanceSnapshot model;
+        MiaIA::Core::ModelContextSnapshot context;
 
         if (name.empty() ||
-            !MiaIAClient::CreateModelInstance(name, model))
+            !MiaIAClient::CreateModelContext(name, context))
         {
             std::cout
-                << "Model creation failed. Check the name and pause "
+                << "Model context creation failed. Check the name and pause "
                    "training or phase debugging first.\n";
             return;
         }
 
-        std::cout << "Model #" << model.Id << " created and selected: "
-            << model.Name << ".\n";
+        std::cout << "Model context #" << context.Id
+            << " created and selected: " << context.Name << ".\n";
         return;
     }
 
@@ -1368,10 +1375,10 @@ void HandleModelCommand(const std::string& command)
         return;
     }
 
-    std::uint64_t modelId{};
+    std::uint64_t contextId{};
     std::stringstream idStream(tokens[2]);
 
-    if (!(idStream >> modelId) || !idStream.eof())
+    if (!(idStream >> contextId) || !idStream.eof())
     {
         std::cout << usage;
         return;
@@ -1379,15 +1386,15 @@ void HandleModelCommand(const std::string& command)
 
     if (action == "select" && tokens.size() == 3)
     {
-        if (!MiaIAClient::SelectModelInstance(modelId))
+        if (!MiaIAClient::SelectModelContext(contextId))
         {
             std::cout
-                << "Model selection failed. Check the ID and pause "
+                << "Model context selection failed. Check the ID and pause "
                    "training or phase debugging first.\n";
             return;
         }
 
-        std::cout << "Model #" << modelId << " selected.\n";
+        std::cout << "Model context #" << contextId << " selected.\n";
         return;
     }
 
@@ -1400,28 +1407,29 @@ void HandleModelCommand(const std::string& command)
                 idPosition + tokens[2].size()));
 
         if (name.empty() ||
-            !MiaIAClient::RenameModelInstance(modelId, name))
+            !MiaIAClient::RenameModelContext(contextId, name))
         {
-            std::cout << "Model rename failed. Check the ID and name.\n";
+            std::cout
+                << "Model context rename failed. Check the ID and name.\n";
             return;
         }
 
-        std::cout << "Model #" << modelId << " renamed: "
+        std::cout << "Model context #" << contextId << " renamed: "
             << name << ".\n";
         return;
     }
 
     if (action == "remove" && tokens.size() == 3)
     {
-        if (!MiaIAClient::RemoveModelInstance(modelId))
+        if (!MiaIAClient::RemoveModelContext(contextId))
         {
             std::cout
-                << "Model removal failed. Check the ID, retain at least "
-                   "one model, and pause training or phase debugging first.\n";
+                << "Model context removal failed. Check the ID, retain at least "
+                   "one context, and pause training or phase debugging first.\n";
             return;
         }
 
-        std::cout << "Model #" << modelId << " removed.\n";
+        std::cout << "Model context #" << contextId << " removed.\n";
         return;
     }
 

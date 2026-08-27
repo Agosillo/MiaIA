@@ -147,7 +147,7 @@
     <ClInclude Include="framework.h" />
     <ClInclude Include="Include\MiaIAClient.h" />
     <ClInclude Include="Source\MiaIAClientState.h" />
-    <ClInclude Include="Source\ModelInstance.h" />
+    <ClInclude Include="Source\ModelContext.h" />
     <ClInclude Include="Source\ProjectState.h" />
     <ClInclude Include="pch.h" />
   </ItemGroup>
@@ -165,7 +165,7 @@
     <ClCompile Include="Source\MiaIAClientAsyncTraining.cpp" />
     <ClCompile Include="Source\MiaIAClientDataset.cpp" />
     <ClCompile Include="Source\MiaIAClientInference.cpp" />
-    <ClCompile Include="Source\MiaIAClientModels.cpp" />
+    <ClCompile Include="Source\MiaIAClientContexts.cpp" />
     <ClCompile Include="Source\MiaIAClientOnnx.cpp" />
     <ClCompile Include="Source\MiaIAClientProject.cpp" />
     <ClCompile Include="Source\MiaIAClientTraining.cpp" />

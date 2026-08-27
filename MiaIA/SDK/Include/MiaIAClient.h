@@ -16,7 +16,7 @@
 #include "../../Core/Public/ForwardTraceSnapshot.h"
 #include "../../Core/Public/LossType.h"
 #include "../../Core/Public/ModelCheckpointSnapshot.h"
-#include "../../Core/Public/ModelInstanceSnapshot.h"
+#include "../../Core/Public/ModelContextSnapshot.h"
 #include "../../Core/Public/OptimizerType.h"
 #include "../../Core/Public/PredictionSnapshot.h"
 #include "../../Core/Public/ProjectInfoSnapshot.h"
@@ -119,19 +119,19 @@ namespace MiaIA::SDK
         static bool SaveProject(const std::string& path);
         [[nodiscard]]
         static Core::ProjectInfoSnapshot GetProjectInfo();
-        static bool CreateModelInstance(
+        static bool CreateModelContext(
             const std::string& name,
-            Core::ModelInstanceSnapshot& result);
+            Core::ModelContextSnapshot& result);
         [[nodiscard]]
-        static std::vector<Core::ModelInstanceSnapshot>
-            GetModelInstances();
+        static std::vector<Core::ModelContextSnapshot>
+            GetModelContexts();
         [[nodiscard]]
-        static Core::ModelInstanceSnapshot GetActiveModelInstance();
-        static bool SelectModelInstance(std::uint64_t modelId);
-        static bool RenameModelInstance(
-            std::uint64_t modelId,
+        static Core::ModelContextSnapshot GetActiveModelContext();
+        static bool SelectModelContext(std::uint64_t contextId);
+        static bool RenameModelContext(
+            std::uint64_t contextId,
             const std::string& name);
-        static bool RemoveModelInstance(std::uint64_t modelId);
+        static bool RemoveModelContext(std::uint64_t contextId);
         static bool ImportCsvDataset(
             const std::string& path,
             std::size_t inputCount,

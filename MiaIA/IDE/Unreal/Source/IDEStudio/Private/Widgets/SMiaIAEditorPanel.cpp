@@ -8,6 +8,7 @@
 #include "InputCoreTypes.h"
 #include "Containers/UnrealString.h"
 #include "Misc/ConfigCacheIni.h"
+#include "Misc/MessageDialog.h"
 #include "Misc/Paths.h"
 #include "Styling/AppStyle.h"
 #include "Widgets/Input/SButton.h"
@@ -800,6 +801,25 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
                     .OnGetMenuContent(
                         this,
                         &SMiaIAEditorPanel::BuildProjectMenu)
+                ]
+                + SHorizontalBox::Slot()
+                .AutoWidth()
+                .VAlign(VAlign_Center)
+                .Padding(2.0f, 0.0f, 8.0f, 0.0f)
+                [
+                    SNew(SComboButton)
+                    .ComboButtonStyle(&ComboButtonStyle)
+                    .ToolTipText(LOCTEXT(
+                        "ContextMenuTooltip",
+                        "Create, select, rename, or remove a model context in the current project."))
+                    .ButtonContent()
+                    [
+                        SNew(STextBlock)
+                        .Text(this, &SMiaIAEditorPanel::ActiveContextText)
+                    ]
+                    .OnGetMenuContent(
+                        this,
+                        &SMiaIAEditorPanel::BuildContextMenu)
                 ]
                 + SHorizontalBox::Slot()
                 .AutoWidth()
@@ -3261,6 +3281,13 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
 void SMiaIAEditorPanel::RefreshData()
 {
     PeriodicRefreshElapsedSeconds = 0.0;
+    const uint64 previousContextId = ActiveContext.Id;
+    Contexts = FMiaIAInstanceService::Contexts(MiaIAInstance);
+    ActiveContext = FMiaIAInstanceService::ActiveContext(MiaIAInstance);
+    if (previousContextId != 0 && previousContextId != ActiveContext.Id)
+    {
+        ResetActiveContextPresentation();
+    }
     FMiaIAInstanceService::RefreshTrainingTimeline(MiaIAInstance);
     TrainingTimeline =
         FMiaIAInstanceService::TrainingTimelineState(MiaIAInstance);
@@ -4236,7 +4263,7 @@ void SMiaIAEditorPanel::RebuildModelCheckpoints()
             SNew(STextBlock)
             .Text(LOCTEXT(
                 "NoModelCheckpoints",
-                "No process-local model checkpoints. Capture a validated model before or after training."))
+                "No checkpoints in the active model. Capture a validated model before or after training."))
             .AutoWrapText(true)
         ];
         return;
@@ -4252,7 +4279,7 @@ void SMiaIAEditorPanel::RebuildModelCheckpoints()
             .ButtonStyle(&ExplorerButtonStyle)
             .OnClicked(
                 this,
-                &SMiaIAEditorPanel::HandleSelectModelCheckpoint,
+                &SMiaIAEditorPanel::HandleSelectContextCheckpoint,
                 checkpointId)
             [
                 SNew(STextBlock)
@@ -6420,7 +6447,7 @@ FReply SMiaIAEditorPanel::HandleRefreshModelCheckpoints()
     return FReply::Handled();
 }
 
-FReply SMiaIAEditorPanel::HandleSelectModelCheckpoint(uint64 CheckpointId)
+FReply SMiaIAEditorPanel::HandleSelectContextCheckpoint(uint64 CheckpointId)
 {
     FMiaIAInstanceService::SelectModelCheckpoint(
         MiaIAInstance,
@@ -8070,6 +8097,322 @@ FReply SMiaIAEditorPanel::HandleResetTopologyLimits()
     return FReply::Handled();
 }
 
+FText SMiaIAEditorPanel::ActiveContextText() const
+{
+    if (ActiveContext.Id == 0)
+    {
+        return LOCTEXT("NoActiveContextLabel", "Context");
+    }
+
+    return FText::FromString(FString::Printf(
+        TEXT("Context #%llu - %s"),
+        ActiveContext.Id,
+        UTF8_TO_TCHAR(ActiveContext.Name.c_str())));
+}
+
+bool SMiaIAEditorPanel::CanRemoveActiveContext() const
+{
+    return ActiveContext.Id != 0 && Contexts.size() > 1;
+}
+
+TSharedRef<SWidget> SMiaIAEditorPanel::BuildContextMenu()
+{
+    TSharedRef<SVerticalBox> content = SNew(SVerticalBox);
+
+    content->AddSlot()
+        .AutoHeight()
+        .Padding(8.0f, 6.0f, 8.0f, 4.0f)
+        [
+            SNew(STextBlock)
+            .Font(FAppStyle::GetFontStyle(TEXT("NormalFontBold")))
+            .Text(LOCTEXT(
+                "ContextsHeading",
+                "Model contexts in this project"))
+        ];
+
+    for (const MiaIA::Core::ModelContextSnapshot& context : Contexts)
+    {
+        const TCHAR* activePrefix = context.Active
+            ? TEXT("Active - ")
+            : TEXT("");
+        const TCHAR* emptySuffix =
+            context.LayerCount == 0 && context.ConnectionCount == 0
+            ? TEXT(" | empty")
+            : TEXT("");
+        const FString label = FString::Printf(
+            TEXT("%s#%llu %s%s | %llu layers | %llu checkpoints"),
+            activePrefix,
+            context.Id,
+            UTF8_TO_TCHAR(context.Name.c_str()),
+            emptySuffix,
+            static_cast<uint64>(context.LayerCount),
+            static_cast<uint64>(context.CheckpointCount));
+
+        content->AddSlot()
+            .AutoHeight()
+            .Padding(4.0f, 1.0f)
+            [
+                SNew(SButton)
+                .ButtonStyle(&ButtonStyle)
+                .Text(FText::FromString(label))
+                .IsEnabled(!context.Active)
+                .OnClicked(FOnClicked::CreateSP(
+                    this,
+                    &SMiaIAEditorPanel::HandleSelectContext,
+                    context.Id))
+            ];
+    }
+
+    content->AddSlot()
+        .AutoHeight()
+        .Padding(8.0f, 8.0f, 8.0f, 3.0f)
+        [
+            SNew(STextBlock)
+            .Text(LOCTEXT(
+                "ContextNameHeading",
+                "Name for a new model context or the active context"))
+        ];
+
+    content->AddSlot()
+        .AutoHeight()
+        .Padding(8.0f, 0.0f, 8.0f, 6.0f)
+        [
+            SAssignNew(ContextNameInput, SEditableTextBox)
+            .Style(&InputStyle)
+            .HintText(LOCTEXT("ContextNameHint", "Model context name"))
+        ];
+
+    content->AddSlot()
+        .AutoHeight()
+        .Padding(4.0f, 0.0f, 4.0f, 6.0f)
+        [
+            SNew(SHorizontalBox)
+            + SHorizontalBox::Slot()
+            .FillWidth(1.0f)
+            .Padding(2.0f)
+            [
+                SNew(SButton)
+                .ButtonStyle(&ButtonStyle)
+                .Text(LOCTEXT("CreateContext", "Create and select"))
+                .OnClicked(this, &SMiaIAEditorPanel::HandleCreateContext)
+            ]
+            + SHorizontalBox::Slot()
+            .FillWidth(1.0f)
+            .Padding(2.0f)
+            [
+                SNew(SButton)
+                .ButtonStyle(&ButtonStyle)
+                .Text(LOCTEXT("RenameActiveContext", "Rename active"))
+                .IsEnabled(ActiveContext.Id != 0)
+                .OnClicked(
+                    this,
+                    &SMiaIAEditorPanel::HandleRenameActiveContext)
+            ]
+        ];
+
+    content->AddSlot()
+        .AutoHeight()
+        .Padding(6.0f, 0.0f, 6.0f, 6.0f)
+        [
+            SNew(SButton)
+            .ButtonStyle(&ButtonStyle)
+            .Text(LOCTEXT(
+                "RemoveActiveContext",
+                "Remove active context..."))
+            .IsEnabled(this, &SMiaIAEditorPanel::CanRemoveActiveContext)
+            .OnClicked(
+                this,
+                &SMiaIAEditorPanel::HandleRemoveActiveContext)
+        ];
+
+    return SNew(SBox)
+        .WidthOverride(390.0f)
+        [
+            content
+        ];
+}
+
+FReply SMiaIAEditorPanel::HandleCreateContext()
+{
+    FString name = ContextNameInput.IsValid()
+        ? ContextNameInput->GetText().ToString()
+        : FString();
+    name.TrimStartAndEndInline();
+    FSlateApplication::Get().DismissAllMenus();
+
+    if (name.IsEmpty() ||
+        !FMiaIAInstanceService::CreateContext(MiaIAInstance, name))
+    {
+        ShowDialog(
+            LOCTEXT(
+                "CreateContextFailedTitle",
+                "Create Model Context Failed"),
+            LOCTEXT(
+                "CreateContextFailedContent",
+                "Enter a valid non-empty context name within the supported length, then pause training or cancel phase debugging before creating a model context."));
+        return FReply::Handled();
+    }
+
+    RefreshAfterContextMutation();
+    ConsoleHistory += FString::Printf(
+        TEXT("\n> model create \"%s\"\nModel context #%llu created and selected.\n"),
+        *name,
+        ActiveContext.Id);
+    UpdateConsoleOutput();
+    return FReply::Handled();
+}
+
+FReply SMiaIAEditorPanel::HandleSelectContext(uint64 ContextId)
+{
+    FSlateApplication::Get().DismissAllMenus();
+    if (!FMiaIAInstanceService::SelectContext(MiaIAInstance, ContextId))
+    {
+        ShowDialog(
+            LOCTEXT(
+                "SelectContextFailedTitle",
+                "Select Model Context Failed"),
+            LOCTEXT(
+                "SelectContextFailedContent",
+                "The model context could not be selected. Check that it still exists, then pause training or cancel phase debugging."));
+        return FReply::Handled();
+    }
+
+    RefreshAfterContextMutation();
+    ConsoleHistory += FString::Printf(
+        TEXT("\n> model select %llu\nModel context #%llu selected.\n"),
+        ContextId,
+        ContextId);
+    UpdateConsoleOutput();
+    return FReply::Handled();
+}
+
+FReply SMiaIAEditorPanel::HandleRenameActiveContext()
+{
+    FString name = ContextNameInput.IsValid()
+        ? ContextNameInput->GetText().ToString()
+        : FString();
+    name.TrimStartAndEndInline();
+    const uint64 contextId = ActiveContext.Id;
+    FSlateApplication::Get().DismissAllMenus();
+
+    if (contextId == 0 || name.IsEmpty() ||
+        !FMiaIAInstanceService::RenameContext(
+            MiaIAInstance,
+            contextId,
+            name))
+    {
+        ShowDialog(
+            LOCTEXT(
+                "RenameContextFailedTitle",
+                "Rename Model Context Failed"),
+            LOCTEXT(
+                "RenameContextFailedContent",
+                "Enter a valid non-empty context name within the supported length."));
+        return FReply::Handled();
+    }
+
+    RefreshAfterContextMutation();
+    ConsoleHistory += FString::Printf(
+        TEXT("\n> model rename %llu \"%s\"\nModel context #%llu renamed.\n"),
+        contextId,
+        *name,
+        contextId);
+    UpdateConsoleOutput();
+    return FReply::Handled();
+}
+
+FReply SMiaIAEditorPanel::HandleRemoveActiveContext()
+{
+    const uint64 contextId = ActiveContext.Id;
+    const FString contextName = UTF8_TO_TCHAR(ActiveContext.Name.c_str());
+    FSlateApplication::Get().DismissAllMenus();
+
+    if (!CanRemoveActiveContext())
+    {
+        return FReply::Handled();
+    }
+
+    const FText confirmation = FText::Format(
+        LOCTEXT(
+            "RemoveContextConfirmation",
+            "Remove model context #{0} ({1}) and all of its network data and checkpoints?"),
+        FText::AsNumber(static_cast<int64>(contextId)),
+        FText::FromString(contextName));
+    if (FMessageDialog::Open(EAppMsgType::YesNo, confirmation) !=
+        EAppReturnType::Yes)
+    {
+        return FReply::Handled();
+    }
+
+    if (!FMiaIAInstanceService::RemoveContext(MiaIAInstance, contextId))
+    {
+        ShowDialog(
+            LOCTEXT(
+                "RemoveContextFailedTitle",
+                "Remove Model Context Failed"),
+            LOCTEXT(
+                "RemoveContextFailedContent",
+                "The model context could not be removed. Retain at least one context, then pause training or cancel phase debugging."));
+        return FReply::Handled();
+    }
+
+    RefreshAfterContextMutation();
+    ConsoleHistory += FString::Printf(
+        TEXT("\n> model remove %llu\nModel context #%llu removed.\n"),
+        contextId,
+        contextId);
+    UpdateConsoleOutput();
+    return FReply::Handled();
+}
+
+void SMiaIAEditorPanel::ResetActiveContextPresentation()
+{
+    Network = {};
+    NetworkOverview = {};
+    Session = {};
+    Debug = {};
+    NeuronInspection = {};
+    ConnectionInspection = {};
+    RelationshipPage = {};
+    Breakpoints.Reset();
+    SelectedNeuronId = -1;
+    SelectedConnectionId = -1;
+    SelectedLayerId = -1;
+    FocusedLayerId = -1;
+    SelectedNeuronIds.Reset();
+    SelectedLayerName.Reset();
+    ExpandedExplorerLayerIds.Reset();
+    bNetworkPreview = true;
+    bCompactTopology = false;
+    bExplorerExpansionInitialized = false;
+    bHasDebugNeuron = false;
+    bHasDebugConnection = false;
+    bHasNeuronInspection = false;
+    bHasRelationshipPage = false;
+    bHasConnectionInspection = false;
+    RelationshipOffset = 0;
+    PendingNeuronBiasId = -1;
+    PendingConnectionWeightId = -1;
+    bPendingNeuronBiasDirty = false;
+    bPendingConnectionWeightDirty = false;
+    TrainingTimelineHiddenStepCount = 0;
+    FirstCheckpointComparisonId = 0;
+    SecondCheckpointComparisonId = 0;
+    TopologyKey.Reset();
+    BreakpointKey.Reset();
+    RelationshipKey.Reset();
+    TrainingTimelineKey.Reset();
+}
+
+void SMiaIAEditorPanel::RefreshAfterContextMutation()
+{
+    RefreshData();
+    RebuildForwardTrace();
+    RebuildBackwardTrace();
+    RebuildSignalHealth();
+    RebuildModelCheckpoints();
+}
+
 TSharedRef<SWidget> SMiaIAEditorPanel::BuildProjectMenu()
 {
     return SNew(SVerticalBox)
@@ -8147,7 +8490,9 @@ FReply SMiaIAEditorPanel::HandleNewProject()
 
     ConsoleHistory += TEXT("\n> project new\nNew MiaIA project created.\n");
     UpdateConsoleOutput();
-    RefreshData();
+    FMiaIAInstanceService::Refresh(MiaIAInstance);
+    ResetActiveContextPresentation();
+    RefreshAfterContextMutation();
     return FReply::Handled();
 }
 
@@ -8160,18 +8505,6 @@ FReply SMiaIAEditorPanel::HandleOpenProject()
 FReply SMiaIAEditorPanel::HandleSaveProject()
 {
     FSlateApplication::Get().DismissAllMenus();
-
-    if (UMiaIABlueprintLibrary::GetNetworkOverview().Layers.Num() == 0)
-    {
-        ShowDialog(
-            LOCTEXT(
-                "SaveProjectWithoutModelTitle",
-                "No Model to Save"),
-            LOCTEXT(
-                "SaveProjectWithoutModelContent",
-                "Create or import a valid network before saving a .mai project. Version 1 always contains an embedded model."));
-        return FReply::Handled();
-    }
 
     const FMiaIAProjectInfo info =
         UMiaIABlueprintLibrary::GetProjectInfo();
@@ -8201,19 +8534,6 @@ FReply SMiaIAEditorPanel::HandleSaveProject()
 
 FReply SMiaIAEditorPanel::HandleSaveProjectAs()
 {
-    if (UMiaIABlueprintLibrary::GetNetworkOverview().Layers.Num() == 0)
-    {
-        FSlateApplication::Get().DismissAllMenus();
-        ShowDialog(
-            LOCTEXT(
-                "SaveProjectAsWithoutModelTitle",
-                "No Model to Save"),
-            LOCTEXT(
-                "SaveProjectAsWithoutModelContent",
-                "Create or import a valid network before saving a .mai project. Version 1 always contains an embedded model."));
-        return FReply::Handled();
-    }
-
     ShowProjectPathDialog(EMiaIAProjectPathAction::SaveAs);
     return FReply::Handled();
 }
@@ -8249,11 +8569,15 @@ FReply SMiaIAEditorPanel::HandleProjectInfo()
     const FMiaIAProjectInfo info =
         UMiaIABlueprintLibrary::GetProjectInfo();
     FString content = FString::Printf(
-        TEXT("Path: %s\nFormat: .mai v%d\nModel: %s\nBreakpoints: %lld"),
+        TEXT("Path: %s\nFormat: .mai v%d\nModel contexts: %lld\nActive context: #%lld - %s\nActive context network: %s\nBreakpoints: %lld\nCheckpoints: %lld"),
         info.Path.IsEmpty() ? TEXT("Unsaved") : *info.Path,
-        info.FormatVersion > 0 ? info.FormatVersion : 1,
+        info.FormatVersion > 0 ? info.FormatVersion : 2,
+        static_cast<long long>(info.ContextCount),
+        static_cast<long long>(info.ActiveContextId),
+        *info.ActiveContextName,
         info.bHasModel ? TEXT("Available") : TEXT("None"),
-        static_cast<long long>(info.BreakpointCount));
+        static_cast<long long>(info.BreakpointCount),
+        static_cast<long long>(info.CheckpointCount));
 
     if (!info.bHasDatasetReference)
     {
@@ -8459,11 +8783,14 @@ FReply SMiaIAEditorPanel::HandleConfirmProjectPath()
     if (action == EMiaIAProjectPathAction::Open ||
         action == EMiaIAProjectPathAction::ImportOnnx)
     {
-        FocusedLayerId = -1;
-        bNetworkPreview = true;
+        FMiaIAInstanceService::Refresh(MiaIAInstance);
+        ResetActiveContextPresentation();
+        RefreshAfterContextMutation();
     }
-
-    RefreshData();
+    else
+    {
+        RefreshData();
+    }
     return FReply::Handled();
 }
 
@@ -8674,14 +9001,27 @@ void SMiaIAEditorPanel::HandleConsoleCommandCommitted(
         output.Contains(TEXT("ONNX model imported.")) ||
         output.Contains(TEXT("New MiaIA project created.")) ||
         output.Contains(TEXT("Project opened."));
+    const bool modelCommand = command.StartsWith(
+        TEXT("model "),
+        ESearchCase::IgnoreCase);
 
-    if (replacedNetwork)
+    if (replacedNetwork || modelCommand)
     {
-        FocusedLayerId = -1;
-        bNetworkPreview = true;
+        FMiaIAInstanceService::Refresh(MiaIAInstance);
+        if (replacedNetwork)
+        {
+            ResetActiveContextPresentation();
+        }
     }
 
     RefreshData();
+    if (replacedNetwork || modelCommand)
+    {
+        RebuildForwardTrace();
+        RebuildBackwardTrace();
+        RebuildSignalHealth();
+        RebuildModelCheckpoints();
+    }
     if (command.StartsWith(TEXT("checkpoint")))
     {
         FMiaIAInstanceService::RefreshModelCheckpoints(MiaIAInstance);

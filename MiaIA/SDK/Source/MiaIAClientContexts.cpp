@@ -6,9 +6,9 @@
 
 namespace MiaIA::SDK
 {
-    bool MiaIAClient::CreateModelInstance(
+    bool MiaIAClient::CreateModelContext(
         const std::string& name,
-        Core::ModelInstanceSnapshot& result)
+        Core::ModelContextSnapshot& result)
     {
         const std::scoped_lock lock(Detail::ClientMutex());
 
@@ -17,23 +17,23 @@ namespace MiaIA::SDK
             return false;
         }
 
-        return Detail::ClientProjectState().CreateModel(name, result);
+        return Detail::ClientProjectState().CreateContext(name, result);
     }
 
-    std::vector<Core::ModelInstanceSnapshot>
-    MiaIAClient::GetModelInstances()
+    std::vector<Core::ModelContextSnapshot>
+    MiaIAClient::GetModelContexts()
     {
         const std::scoped_lock lock(Detail::ClientMutex());
-        return Detail::ClientProjectState().ModelSnapshots();
+        return Detail::ClientProjectState().ContextSnapshots();
     }
 
-    Core::ModelInstanceSnapshot MiaIAClient::GetActiveModelInstance()
+    Core::ModelContextSnapshot MiaIAClient::GetActiveModelContext()
     {
         const std::scoped_lock lock(Detail::ClientMutex());
-        return Detail::ClientProjectState().ActiveModelSnapshot();
+        return Detail::ClientProjectState().ActiveContextSnapshot();
     }
 
-    bool MiaIAClient::SelectModelInstance(std::uint64_t modelId)
+    bool MiaIAClient::SelectModelContext(std::uint64_t contextId)
     {
         const std::scoped_lock lock(Detail::ClientMutex());
 
@@ -42,18 +42,18 @@ namespace MiaIA::SDK
             return false;
         }
 
-        return Detail::ClientProjectState().SelectModel(modelId);
+        return Detail::ClientProjectState().SelectContext(contextId);
     }
 
-    bool MiaIAClient::RenameModelInstance(
-        std::uint64_t modelId,
+    bool MiaIAClient::RenameModelContext(
+        std::uint64_t contextId,
         const std::string& name)
     {
         const std::scoped_lock lock(Detail::ClientMutex());
-        return Detail::ClientProjectState().RenameModel(modelId, name);
+        return Detail::ClientProjectState().RenameContext(contextId, name);
     }
 
-    bool MiaIAClient::RemoveModelInstance(std::uint64_t modelId)
+    bool MiaIAClient::RemoveModelContext(std::uint64_t contextId)
     {
         const std::scoped_lock lock(Detail::ClientMutex());
 
@@ -62,6 +62,6 @@ namespace MiaIA::SDK
             return false;
         }
 
-        return Detail::ClientProjectState().RemoveModel(modelId);
+        return Detail::ClientProjectState().RemoveContext(contextId);
     }
 }

@@ -13,6 +13,9 @@
 #include "../SDK/Include/MiaIAClient.h"
 #include "../Core/Execution/Activation.h"
 #include "../Engine/Training/TrainingStepComparer.h"
+#include "../Engine/Project/ProjectArchive.h"
+#include "../Engine/Interchange/OnnxImporter.h"
+#include "../Engine/Data/CsvDatasetImporter.h"
 #include "../Engine/Validation/NetworkValidator.h"
 
 // Keep the existing checks active in every build configuration.
@@ -393,6 +396,45 @@ int main()
         assert(suggestions.size() == 1);
         assert(suggestions[0].Completion == "predict");
 
+        assert(controller.CaptureModelCheckpoint("Studio first"));
+        assert(controller.SelectNeuron(1003));
+        assert(controller.RunForwardTrace({ 1.0, 1.0 }));
+        const std::uint64_t firstStudioModel =
+            controller.State().ActiveContext.Id;
+        assert(controller.CreateContext("Studio second"));
+        const std::uint64_t secondStudioModel =
+            controller.State().ActiveContext.Id;
+        assert(secondStudioModel != firstStudioModel);
+        assert(controller.State().Contexts.size() == 2);
+        assert(controller.State().Overview.Layers.empty());
+        assert(controller.State().Selection.Kind ==
+            StudioSelectionKind::None);
+        assert(!controller.State().ForwardTrace.Active);
+        assert(controller.State().ModelCheckpoints.Checkpoints.empty());
+
+        assert(controller.ExecuteCommand("create 1 1 0 1").Output.find(
+            "Dense network created") != std::string::npos);
+        assert(controller.SelectNeuron(1002));
+        assert(controller.RunForwardTrace({ 1.0 }));
+        assert(controller.RenameContext(
+            secondStudioModel,
+            "Studio comparison"));
+        assert(MiaIAClient::SelectModelContext(firstStudioModel));
+        controller.RefreshContexts();
+        assert(controller.State().ActiveContext.Id == firstStudioModel);
+        assert(controller.State().Selection.Kind ==
+            StudioSelectionKind::None);
+        assert(!controller.State().ForwardTrace.Active);
+        controller.Refresh();
+        assert(controller.State().Topology.Nodes.size() == 5);
+        assert(controller.State().Selection.Kind ==
+            StudioSelectionKind::None);
+        assert(!controller.State().ForwardTrace.Active);
+        assert(controller.State().ModelCheckpoints.Checkpoints.size() == 1);
+        assert(controller.RemoveContext(secondStudioModel));
+        assert(controller.State().Contexts.size() == 1);
+        assert(!controller.RemoveContext(firstStudioModel));
+
         MiaIAClient::ClearNetwork();
         controller.Refresh();
         assert(controller.State().Topology.Nodes.empty());
@@ -400,7 +442,7 @@ int main()
             StudioSelectionKind::None);
     });
 
-    runner.Run("Process-local model checkpoints", [&]()
+    runner.Run("Model checkpoints", [&]()
     {
         assert(MiaIAClient::ClearModelCheckpoints());
         assert(MiaIAClient::CreateDenseNetwork(2, 2, 1, 1));
@@ -497,7 +539,7 @@ int main()
         assert(MiaIAClient::GetModelCheckpoints().empty());
     });
 
-    runner.Run("Project model instance isolation", [&]()
+    runner.Run("Project model context isolation", [&]()
     {
         const auto datasetPath =
             std::filesystem::temp_directory_path() /
@@ -510,13 +552,18 @@ int main()
         }
 
         assert(MiaIAClient::NewProject());
-        auto models = MiaIAClient::GetModelInstances();
+        auto models = MiaIAClient::GetModelContexts();
         assert(models.size() == 1);
         assert(models[0].Id == 1);
         assert(models[0].Name == "Model 1");
         assert(models[0].Active);
+        const auto emptyContextList = MiaIA::CLI::MiaIACommandProcessor::Execute(
+            "model list").Output;
+        assert(emptyContextList.find("Model Contexts") != std::string::npos);
+        assert(emptyContextList.find(
+            "Model 1 | empty | 0 layers") != std::string::npos);
 
-        const std::uint64_t firstModelId = models[0].Id;
+        const std::uint64_t firstContextId = models[0].Id;
         assert(MiaIAClient::CreateDenseNetwork(2, 2, 1, 1));
         assert(MiaIAClient::ImportCsvDataset(
             datasetPath.string(),
@@ -535,11 +582,11 @@ int main()
             "first model checkpoint",
             firstCheckpoint));
 
-        MiaIA::Core::ModelInstanceSnapshot secondModel;
-        assert(MiaIAClient::CreateModelInstance(
+        MiaIA::Core::ModelContextSnapshot secondModel;
+        assert(MiaIAClient::CreateModelContext(
             "Comparison model",
             secondModel));
-        assert(secondModel.Id != firstModelId);
+        assert(secondModel.Id != firstContextId);
         assert(secondModel.Active);
         assert(MiaIAClient::GetSnapshot().Layers.empty());
         assert(MiaIAClient::GetDatasetSummary().SampleCount == 0);
@@ -554,7 +601,7 @@ int main()
             secondCheckpoint));
         assert(secondCheckpoint.Id == 1);
 
-        models = MiaIAClient::GetModelInstances();
+        models = MiaIAClient::GetModelContexts();
         assert(models.size() == 2);
         assert(!models[0].Active);
         assert(models[0].LayerCount == 3);
@@ -569,7 +616,7 @@ int main()
             MiaIA::Core::TrainingSessionStatus::Idle);
         assert(models[1].CheckpointCount == 1);
 
-        assert(MiaIAClient::SelectModelInstance(firstModelId));
+        assert(MiaIAClient::SelectModelContext(firstContextId));
         assert(MiaIAClient::GetSnapshot().Layers.size() == 3);
         assert(MiaIAClient::GetDatasetSummary().SampleCount == 1);
         assert(MiaIAClient::GetTrainingSession().Status ==
@@ -584,17 +631,59 @@ int main()
             "model rename " + std::to_string(secondModel.Id) +
             " Alternative").Output.find("renamed") !=
             std::string::npos);
-        assert(!MiaIAClient::RenameModelInstance(
+        assert(!MiaIAClient::RenameModelContext(
             secondModel.Id,
             "   "));
-        assert(!MiaIAClient::SelectModelInstance(999999));
+        assert(!MiaIAClient::SelectModelContext(999999));
+
+        MiaIA::Core::ModelContextSnapshot emptyModel;
+        assert(MiaIAClient::CreateModelContext(
+            "Empty model",
+            emptyModel));
+        assert(emptyModel.Id == 3);
+        assert(MiaIAClient::SelectModelContext(firstContextId));
 
         const auto multiModelPath =
             std::filesystem::temp_directory_path() /
-            "miaia_multi_model_v1_rejection.mai";
+            "miaia_multi_model_v2_roundtrip.mai";
         std::filesystem::remove(multiModelPath);
-        assert(!MiaIAClient::SaveProject(multiModelPath.string()));
-        assert(!std::filesystem::exists(multiModelPath));
+        assert(MiaIAClient::SaveProject(multiModelPath.string()));
+        assert(std::filesystem::exists(multiModelPath));
+
+        auto projectInfo = MiaIAClient::GetProjectInfo();
+        assert(projectInfo.FormatVersion == 2);
+        assert(projectInfo.ContextCount == 3);
+        assert(projectInfo.ActiveContextId == firstContextId);
+        assert(projectInfo.ActiveContextName == "Model 1");
+        assert(projectInfo.CheckpointCount == 1);
+
+        assert(MiaIAClient::NewProject());
+        assert(MiaIAClient::OpenProject(multiModelPath.string()));
+        models = MiaIAClient::GetModelContexts();
+        assert(models.size() == 3);
+        assert(models[0].Id == firstContextId);
+        assert(models[0].Active);
+        assert(models[0].DatasetSampleCount == 1);
+        assert(models[0].TrainingStatus ==
+            MiaIA::Core::TrainingSessionStatus::Idle);
+        assert(models[0].CheckpointCount == 1);
+        assert(models[1].Id == secondModel.Id);
+        assert(models[1].Name == "Alternative");
+        assert(models[1].LayerCount == 2);
+        assert(models[1].CheckpointCount == 1);
+        assert(models[2].Id == emptyModel.Id);
+        assert(models[2].Name == "Empty model");
+        assert(models[2].LayerCount == 0);
+
+        assert(MiaIAClient::GetSnapshot().Layers.size() == 3);
+        assert(MiaIAClient::GetDatasetSummary().SampleCount == 1);
+        assert(MiaIAClient::GetTrainingBreakpoints().empty());
+        assert(MiaIAClient::GetModelCheckpoints().size() == 1);
+        MiaIA::Core::ModelCheckpointSummarySnapshot afterReload;
+        assert(MiaIAClient::CaptureModelCheckpoint(
+            "after reload",
+            afterReload));
+        assert(afterReload.Id == 2);
 
         assert(MiaIACommandProcessor::Execute(
             "model list").Output.find("Alternative") !=
@@ -603,22 +692,45 @@ int main()
             "model select " + std::to_string(secondModel.Id)).Output.find(
                 "selected") != std::string::npos);
         assert(MiaIAClient::GetSnapshot().Layers.size() == 2);
+        const auto secondCheckpoints = MiaIAClient::GetModelCheckpoints();
+        assert(secondCheckpoints.size() == 1);
+        assert(secondCheckpoints[0].Name == "second model checkpoint");
 
-        assert(MiaIAClient::RemoveModelInstance(firstModelId));
-        assert(!MiaIAClient::RemoveModelInstance(secondModel.Id));
-        assert(MiaIAClient::GetModelInstances().size() == 1);
+        MiaIA::Core::ModelContextSnapshot postReloadModel;
+        assert(MiaIAClient::CreateModelContext(
+            "Post reload",
+            postReloadModel));
+        assert(postReloadModel.Id == 4);
+        assert(MiaIAClient::SelectModelContext(secondModel.Id));
+        assert(MiaIAClient::RemoveModelContext(postReloadModel.Id));
+
+        assert(MiaIAClient::RemoveModelContext(firstContextId));
+        assert(MiaIAClient::RemoveModelContext(emptyModel.Id));
+        assert(!MiaIAClient::RemoveModelContext(secondModel.Id));
+        assert(MiaIAClient::GetModelContexts().size() == 1);
 
         assert(MiaIAClient::NewProject());
-        models = MiaIAClient::GetModelInstances();
+        models = MiaIAClient::GetModelContexts();
         assert(models.size() == 1);
         assert(models[0].Id == 1);
         assert(models[0].Name == "Model 1");
         assert(models[0].CheckpointCount == 0);
 
+        const auto emptyProjectPath =
+            std::filesystem::temp_directory_path() /
+            "miaia_empty_active_model_v2.mai";
+        std::filesystem::remove(emptyProjectPath);
+        assert(MiaIAClient::SaveProject(emptyProjectPath.string()));
+        projectInfo = MiaIAClient::GetProjectInfo();
+        assert(projectInfo.FormatVersion == 2);
+        assert(!projectInfo.HasModel);
+        assert(projectInfo.ContextCount == 1);
+        assert(projectInfo.ActiveContextId == 1);
+
         assert(MiaIACommandProcessor::Execute(
             "model create CLI model").Output.find("created") !=
             std::string::npos);
-        models = MiaIAClient::GetModelInstances();
+        models = MiaIAClient::GetModelContexts();
         assert(models.size() == 2);
         assert(models[1].Active);
         assert(models[1].Name == "CLI model");
@@ -628,9 +740,11 @@ int main()
         assert(MiaIACommandProcessor::Execute(
             "model remove 2").Output.find("removed") !=
             std::string::npos);
-        assert(MiaIAClient::GetModelInstances().size() == 1);
+        assert(MiaIAClient::GetModelContexts().size() == 1);
         assert(MiaIAClient::NewProject());
+        std::filesystem::remove(emptyProjectPath);
         std::filesystem::remove(datasetPath);
+        std::filesystem::remove(multiModelPath);
     });
 
     runner.Run("Shared CLI command processor", [&]()
@@ -1333,6 +1447,8 @@ int main()
         "miaia_project_archive_tests";
     const auto datasetPath = testDirectory / "samples.csv";
     const auto projectPath = testDirectory / "training.mai";
+    const auto legacyProjectPath = testDirectory / "legacy-v1.mai";
+    const auto legacyOnnxPath = testDirectory / "legacy-v1.onnx";
     const auto cliProjectPath = testDirectory / "cli.mai";
     const auto corruptPath = testDirectory / "corrupt.mai";
     const auto futurePath = testDirectory / "future.mai";
@@ -1389,6 +1505,39 @@ int main()
         MiaIA::Core::OptimizerType::StochasticGradientDescent,
         session));
     assert(MiaIAClient::CancelTrainingSession());
+
+    assert(MiaIAClient::ExportOnnx(legacyOnnxPath.string()));
+    MiaIA::Core::Network legacyNetwork;
+    assert(MiaIA::Engine::OnnxImporter::Import(
+        legacyNetwork,
+        legacyOnnxPath.string()));
+    MiaIA::Core::Dataset legacyDataset;
+    assert(MiaIA::Engine::CsvDatasetImporter::Import(
+        legacyDataset,
+        datasetPath.string(),
+        2,
+        1,
+        false));
+    MiaIA::Core::TrainingSession legacySession;
+    legacySession.EpochCount = 3;
+    legacySession.LearningRate = 0.05;
+    legacySession.Loss = MiaIA::Core::LossType::MeanSquaredError;
+    legacySession.Optimizer =
+        MiaIA::Core::OptimizerType::StochasticGradientDescent;
+    legacySession.Breakpoints = {
+        addedPhaseBreakpoint,
+        addedActivationBreakpoint
+    };
+    legacySession.NextBreakpointId = 3;
+    MiaIA::Core::ProjectInfoSnapshot legacySavedInfo;
+    assert(MiaIA::Engine::ProjectArchive::SaveVersion1(
+        legacyNetwork,
+        legacyDataset,
+        legacySession,
+        legacyProjectPath.string(),
+        legacySavedInfo));
+    assert(legacySavedInfo.FormatVersion == 1);
+    std::filesystem::remove(legacyOnnxPath);
 
     assert(!MiaIAClient::SaveProject(wrongExtensionPath.string()));
     assert(MiaIAClient::SaveProject(projectPath.string()));
@@ -1454,7 +1603,7 @@ int main()
         MiaIACommandProcessor::GetSuggestions("project ");
     assert(projectSuggestions.size() == 4);
     assert(MiaIACommandProcessor::Execute(
-        "project info").Output.find("Format: .mai v1") !=
+        "project info").Output.find("Format: .mai v2") !=
         std::string::npos);
     assert(MiaIACommandProcessor::Execute(
         "project save cli.mai",
@@ -1468,6 +1617,19 @@ int main()
         testDirectory.string()).Output.find("project opened") !=
         std::string::npos);
     assert(MiaIAClient::GetSnapshot().Layers.size() == 3);
+
+    assert(MiaIAClient::NewProject());
+    assert(MiaIAClient::OpenProject(legacyProjectPath.string()));
+    projectInfo = MiaIAClient::GetProjectInfo();
+    assert(projectInfo.FormatVersion == 1);
+    assert(projectInfo.ContextCount == 1);
+    assert(projectInfo.ActiveContextId == 1);
+    assert(projectInfo.ActiveContextName == "Model 1");
+    assert(MiaIAClient::GetModelContexts().size() == 1);
+    assert(MiaIAClient::GetSnapshot().Layers.size() == 3);
+    assert(MiaIAClient::GetDatasetSummary().SampleCount == 2);
+    assert(MiaIAClient::GetTrainingBreakpoints().size() == 2);
+    assert(MiaIAClient::GetModelCheckpoints().empty());
 
     std::filesystem::rename(datasetPath, datasetPath.string() + ".away");
     assert(MiaIAClient::NewProject());
@@ -1505,7 +1667,7 @@ int main()
         std::fstream future(
             futurePath,
             std::ios::binary | std::ios::in | std::ios::out);
-        const char unsupportedVersion[4]{ 2, 0, 0, 0 };
+        const char unsupportedVersion[4]{ 3, 0, 0, 0 };
         future.seekp(8);
         future.write(unsupportedVersion, sizeof(unsupportedVersion));
     }
@@ -1518,6 +1680,8 @@ int main()
     assert(MiaIAClient::NewProject());
     std::filesystem::remove(datasetPath);
     std::filesystem::remove(projectPath);
+    std::filesystem::remove(legacyProjectPath);
+    std::filesystem::remove(legacyOnnxPath);
     std::filesystem::remove(cliProjectPath);
     std::filesystem::remove(corruptPath);
     std::filesystem::remove(futurePath);
@@ -3325,11 +3489,11 @@ int main()
     }
 
     assert(MiaIAClient::NewProject());
-    MiaIA::Core::ModelInstanceSnapshot inactiveModel;
-    assert(MiaIAClient::CreateModelInstance(
+    MiaIA::Core::ModelContextSnapshot inactiveModel;
+    assert(MiaIAClient::CreateModelContext(
         "Inactive during training",
         inactiveModel));
-    assert(MiaIAClient::SelectModelInstance(1));
+    assert(MiaIAClient::SelectModelContext(1));
     assert(MiaIAClient::ImportCsvDataset(
         backgroundPath.string(),
         1,
@@ -3398,14 +3562,14 @@ int main()
     assert(!MiaIAClient::Predict(
         { 1.0 },
         runningPrediction));
-    MiaIA::Core::ModelInstanceSnapshot rejectedModel;
+    MiaIA::Core::ModelContextSnapshot rejectedModel;
     rejectedModel.Id = 4242;
-    assert(!MiaIAClient::CreateModelInstance(
+    assert(!MiaIAClient::CreateModelContext(
         "Blocked while training",
         rejectedModel));
     assert(rejectedModel.Id == 4242);
-    assert(!MiaIAClient::SelectModelInstance(inactiveModel.Id));
-    assert(!MiaIAClient::RemoveModelInstance(inactiveModel.Id));
+    assert(!MiaIAClient::SelectModelContext(inactiveModel.Id));
+    assert(!MiaIAClient::RemoveModelContext(inactiveModel.Id));
 
     assert(MiaIAClient::PauseTrainingSession());
 
@@ -3415,8 +3579,8 @@ int main()
     assert(session.WorkerStopReason ==
         MiaIA::Core::TrainingWorkerStopReason::PauseRequested);
     assert(MiaIAClient::SetConnectionWeight(1, 0.5));
-    assert(MiaIAClient::SelectModelInstance(inactiveModel.Id));
-    assert(MiaIAClient::SelectModelInstance(1));
+    assert(MiaIAClient::SelectModelContext(inactiveModel.Id));
+    assert(MiaIAClient::SelectModelContext(1));
 
     assert(MiaIAClient::ResumeTrainingSession());
     assert(MiaIAClient::CancelTrainingSession());

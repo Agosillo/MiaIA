@@ -75,6 +75,9 @@
     <ClInclude Include="Project\ProjectArchive.h">
       <Filter>File di intestazione</Filter>
     </ClInclude>
+    <ClInclude Include="Project\ProjectArchiveState.h">
+      <Filter>File di intestazione</Filter>
+    </ClInclude>
     <ClInclude Include="Weights\NetworkWeights.h">
       <Filter>File di intestazione</Filter>
     </ClInclude>

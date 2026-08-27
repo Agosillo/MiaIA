@@ -5,7 +5,9 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <map>
+#include <unordered_set>
 #include <utility>
 
 namespace
@@ -120,7 +122,9 @@ namespace MiaIA::Engine
         const std::string& name,
         Core::ModelCheckpointSummarySnapshot& result)
     {
-        if (!HasText(name) || !NetworkValidator::ValidateForForward(network))
+        if (!HasText(name) ||
+            NextId == std::numeric_limits<std::uint64_t>::max() ||
+            !NetworkValidator::ValidateForForward(network))
         {
             return false;
         }
@@ -295,6 +299,75 @@ namespace MiaIA::Engine
     void ModelCheckpointStore::Clear()
     {
         Entries.clear();
+    }
+
+    std::vector<ModelCheckpointArchiveEntryView>
+    ModelCheckpointStore::ArchiveEntries() const
+    {
+        std::vector<ModelCheckpointArchiveEntryView> result;
+        result.reserve(Entries.size());
+
+        for (const Entry& entry : Entries)
+        {
+            result.push_back({
+                entry.Summary.Id,
+                &entry.Summary.Name,
+                &entry.Network
+            });
+        }
+
+        return result;
+    }
+
+    std::uint64_t ModelCheckpointStore::NextIdentifier() const
+    {
+        return NextId;
+    }
+
+    bool ModelCheckpointStore::ReplaceArchiveEntries(
+        std::vector<ModelCheckpointArchiveEntry> entries,
+        std::uint64_t nextIdentifier)
+    {
+        if (nextIdentifier == 0)
+        {
+            return false;
+        }
+
+        std::vector<Entry> replacements;
+        replacements.reserve(entries.size());
+        std::unordered_set<std::uint64_t> identifiers;
+        std::uint64_t maximumIdentifier{};
+
+        for (ModelCheckpointArchiveEntry& source : entries)
+        {
+            if (source.Id == 0 || source.Id >= nextIdentifier ||
+                !identifiers.insert(source.Id).second ||
+                !HasText(source.Name) ||
+                !NetworkValidator::ValidateForForward(source.Network))
+            {
+                return false;
+            }
+
+            Entry entry;
+            entry.Summary.Id = source.Id;
+            entry.Summary.Name = std::move(source.Name);
+            entry.Summary.LayerCount = source.Network.Layers.size();
+            entry.Summary.NeuronCount = NeuronCount(source.Network);
+            entry.Summary.ConnectionCount =
+                source.Network.Connections.size();
+            entry.Network = std::move(source.Network);
+            maximumIdentifier = std::max(maximumIdentifier, entry.Summary.Id);
+            replacements.push_back(std::move(entry));
+        }
+
+        if (maximumIdentifier >= nextIdentifier)
+        {
+            return false;
+        }
+
+        Entries = std::move(replacements);
+        NextId = nextIdentifier;
+        return true;
     }
 
     const ModelCheckpointStore::Entry* ModelCheckpointStore::Find(

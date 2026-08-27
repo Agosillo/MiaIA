@@ -36,21 +36,22 @@ The MiaIA Studio **0.1 Alpha** release includes:
 - controlled foreground and background sessions with navigable history;
 - phase-by-phase training debug with candidate-state inspection and rollback;
 - immutable forward and backward gradient-flow traces with graphical playback;
-- process-local model checkpoints with inspection, comparison, and transactional restore;
+- multi-model projects built from isolated model contexts, each with its own optional network, dataset, sessions, and checkpoints;
+- model checkpoints with inspection, comparison, transactional restore, and `.mai` persistence;
 - bounded neuron and connection relationship inspection with exact topology counts;
 - ONNX model interchange and numeric CSV datasets;
 - one shared command processor for the terminal and Unreal clients;
 - interactive 2D and 3D topology views in MiaIA Studio;
 - a renderer-neutral StudioCore application layer and Windows standalone host.
 
-> **Project status — 0.1 Alpha:** the mathematical and application foundations, versioned `.mai` v1 project persistence, execution traces, diagnostics, and process-local model checkpoints are implemented and tested. Persisting session history, process-local checkpoints, and visualization layouts remains planned work. APIs and supported file-format behavior may evolve during the alpha series.
+> **Project status — 0.1 Alpha:** the mathematical and application foundations, versioned `.mai` v2 multi-context persistence with v1 migration, execution traces, diagnostics, and model checkpoints are implemented and tested. Persisting session history and visualization layouts remains planned work. APIs and supported file-format behavior may evolve during the alpha series.
 
 ## Alpha limitations
 
 - The native engine currently focuses on observable feed-forward networks and the activations documented by the project.
 - ONNX import and export support the documented dense subset, not arbitrary ONNX graphs or operators.
 - Built-in optimization currently focuses on mean squared error and stochastic gradient descent.
-- `.mai` version 1 does not persist transient training progress, session history, process-local checkpoints, annotations, or visualization layout.
+- `.mai` version 2 does not persist transient training progress, session history, annotations, or visualization layout.
 - Live model, dataset, training, and checkpoint state is process-local; separate executables do not share one running session.
 - The packaged application is currently verified for Windows x64. Other platforms and solution configurations are not release targets yet.
 - Alpha APIs and workflows can change; preserve important interoperable models through ONNX exports where supported.

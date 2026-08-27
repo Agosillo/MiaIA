@@ -584,6 +584,40 @@ struct IDE_API FMiaIATrainingDebugConnection
 };
 
 USTRUCT(BlueprintType)
+struct IDE_API FMiaIAModelContext
+{
+    GENERATED_BODY()
+
+    UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
+    int64 Id{};
+
+    UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
+    FString Name;
+
+    UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
+    bool bActive{};
+
+    UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
+    int64 LayerCount{};
+
+    UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
+    int64 NeuronCount{};
+
+    UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
+    int64 ConnectionCount{};
+
+    UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
+    int64 DatasetSampleCount{};
+
+    UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
+    EMiaIATrainingSessionStatus TrainingStatus{
+        EMiaIATrainingSessionStatus::Idle};
+
+    UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
+    int64 CheckpointCount{};
+};
+
+USTRUCT(BlueprintType)
 struct IDE_API FMiaIAProjectInfo
 {
     GENERATED_BODY()
@@ -593,6 +627,15 @@ struct IDE_API FMiaIAProjectInfo
 
     UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
     FString Path;
+
+    UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
+    int64 ContextCount{};
+
+    UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
+    int64 ActiveContextId{};
+
+    UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
+    FString ActiveContextName;
 
     UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
     bool bHasModel{};
@@ -626,4 +669,7 @@ struct IDE_API FMiaIAProjectInfo
 
     UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
     int64 BreakpointCount{};
+
+    UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
+    int64 CheckpointCount{};
 };

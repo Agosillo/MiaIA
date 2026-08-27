@@ -2,7 +2,7 @@
 
 MiaIA is an Interactive Development Environment for Artificial Intelligence. Its purpose is not to compete with large training frameworks on throughput. Its purpose is to make a neural network observable: users should be able to build a model, execute it, inspect its state, evaluate samples, follow gradients, and eventually control training step by step.
 
-The project is currently at **0.1 Alpha**. The C++ engine, public SDK facade, shared command processor, terminal and Unreal command consoles, test harness, ONNX interchange, CSV dataset pipeline, versioned `.mai` project persistence, fixed-model dataset evaluation, immutable forward execution and backward gradient-flow tracing with graphical Studio playback, non-mutating gradient inspection, process-local model checkpoints, phase-by-phase SGD debugging, controlled sessions, background pause/resume, navigable training history, interactive 2D and first runtime 3D topology views, renderer-neutral Studio application foundation, shared Unreal editor/standalone runtime UI, and verified Win64 packaging workflow are implemented. The complete production visualization experience remains planned work.
+The project is currently at **0.1 Alpha**. The C++ engine, public SDK facade, shared command processor, terminal and Unreal command consoles, test harness, ONNX interchange, CSV dataset pipeline, versioned `.mai` v2 multi-context project persistence with v1 migration, fixed-model dataset evaluation, immutable forward execution and backward gradient-flow tracing with graphical Studio playback, non-mutating gradient inspection, persistent model checkpoints, phase-by-phase SGD debugging, controlled sessions, background pause/resume, navigable training history, interactive 2D and first runtime 3D topology views, renderer-neutral Studio application foundation, shared Unreal editor/standalone runtime UI, and verified Win64 packaging workflow are implemented. The complete production visualization experience remains planned work.
 
 ## Documentation map
 
@@ -10,7 +10,7 @@ The project is currently at **0.1 Alpha**. The C++ engine, public SDK facade, sh
 - [Console guide](Console/Console.md) documents every interactive command and introduces the neural-network concepts behind them.
 - [Unreal integration](Unreal/Unreal.md) documents the current Blueprint-facing SDK adapter and build workflow.
 - [MiaIA Studio](Studio/Studio.md) documents the shared graphical application model and standalone delivery path.
-- [MiaIA project format](Project/Project.md) defines the `.mai` v1 container and its safety behavior.
+- [MiaIA project format](Project/Project.md) defines the `.mai` v2 container, v1 migration, and safety behavior.
 - [Coding guidelines](Coding/Coding.md) records the conventions used by the C++ codebase.
 - [Architectural decisions](ADR/ADR.md) summarizes the decisions that currently shape the project.
 - [History](History/History.md) tracks the implemented foundation in chronological order.
@@ -28,13 +28,13 @@ The project is currently at **0.1 Alpha**. The C++ engine, public SDK facade, sh
 | Inference | Direct input-to-output prediction through SDK and Console |
 | Inspection | Network, forward-value/contribution trace, backward gradient-flow trace, dataset, focused neuron/connection debug, gradient, session-history, and completed-step snapshots |
 | Interchange | Import and export of the currently supported dense ONNX subset |
-| Projects | Atomic `.mai` v1 save/open with embedded ONNX, dataset reference, training configuration, and breakpoints |
+| Projects | Atomic `.mai` v2 multi-context save/open with v1 migration, context-local metadata, and checkpoints |
 | Datasets | Numeric CSV import with explicit input and target column counts |
 | Evaluation | Per-sample details and fixed-model mean squared error across a complete dataset |
 | Differentiation | Per-neuron, per-bias, and per-connection gradients without parameter updates |
-| Checkpoints | Process-local capture, listing, inspection, comparison, transactional restore, removal, and clearing |
+| Checkpoints | Model-local capture, listing, inspection, comparison, transactional restore, removal, clearing, and `.mai` persistence |
 | Optimization | Standalone and session-attached phase debugging, atomic SGD, ordered epochs, history, bounded runs, and background control |
-| Clients | Shared CLI hosted by Console.exe and Unreal, Blueprint nodes, a shared editor/standalone topology panel, and renderer-neutral StudioCore |
+| Clients | Shared CLI hosted by Console.exe and Unreal, Blueprint nodes, a shared editor/standalone topology panel with model-context selector, and renderer-neutral StudioCore |
 | Verification | Named Debug- and Release-capable C++ test harness, including numerical gradient checks |
 
 ## Solution structure
@@ -78,13 +78,13 @@ The Unreal-based standalone application is packaged through `IDE/Unreal/Build/Pa
 
 ## Alpha limitations
 
-The 0.1 Alpha release focuses on observable feed-forward networks, the documented dense ONNX subset, numeric CSV datasets, mean squared error, and stochastic gradient descent. `.mai` version 1 deliberately excludes transient training progress, session history, process-local checkpoints, annotations, and visualization layout. Runtime state belongs to one SDK context and is not shared between separate processes. Windows x64 is the currently verified packaged target; alpha APIs and workflows may evolve before a stable release.
+The 0.1 Alpha release focuses on observable feed-forward networks, the documented dense ONNX subset, numeric CSV datasets, mean squared error, and stochastic gradient descent. `.mai` version 2 preserves multi-context project state and checkpoints but deliberately excludes transient training progress, session history, annotations, and visualization layout. Runtime state belongs to one SDK process and is not shared between separate processes. Windows x64 is the currently verified packaged target; alpha APIs and workflows may evolve before a stable release.
 
 ## Architectural direction
 
 All clients use the SDK rather than reaching into Engine or Core internals. Text commands are implemented once in the CLI module and hosted by both `Console.exe` and Unreal. Structured Unreal and Blueprint operations continue to use the SDK facade directly. A separate executable does not share current state because the SDK context is process-local.
 
-ONNX is used as an interchange format. The versioned `.mai` project format preserves the supported model together with the current dataset reference, training configuration, and breakpoint definitions. It deliberately does not yet preserve transient training progress, history, annotations, or visualization layout. A `.mai` project remains exportable to ONNX when its model graph is representable by the supported ONNX subset.
+ONNX is used as an interchange format. The versioned `.mai` project format preserves all model contexts, their active selection, context-local dataset references, training configurations, breakpoint definitions, and checkpoint stores. It deliberately does not preserve transient training progress, history, annotations, or visualization layout. The active context's model remains exportable to ONNX when its graph is representable by the supported ONNX subset.
 
 ## Documentation rule
 

@@ -162,7 +162,7 @@
     <ClInclude Include="Public\SignalHealthSnapshot.h" />
     <ClInclude Include="Public\LossType.h" />
     <ClInclude Include="Public\ModelCheckpointSnapshot.h" />
-    <ClInclude Include="Public\ModelInstanceSnapshot.h" />
+    <ClInclude Include="Public\ModelContextSnapshot.h" />
     <ClInclude Include="Public\NetworkSnapshot.h" />
     <ClInclude Include="Public\NetworkParameterUpdate.h" />
     <ClInclude Include="Public\NeuronContextSnapshot.h" />

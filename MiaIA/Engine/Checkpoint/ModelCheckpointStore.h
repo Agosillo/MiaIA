@@ -9,6 +9,20 @@
 
 namespace MiaIA::Engine
 {
+    struct ModelCheckpointArchiveEntry
+    {
+        std::uint64_t Id{};
+        std::string Name;
+        Core::Network Network;
+    };
+
+    struct ModelCheckpointArchiveEntryView
+    {
+        std::uint64_t Id{};
+        const std::string* Name{};
+        const Core::Network* Network{};
+    };
+
     class ModelCheckpointStore final
     {
     public:
@@ -35,6 +49,13 @@ namespace MiaIA::Engine
 
         bool Remove(std::uint64_t checkpointId);
         void Clear();
+
+        [[nodiscard]] std::vector<ModelCheckpointArchiveEntryView>
+            ArchiveEntries() const;
+        [[nodiscard]] std::uint64_t NextIdentifier() const;
+        bool ReplaceArchiveEntries(
+            std::vector<ModelCheckpointArchiveEntry> entries,
+            std::uint64_t nextIdentifier);
 
     private:
         struct Entry

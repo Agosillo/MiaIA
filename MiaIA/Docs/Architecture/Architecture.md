@@ -65,11 +65,11 @@ This separation allows a mathematical subsystem to evolve without requiring clie
 
 ### SDK
 
-`MiaIAClient` is the public facade used by clients. It exposes project and model-instance management, network creation and editing, complete and focused inspection snapshots, immutable forward execution and backward gradient-flow traces, dataset-wide signal-health diagnostics, ONNX interchange, versioned `.mai` project persistence, datasets, forward execution, sample and full-dataset evaluation, gradient evaluation, atomic sample training, and an ordered dataset epoch.
+`MiaIAClient` is the public facade used by clients. It exposes project and model-context management, network creation and editing, complete and focused inspection snapshots, immutable forward execution and backward gradient-flow traces, dataset-wide signal-health diagnostics, ONNX interchange, versioned `.mai` project persistence, datasets, forward execution, sample and full-dataset evaluation, gradient evaluation, atomic sample training, and an ordered dataset epoch.
 
-The process-local SDK state is now represented by one `ProjectState`. It owns one or more `ModelInstance` values with stable runtime IDs and exactly one active selection. Each model instance owns an independent network, dataset, controlled training session, phase-debug session, and checkpoint store. Existing network, dataset, training, debug, and checkpoint APIs remain source-compatible and operate on the active model. The explicit model API can create and select an empty model, list lightweight summaries, rename a model, or remove it while retaining at least one instance.
+The process-local SDK state is represented by one `ProjectState`. It owns one or more `ModelContext` values with stable runtime IDs and exactly one active selection. Each model context owns an optional independent network plus its dataset, controlled training session, phase-debug session, and checkpoint store. Existing network, dataset, training, debug, and checkpoint APIs operate inside the active context. The explicit context API can create and select an empty context, list lightweight summaries, rename a context, or remove it while retaining at least one. Automatically generated names remain `Model 1`, `Model 2`, and so on, while the Console deliberately keeps the short `model` management command.
 
-This is multi-model project state, not parallel execution. One process-wide client mutex and one cooperative background worker still serialize SDK access. Creating, selecting, or removing models is rejected while the active model is Running or owns an active phase-debug transaction; renaming only changes model metadata. Independent concurrently executing client contexts remain future work.
+This is multi-context project state, not parallel execution. One process-wide client mutex and one cooperative background worker still serialize SDK access. Creating, selecting, or removing contexts is rejected while the active context is Running or owns an active phase-debug transaction; renaming changes only context metadata. Independent concurrently executing client contexts remain future work.
 
 ### CLI command processor
 
@@ -77,11 +77,11 @@ The CLI module is a reusable static library that parses one textual command and 
 
 The module also owns the structured command catalog used for contextual discovery. A client supplies the partially entered text and receives bounded suggestions containing a completion, complete syntax, and short description. Command paths are filtered one level at a time, while an active parameter sequence retains the complete syntax as guidance. This keeps command knowledge out of Unreal-specific widgets and makes the same catalog available to future clients.
 
-`Console.exe` and the Unreal editor console use this same processor in the same process as their SDK state. Unreal does not launch `Console.exe`: a separate process would own a separate process-local project and its model instances. Command execution is serialized because the current processor captures the existing command handlers' standard output during dispatch.
+`Console.exe` and the Unreal editor console use this same processor in the same process as their SDK state. Unreal does not launch `Console.exe`: a separate process would own a separate process-local project and its model contexts. Command execution is serialized because the current processor captures the existing command handlers' standard output during dispatch.
 
 ### StudioCore
 
-`StudioCore` is the renderer-neutral application layer for graphical clients. It is a C++20 static library and does not depend on Unreal, Slate, Qt, or a graphics API. Its controller composes the shared CLI and SDK into refresh, command, suggestion, view-mode, selection, and selected-element inspection operations. A configurable per-direction relationship limit keeps selection responsive while exact connection totals remain available.
+`StudioCore` is the renderer-neutral application layer for graphical clients. It is a C++20 static library and does not depend on Unreal, Slate, Qt, or a graphics API. Its controller composes the shared CLI and SDK into refresh, command, suggestion, active-context management, view-mode, selection, and selected-element inspection operations. It retains lightweight context summaries and the active-context identity, and clears context-specific presentation state whenever that identity changes. A configurable per-direction relationship limit keeps selection responsive while exact connection totals remain available.
 
 The topology builder converts full or overview network snapshots into logical scenes. Detailed layout coordinates are centered and measured in neuron diameters: layers progress on X, neurons progress vertically on Y, and automatic nodes begin coplanar. Shared Expanded/Packed spacing guarantees deterministic symmetry and non-intersection independently of renderer scale. Compact scenes retain aggregate layer counts without copying every neuron and connection. Frontends remain responsible for pixels or world units, meshes, camera behavior, input events, and toolkit-specific styling.
 
@@ -89,9 +89,9 @@ The topology builder converts full or overview network snapshots into logical sc
 
 `Console.exe` is a thin terminal host around the shared CLI command processor. It is both a usable diagnostic client and a reference for other integrations.
 
-The Unreal Engine project is the first graphical integration. Its runtime Blueprint function library converts native session, phase, neuron, and connection snapshots into Unreal-reflected types while keeping every operation behind `MiaIAClient`. It also exposes the shared command processor to Blueprint and to MiaIA Studio. The runtime `IDEStudio` module owns the reusable Slate panel, selectable 2D canvas, embedded runtime 3D viewport, interface theme, persistent semantic visualization palette, and game-instance host. Theme surfaces remain independent from the shared neuron, contribution, selection, and debug colors so presets and user-defined colors apply identically to 2D, 3D, traces, legends, and timeline state. StudioCore supplies the persistent Horizontal/Vertical flow transformation so both renderers interpret layers and neurons consistently. The 3D frontend transforms those coordinates into one aggregated dynamic mesh containing shaded neuron spheres and weighted connection cylinders and retains separate model IDs for hit testing, so detailed inspection does not require one Unreal Actor per graph element. The editor-only `IDEEditor` module owns dock-tab registration and Blueprint demonstration installation.
+The Unreal Engine project is the first graphical integration. Its runtime Blueprint function library converts native project, model-context, network, session, phase, neuron, and connection snapshots into Unreal-reflected types while keeping every operation behind `MiaIAClient`. It also exposes the shared command processor to Blueprint and to MiaIA Studio. The runtime `IDEStudio` module owns the reusable Slate panel, graphical model-context selector, selectable 2D canvas, embedded runtime 3D viewport, interface theme, persistent semantic visualization palette, and game-instance host. Theme surfaces remain independent from the shared neuron, contribution, selection, and debug colors so presets and user-defined colors apply identically to 2D, 3D, traces, legends, and timeline state. StudioCore supplies the persistent Horizontal/Vertical flow transformation so both renderers interpret layers and neurons consistently. The 3D frontend transforms those coordinates into one aggregated dynamic mesh containing shaded neuron spheres and weighted connection cylinders and retains separate network element IDs for hit testing, so detailed inspection does not require one Unreal Actor per graph element. The editor-only `IDEEditor` module owns dock-tab registration and Blueprint demonstration installation.
 
-The Unreal runtime also defines an explicit instance boundary. `FMiaIAInstanceHandle` is an opaque frontend identity, while `FMiaIAInstanceService` resolves it and executes stateful `StudioController` operations inside `IDE.dll`. This prevents `IDEStudio.dll` from linking and constructing a second copy of the process-local static SDK state. The first implementation deliberately registers only the `default` instance. Creating multiple independent models will require replacing the SDK process globals with explicit native contexts, but the Unreal frontend already addresses an instance instead of owning a controller directly.
+The Unreal runtime also defines an explicit instance boundary. `FMiaIAInstanceHandle` is an opaque frontend identity, while `FMiaIAInstanceService` resolves it and executes stateful `StudioController` operations inside `IDE.dll`. This prevents `IDEStudio.dll` from linking and constructing a second copy of the process-local static SDK state. The first implementation deliberately registers only the `default` frontend instance; it can manage all model contexts inside the shared project. Multiple independently executing SDK contexts would still require replacing process globals with explicit native contexts, but the Unreal frontend already addresses an instance instead of owning a controller directly.
 
 The `MiaIAStudio` Unreal game target hosts the same runtime UI independently of Unreal Editor. Its verified Win64 packaging pipeline explicitly cooks the main map and stages the Unreal runtime without including the editor-only module. The packaged application does not require Unreal Editor to run, but it still contains the Unreal runtime. A future Qt or other native frontend can consume the same StudioCore state while supplying a different renderer and widget implementation.
 
@@ -259,7 +259,7 @@ A session starts Active at a safe step boundary. `next` executes exactly one sam
 
 `resume` changes an Active session to Running and launches one SDK-owned background worker. `pause` requests cooperative stop, waits for the current atomic sample step to finish, joins the worker, and returns the session to Active. The network is therefore never exposed halfway through an update. Completion occurs after the configured number of ordered epochs. Cancellation stops and joins a running worker but does not roll back successful steps.
 
-All SDK access to the process-local project and its active model is serialized by one client-state mutex. Snapshot and inspection calls remain available while Running and observe a coherent step boundary. Operations that would mutate the active network, dataset, or activations, or change the active model, are rejected until the session is paused. Worker stop reasons distinguish a requested pause, a breakpoint hit, requested cancellation, and a failed step.
+All SDK access to the process-local project and its active context is serialized by one client-state mutex. Snapshot and inspection calls remain available while Running and observe a coherent step boundary. Operations that would mutate the active network, dataset, or activations, or change the active context, are rejected until the session is paused. Worker stop reasons distinguish a requested pause, a breakpoint hit, requested cancellation, and a failed step.
 
 `TrainingBreakpointController` owns validated breakpoint definitions and evaluates them against either a committed `TrainingStepSnapshot` or an intermediate `TrainingDebugSnapshot`. Breakpoint configuration is retained across new controlled sessions while hit state is reset. Automatic execution evaluates only fully committed sample results, changes a Running session back to Active, and records structured trigger telemetry. Phase stepping can additionally evaluate the internal forward, backward, update, and verification boundaries without moving breakpoint logic into a client.
 
@@ -275,11 +275,11 @@ A bounded run composes repeated `next` operations synchronously. It can stop bec
 
 `TrainingSessionDebugController` attaches the same phase transaction to the session's current cursor and configuration. The session remains unchanged until candidate commit. A shared `TrainingSessionController::RecordStep` operation then records both ordinary and debugged steps, enforcing the expected sample and history position before advancing the cursor. SDK guards prevent synchronous or background session execution while an attached transaction is active.
 
-### Process-local model checkpoints
+### Model checkpoints
 
 `Engine/Checkpoint/ModelCheckpointStore` owns captured copies of validated networks and
-assigns stable process-local checkpoint IDs. The SDK owns one store beside the current
-model, dataset, and training state. Public callers only receive contracts from
+assigns stable model-local checkpoint IDs. The SDK owns one store beside each model's
+network, dataset, and training state. Public callers only receive contracts from
 `Core/Public/ModelCheckpointSnapshot.h`.
 
 Comparison requires matching layer, neuron, and connection IDs before it compares
@@ -288,8 +288,10 @@ then replaces the client model in one operation. A missing or invalid checkpoint
 partially mutate the active network. Model-changing checkpoint operations use the same
 training/debug mutation guard as ordinary network editing.
 
-Checkpoint payloads are intentionally absent from `.mai` format version 1. A later
-tagged format version can add persistence without changing these contracts.
+`.mai` format version 2 persists each checkpoint ID, name, supported ONNX network, and
+the store's next identifier. Opening version 1 creates an empty checkpoint store. The
+same inspection, comparison, and transactional restore contracts apply before and after
+an archive round trip.
 
 ## Snapshot boundary
 
@@ -297,6 +299,7 @@ Clients receive snapshots rather than references to mutable engine storage. A sn
 
 Current public snapshots include:
 
+- project information and lightweight model-context summaries;
 - network, layer, neuron, and connection state;
 - dataset summary and individual samples;
 - predictions, targets, errors, sample loss, and fixed-model dataset mean loss;
@@ -306,6 +309,7 @@ Current public snapshots include:
 - bounded run progress, trace means, details, and stop reason;
 - background worker state and stop reason.
 - breakpoint definitions, hit counts, and the latest structured trigger;
+- model-checkpoint summaries, details, and comparisons;
 - lightweight training-history entries and complete retained steps.
 - two-step training comparisons for loss, output predictions, gradients, weights, and biases.
 
@@ -327,9 +331,9 @@ CSV contains samples, not MiaIA editor or debug metadata.
 
 ### `.mai` project format
 
-`ProjectArchive` implements the versioned `.mai` container independently of any frontend. Version 1 embeds exactly one supported ONNX model and tagged metadata sections for its CSV dataset reference, training configuration, and breakpoint definitions. Writes use a sibling temporary file followed by replacement, and reads construct validated replacement state before `MiaIAClient` publishes it as a new `ProjectState` containing the default model instance.
+`ProjectArchive` implements the versioned `.mai` container independently of any frontend. Version 2 writes an ordered tagged stream containing project identity state followed by every context's stable ID, name, optional supported ONNX network, CSV reference, training configuration, breakpoints, and checkpoint store. Empty model contexts are valid. ONNX payloads pass through temporary files so large networks are streamed instead of duplicated into metadata buffers.
 
-Dataset samples remain external. If their recorded path is unavailable, opening still restores the model, training configuration, and breakpoints while reporting the dataset as unavailable. Current training progress, retained history, active phase-debug state, additional model instances, checkpoint stores, visualization layout, and user preferences are not part of version 1. Saving is rejected while more than one runtime model exists, preventing silent loss until a later format version defines multi-model persistence. See the [project format contract](../Project/Project.md).
+Writes use a sibling temporary file followed by replacement, and reads construct a validated `ProjectArchiveState` before `MiaIAClient` publishes it. Version 1 remains readable and migrates to model `1` named `Model 1`; the next save publishes version 2. Dataset samples remain external, and an unavailable reference preserves its schema while the rest of the model opens normally. Current training progress, retained history, active phase-debug state, visualization layout, and user preferences remain outside version 2. See the [project format contract](../Project/Project.md).
 
 ## Validation and failure behavior
 
@@ -339,14 +343,14 @@ Clients should treat a `false` result as a rejected operation and should not inf
 
 ## Current constraints
 
-- one process-local `ProjectState` with multiple isolated models and one active model at a time;
+- one process-local `ProjectState` with multiple isolated model contexts and one active context at a time;
 - feed-forward execution only;
 - dense factory and a limited ONNX graph subset;
 - MSE is the only loss type;
 - SGD is the only optimizer;
 - background execution uses one cooperative worker and one process-local state lock;
 - no mini-batches or configurable sample ordering yet;
-- `.mai` v1 persists exactly one model and does not yet persist additional model instances, checkpoints, training progress, history, or visualization layout;
+- `.mai` v2 persists multi-context project state and checkpoints, reads v1, and does not persist training progress, history, or visualization layout;
 - Unreal visualization and Blueprint coverage are incomplete.
 
 These constraints describe the current implementation, not the intended final scope.

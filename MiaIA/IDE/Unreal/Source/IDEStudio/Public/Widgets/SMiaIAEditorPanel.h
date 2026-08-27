@@ -133,6 +133,15 @@ private:
     FReply HandleExit();
     FReply SelectBottomTab(int32 TabIndex);
     TSharedRef<SWidget> BuildProjectMenu();
+    TSharedRef<SWidget> BuildContextMenu();
+    FReply HandleCreateContext();
+    FReply HandleSelectContext(uint64 ContextId);
+    FReply HandleRenameActiveContext();
+    FReply HandleRemoveActiveContext();
+    FText ActiveContextText() const;
+    bool CanRemoveActiveContext() const;
+    void ResetActiveContextPresentation();
+    void RefreshAfterContextMutation();
     FReply HandleNewProject();
     FReply HandleOpenProject();
     FReply HandleSaveProject();
@@ -207,7 +216,7 @@ private:
         MiaIA::Studio::StudioSignalHealthFilter Filter);
     FReply HandleCaptureModelCheckpoint();
     FReply HandleRefreshModelCheckpoints();
-    FReply HandleSelectModelCheckpoint(uint64 CheckpointId);
+    FReply HandleSelectContextCheckpoint(uint64 CheckpointId);
     FReply HandleSetCheckpointComparisonSide(bool bFirst);
     FReply HandleCompareModelCheckpoints();
     FReply HandleRestoreModelCheckpoint();
@@ -302,6 +311,8 @@ private:
     double DataRefreshInterval() const;
 
     FMiaIANetworkSnapshot Network;
+    std::vector<MiaIA::Core::ModelContextSnapshot> Contexts;
+    MiaIA::Core::ModelContextSnapshot ActiveContext;
     FMiaIANetworkOverview NetworkOverview;
     FMiaIATrainingSessionSnapshot Session;
     FMiaIATrainingDebugSnapshot Debug;
@@ -410,6 +421,7 @@ private:
     TSharedPtr<SEditableTextBox> BreakpointTargetInput;
     TSharedPtr<SEditableTextBox> BreakpointThresholdInput;
     TSharedPtr<SEditableTextBox> ProjectPathInput;
+    TSharedPtr<SEditableTextBox> ContextNameInput;
     TSharedPtr<SEditableTextBox> ForwardTraceInput;
     TSharedPtr<SEditableTextBox> BackwardTraceInput;
     TSharedPtr<SEditableTextBox> BackwardTraceTarget;

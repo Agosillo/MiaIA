@@ -433,3 +433,4 @@ FodyWeavers.xsd
 
 # Local NONOP website deployment package (not part of the MiaIA repository)
 Website/
+/MiaIA/Console/testMoreModel.mai

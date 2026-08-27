@@ -11,7 +11,7 @@
 
 namespace MiaIA::SDK::Detail
 {
-    struct ModelInstance final
+    struct ModelContext final
     {
         std::uint64_t Id{};
         std::string Name;

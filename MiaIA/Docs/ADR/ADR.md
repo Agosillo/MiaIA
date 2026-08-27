@@ -54,13 +54,13 @@ Future decisions that require a detailed comparison of alternatives should be re
 
 ## ADR-006: Use `.mai` for versioned MiaIA projects
 
-**Status:** Accepted; version 1 implemented
+**Status:** Accepted; versions 1 and 2 implemented
 
-**Decision:** Use `.mai` as a tagged, versioned project container. Version 1 embeds the supported ONNX model and stores a CSV dataset reference, training configuration, and breakpoint definitions when available.
+**Decision:** Use `.mai` as a tagged, versioned project container. Version 1 embeds one supported ONNX model and its dataset, training, and breakpoint metadata. Version 2 preserves every model context, active selection, context-local metadata, and checkpoint store while retaining version-1 read compatibility.
 
 **Reason:** Breakpoints and training context exceed the responsibility of ONNX, while project persistence must remain independent of a specific graphical frontend.
 
-**Consequence:** `.mai` saves are atomic and opens are transactional. A missing referenced dataset does not prevent the embedded model and metadata from opening. The representable model portion retains an explicit ONNX export path. Visualization layout, training history, and active debug state remain outside version 1.
+**Consequence:** `.mai` saves are atomic and opens are transactional. A missing referenced dataset does not prevent the affected context and metadata from opening. Normal saves publish version 2; version 1 is migrated in memory when opened. A representable model in the active context retains an explicit ONNX export path. Visualization layout, training history, current training progress, and active debug state remain outside version 2.
 
 ## ADR-007: Start dataset interchange with explicit numeric CSV
 

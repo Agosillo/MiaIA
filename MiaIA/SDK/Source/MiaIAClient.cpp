@@ -31,12 +31,12 @@ MiaIA::SDK::Detail::ClientProjectState()
 
 MiaIA::Core::Dataset& MiaIA::SDK::Detail::ClientDataset()
 {
-    return CurrentProjectState.ActiveModel().Dataset;
+    return CurrentProjectState.ActiveContext().Dataset;
 }
 
 MiaIA::Core::Network& MiaIA::SDK::Detail::ClientNetwork()
 {
-    return CurrentProjectState.ActiveModel().Network;
+    return CurrentProjectState.ActiveContext().Network;
 }
 
 MiaIA::Core::ProjectInfoSnapshot&
@@ -48,19 +48,19 @@ MiaIA::SDK::Detail::ClientProjectInfo()
 MiaIA::Core::TrainingSession&
 MiaIA::SDK::Detail::ClientTrainingSession()
 {
-    return CurrentProjectState.ActiveModel().TrainingSession;
+    return CurrentProjectState.ActiveContext().TrainingSession;
 }
 
 MiaIA::Core::TrainingDebugSession&
 MiaIA::SDK::Detail::ClientTrainingDebugSession()
 {
-    return CurrentProjectState.ActiveModel().TrainingDebugSession;
+    return CurrentProjectState.ActiveContext().TrainingDebugSession;
 }
 
 MiaIA::Engine::ModelCheckpointStore&
 MiaIA::SDK::Detail::ClientCheckpointStore()
 {
-    return CurrentProjectState.ActiveModel().Checkpoints;
+    return CurrentProjectState.ActiveContext().Checkpoints;
 }
 
 std::mutex& MiaIA::SDK::Detail::ClientMutex()

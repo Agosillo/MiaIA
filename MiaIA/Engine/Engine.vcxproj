@@ -167,6 +167,7 @@
     <ClInclude Include="Optimization\SgdOptimizer.h" />
     <ClInclude Include="Parameters\NetworkParameters.h" />
     <ClInclude Include="Project\ProjectArchive.h" />
+    <ClInclude Include="Project\ProjectArchiveState.h" />
     <ClInclude Include="pch.h" />
     <ClInclude Include="Runtime\NetworkFactory.h" />
     <ClInclude Include="Runtime\NetworkRuntime.h" />

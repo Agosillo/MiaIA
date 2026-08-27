@@ -114,11 +114,11 @@ dMSE/dPrediction = 2 * error / output-count
 
 ## Concurrency
 
-The SDK owns the synchronization boundary for its process-local `ProjectState`. Every public SDK operation must acquire the shared client-state lock before reading or writing the project, its active-model selection, or a model instance's network, dataset, training/debug sessions, and checkpoints.
+The SDK owns the synchronization boundary for its process-local `ProjectState`. Every public SDK operation must acquire the shared client-state lock before reading or writing the project, its active-context selection, or a model context's network, dataset, training/debug sessions, and checkpoints.
 
 Background training may publish state only after one complete atomic sample step. Inspection is allowed while the worker runs because it observes state under the same lock. Mutating calls must reject Running state rather than interleave with the worker. Pause and cancellation must request cooperative stop and join the worker without holding the client-state lock.
 
-Existing mathematical APIs deliberately resolve the active `ModelInstance` behind the facade. New code must not cache references across SDK calls because another permitted call can select or remove a model. Creating, selecting, and removing models use the normal mutation guard; each model must retain its own dataset, sessions, debug transaction, and checkpoint store.
+Existing mathematical APIs deliberately resolve the active `ModelContext` behind the facade. New code must not cache references across SDK calls because another permitted call can select or remove a context. Creating, selecting, and removing contexts use the normal mutation guard; each context must retain its own network, dataset, sessions, debug transaction, and checkpoint store.
 
 Concurrency tests should synchronize through public state and join operations. Avoid fixed sleeps as correctness conditions.
 
@@ -143,7 +143,7 @@ Snapshots are public data-transfer values. They should be:
 - free of client-specific rendering state;
 - assigned atomically after successful inspection or calculation.
 
-MiaIA-specific persistent state belongs to dedicated project or visualization structures rather than being inserted into the mathematical network model without a clear boundary. The `.mai` v1 implementation follows this rule through `ProjectArchive` and `ProjectInfoSnapshot`; future visualization sections should preserve the same separation.
+MiaIA-specific persistent state belongs to dedicated project or visualization structures rather than being inserted into the mathematical network model without a clear boundary. The `.mai` v2 implementation follows this rule through pointer-based `ProjectArchiveView`, owning `ProjectArchiveState`, and `ProjectInfoSnapshot` contracts. Archive readers must finish validating independent replacement state before the SDK publishes it, and large model payloads should remain streamed rather than copied into metadata buffers. Future visualization sections should preserve the same separation.
 
 ## Tests
 
