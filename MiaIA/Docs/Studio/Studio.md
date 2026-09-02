@@ -81,6 +81,12 @@ gradient, and signal-health views before refreshing the topology. `Remove select
 checkpoint names, stable IDs, complete supported networks, and next identifier; version
 1 projects open with an empty store.
 
+## Model-context comparison
+
+The `Model compare` tab treats the network displayed in the topology as `Current` and lets the user choose a different saved context as the immutable `Reference`. `Compare` reports counts and structural compatibility before showing activation-type changes and a configurable number of the largest bias and weight differences. Every signed delta means `Current - Reference`; neither source network nor the active-context selection is changed by the comparison itself.
+
+For compatible topologies with scalar differences, both detailed 2D and 3D renderers color changed neurons by bias delta and changed connections by weight delta, normalize intensity by the largest absolute difference, and dim unchanged elements. The ordinary selection highlight remains visible. If activation types, biases, and weights are all identical, the comparison reports `Models are identical` and leaves the topology in its normal colors instead of enabling an empty overlay. Incompatible topologies keep their summary but do not invent scalar matches or enable the overlay. Compact overview scenes remain summaries; opening the compatible network or a detailed layer reveals stable-ID differences. `Clear overlay` removes only transient Studio comparison state. Empty contexts receive a direct explanation and must first create or import a network.
+
 ## Layout conventions
 
 In the two-dimensional layout:

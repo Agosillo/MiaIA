@@ -72,6 +72,10 @@ public:
         const TMap<int64, EMiaIASignalHealthVisualState>& InNeurons,
         const TMap<int64, EMiaIASignalHealthVisualState>& InConnections,
         bool bInActive);
+    void SetModelComparisonOverlay(
+        const TMap<int64, double>& InBiasDeltas,
+        const TMap<int64, double>& InWeightDeltas,
+        bool bInActive);
     void SetSelectedNeurons(
         const TSet<int64>& InNeuronIds,
         int64 InPrimaryNeuronId);
@@ -180,11 +184,15 @@ private:
     TSet<int64> BackwardTracePlaybackConnections;
     TMap<int64, EMiaIASignalHealthVisualState> SignalHealthNeurons;
     TMap<int64, EMiaIASignalHealthVisualState> SignalHealthConnections;
+    TMap<int64, double> ModelComparisonBiasDeltas;
+    TMap<int64, double> ModelComparisonWeightDeltas;
     double MaximumNeuronMetric{1.0};
     double MaximumConnectionMetric{1.0};
     double MaximumForwardTraceContribution{1.0};
     double MaximumBackwardTraceNeuronGradient{1.0};
     double MaximumBackwardTraceConnectionGradient{1.0};
+    double MaximumModelComparisonBiasDelta{1.0};
+    double MaximumModelComparisonWeightDelta{1.0};
     int64 SelectedNeuronId{-1};
     int64 SelectedConnectionId{-1};
     int64 SelectedLayerId{-1};
@@ -208,6 +216,7 @@ private:
     bool bForwardTracePlaybackActive{};
     bool bBackwardTracePlaybackActive{};
     bool bSignalHealthActive{};
+    bool bModelComparisonActive{};
     bool bSelectionCursorVisible{true};
     bool bPanning{};
     bool bMarqueeSelecting{};

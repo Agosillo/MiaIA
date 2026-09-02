@@ -2,7 +2,10 @@
 #include "MiaIAClientState.h"
 #include "ProjectState.h"
 
+#include "../../Engine/Analysis/ModelComparator.h"
+
 #include <mutex>
+#include <utility>
 
 namespace MiaIA::SDK
 {
@@ -31,6 +34,47 @@ namespace MiaIA::SDK
     {
         const std::scoped_lock lock(Detail::ClientMutex());
         return Detail::ClientProjectState().ActiveContextSnapshot();
+    }
+
+    bool MiaIAClient::TryCompareModelContexts(
+        std::uint64_t referenceContextId,
+        std::uint64_t currentContextId,
+        Core::ModelContextComparisonSnapshot& result)
+    {
+        const std::scoped_lock lock(Detail::ClientMutex());
+        if (referenceContextId == currentContextId)
+        {
+            return false;
+        }
+
+        const Detail::ProjectState& project =
+            Detail::ClientProjectState();
+        const Detail::ModelContext* reference =
+            project.FindContext(referenceContextId);
+        const Detail::ModelContext* current =
+            project.FindContext(currentContextId);
+        if (reference == nullptr || current == nullptr)
+        {
+            return false;
+        }
+
+        Core::ModelComparisonSnapshot comparison;
+        if (!Engine::ModelComparator::Compare(
+            reference->Network,
+            current->Network,
+            comparison))
+        {
+            return false;
+        }
+
+        Core::ModelContextComparisonSnapshot candidate;
+        candidate.ReferenceContextId = reference->Id;
+        candidate.CurrentContextId = current->Id;
+        candidate.ReferenceContextName = reference->Name;
+        candidate.CurrentContextName = current->Name;
+        candidate.Model = std::move(comparison);
+        result = std::move(candidate);
+        return true;
     }
 
     bool MiaIAClient::SelectModelContext(std::uint64_t contextId)

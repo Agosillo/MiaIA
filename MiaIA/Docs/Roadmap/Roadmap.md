@@ -131,6 +131,8 @@ Forward execution now also has an immutable renderer-neutral trace. Engine and S
 
 Backward differentiation now has the equivalent immutable gradient-flow trace. Engine and SDK expose captured predictions, errors and loss, neuron activation and pre-activation gradients, bias gradients, weight gradients, and signed per-connection propagation contributions. The shared CLI prints the output-to-input flow, while StudioCore drives deterministic output-gradient, connection-flow, and source-layer frames consumed identically by the Unreal 2D and 3D renderers.
 
+Immutable model-context comparison is also implemented. The Engine checks topology and stable identities before exposing activation, bias, and weight differences; SDK and `model compare` leave both networks and the active selection unchanged. Studio provides Current/Reference selectors, bounded rankings, explicit empty/incompatible states, and signed detailed overlays in both 2D and 3D.
+
 The debugging experience should next evolve toward:
 
 - extend retained history with an explicit bounded policy for hidden-neuron activations;
@@ -167,7 +169,7 @@ The precise version 2 contract and version 1 migration boundary are documented i
 - render paged cross-layer relationship results directly on compact topology scenes;
 - expand neuron coloring beyond activation and current debug state;
 - extend compact navigation with visual cross-layer relationship overlays;
-- compare snapshots and training checkpoints;
+- extend the implemented model-context and checkpoint comparisons with diagnostic-snapshot comparison;
 - keep Unreal-specific rendering data outside the mathematical Core.
 
 ## MiaIA Studio delivery
@@ -189,14 +191,14 @@ Once the SDK contract and session model are stable:
 
 ## Model analysis
 
-Longer-term analysis features may include:
+Implemented analysis now includes immutable context-to-context topology comparison, ranked parameter differences, Console interrogation, checkpoint comparison, and signed detailed 2D/3D overlays. Longer-term analysis may include:
 
-- side-by-side model comparison;
+- synchronized side-by-side canvases in addition to the current reference overlay;
 - activation and gradient distributions;
 - richer distributions and temporal trends built on the implemented signal-health aggregates;
 - weight-change heat maps;
 - sample-specific execution traces;
-- checkpoint comparison;
+- diagnostic comparison across datasets and checkpoints;
 - targeted parameter experiments;
 - model interrogation from Console and graphical clients.
 

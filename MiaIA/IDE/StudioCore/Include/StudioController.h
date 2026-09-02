@@ -7,6 +7,7 @@
 #include "../../../Core/Public/NeuronInspectionSnapshot.h"
 #include "../../../Core/Public/SignalHealthSnapshot.h"
 #include "../../../Core/Public/ModelCheckpointSnapshot.h"
+#include "../../../Core/Public/ModelComparisonSnapshot.h"
 #include "../../../Core/Public/ModelContextSnapshot.h"
 #include "../../../Core/Public/TrainingDebugSnapshot.h"
 #include "../../../Core/Public/TrainingHistoryEntrySnapshot.h"
@@ -149,6 +150,12 @@ namespace MiaIA::Studio
         Core::ModelCheckpointComparisonSnapshot Comparison;
     };
 
+    struct StudioModelComparisonState
+    {
+        bool HasComparison{};
+        Core::ModelContextComparisonSnapshot Comparison;
+    };
+
     struct StudioState
     {
         std::vector<Core::ModelContextSnapshot> Contexts;
@@ -164,6 +171,7 @@ namespace MiaIA::Studio
         StudioForwardTraceState ForwardTrace;
         StudioBackwardTraceState BackwardTrace;
         StudioSignalHealthState SignalHealth;
+        StudioModelComparisonState ModelComparison;
         StudioModelCheckpointState ModelCheckpoints;
         StudioTrainingTimelineState TrainingTimeline;
     };
@@ -188,6 +196,10 @@ namespace MiaIA::Studio
             std::uint64_t contextId,
             const std::string& name);
         bool RemoveContext(std::uint64_t contextId);
+        bool CompareModelContexts(
+            std::uint64_t referenceContextId,
+            std::uint64_t currentContextId);
+        void ClearModelContextComparison();
         [[nodiscard]] StudioCommandResult ExecuteCommand(
             const std::string& command);
         [[nodiscard]] std::vector<StudioCommandSuggestion>

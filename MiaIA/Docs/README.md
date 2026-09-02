@@ -33,6 +33,7 @@ The project is currently at **0.1 Alpha**. The C++ engine, public SDK facade, sh
 | Evaluation | Per-sample details and fixed-model mean squared error across a complete dataset |
 | Differentiation | Per-neuron, per-bias, and per-connection gradients without parameter updates |
 | Checkpoints | Model-local capture, listing, inspection, comparison, transactional restore, removal, clearing, and `.mai` persistence |
+| Model comparison | Immutable context-to-context topology checks, ranked bias/weight deltas, CLI output, and detailed 2D/3D Studio overlays |
 | Optimization | Standalone and session-attached phase debugging, atomic SGD, ordered epochs, history, bounded runs, and background control |
 | Clients | Shared CLI hosted by Console.exe and Unreal, Blueprint nodes, a shared editor/standalone topology panel with model-context selector, and renderer-neutral StudioCore |
 | Verification | Named Debug- and Release-capable C++ test harness, including numerical gradient checks |

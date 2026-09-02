@@ -15,6 +15,7 @@
 #include "../../Core/Public/DenseNetworkConfiguration.h"
 #include "../../Core/Public/ForwardTraceSnapshot.h"
 #include "../../Core/Public/LossType.h"
+#include "../../Core/Public/ModelComparisonSnapshot.h"
 #include "../../Core/Public/ModelCheckpointSnapshot.h"
 #include "../../Core/Public/ModelContextSnapshot.h"
 #include "../../Core/Public/OptimizerType.h"
@@ -127,6 +128,10 @@ namespace MiaIA::SDK
             GetModelContexts();
         [[nodiscard]]
         static Core::ModelContextSnapshot GetActiveModelContext();
+        static bool TryCompareModelContexts(
+            std::uint64_t referenceContextId,
+            std::uint64_t currentContextId,
+            Core::ModelContextComparisonSnapshot& result);
         static bool SelectModelContext(std::uint64_t contextId);
         static bool RenameModelContext(
             std::uint64_t contextId,

@@ -747,6 +747,140 @@ int main()
         std::filesystem::remove(multiModelPath);
     });
 
+    runner.Run("Immutable model context comparison", [&]()
+    {
+        using MiaIA::CLI::MiaIACommandProcessor;
+
+        assert(MiaIAClient::NewProject());
+        const auto initialContexts = MiaIAClient::GetModelContexts();
+        assert(initialContexts.size() == 1);
+        const std::uint64_t referenceId = initialContexts[0].Id;
+        assert(MiaIAClient::CreateDenseNetwork(2, 2, 1, 1));
+        assert(MiaIAClient::SetConnectionWeight(1, 0.1));
+        const auto referenceBefore = MiaIAClient::GetSnapshot();
+
+        MiaIA::Core::ModelContextSnapshot currentContext;
+        assert(MiaIAClient::CreateModelContext(
+            "Current candidate",
+            currentContext));
+        assert(MiaIAClient::CreateDenseNetwork(2, 2, 1, 1));
+        assert(MiaIAClient::SetConnectionWeight(1, -0.4));
+        assert(MiaIAClient::SetNeuronBias(1003, 0.75));
+        const auto currentBefore = MiaIAClient::GetSnapshot();
+
+        MiaIA::Core::ModelContextComparisonSnapshot comparison;
+        assert(MiaIAClient::TryCompareModelContexts(
+            referenceId,
+            currentContext.Id,
+            comparison));
+        assert(comparison.ReferenceContextId == referenceId);
+        assert(comparison.CurrentContextId == currentContext.Id);
+        assert(comparison.ReferenceContextName == "Model 1");
+        assert(comparison.CurrentContextName == "Current candidate");
+        assert(comparison.Model.Topology.Compatible);
+        assert(comparison.Model.Topology.Reference.LayerCount == 3);
+        assert(comparison.Model.Topology.Current.LayerCount == 3);
+        assert(comparison.Model.Topology.Reference.NeuronCount == 5);
+        assert(comparison.Model.Topology.Reference.ConnectionCount == 6);
+        assert(comparison.Model.ActivationTypeChangeCount == 0);
+        assert(comparison.Model.ChangedBiasCount == 1);
+        assert(comparison.Model.ChangedWeightCount == 1);
+
+        const auto changedBias = std::find_if(
+            comparison.Model.Neurons.begin(),
+            comparison.Model.Neurons.end(),
+            [](const auto& item)
+            {
+                return item.Id == 1003;
+            });
+        assert(changedBias != comparison.Model.Neurons.end());
+        assert(changedBias->Bias.FirstValue == 0.0);
+        assert(changedBias->Bias.SecondValue == 0.75);
+        assert(changedBias->Bias.Delta == 0.75);
+
+        const auto changedWeight = std::find_if(
+            comparison.Model.Connections.begin(),
+            comparison.Model.Connections.end(),
+            [](const auto& item)
+            {
+                return item.Id == 1;
+            });
+        assert(changedWeight != comparison.Model.Connections.end());
+        assert(changedWeight->Weight.FirstValue == 0.1);
+        assert(changedWeight->Weight.SecondValue == -0.4);
+        assert(changedWeight->Weight.Delta == -0.5);
+
+        assert(MiaIAClient::GetActiveModelContext().Id ==
+            currentContext.Id);
+        const auto currentAfter = MiaIAClient::GetSnapshot();
+        assert(currentAfter.Connections[0].Weight ==
+            currentBefore.Connections[0].Weight);
+        assert(currentAfter.Layers[1].Neurons[0].Bias ==
+            currentBefore.Layers[1].Neurons[0].Bias);
+        assert(MiaIAClient::SelectModelContext(referenceId));
+        const auto referenceAfter = MiaIAClient::GetSnapshot();
+        assert(referenceAfter.Connections[0].Weight ==
+            referenceBefore.Connections[0].Weight);
+        assert(referenceAfter.Layers[1].Neurons[0].Bias ==
+            referenceBefore.Layers[1].Neurons[0].Bias);
+
+        MiaIA::Core::ModelContextComparisonSnapshot preserved;
+        preserved.ReferenceContextId = 777;
+        assert(!MiaIAClient::TryCompareModelContexts(
+            referenceId,
+            referenceId,
+            preserved));
+        assert(preserved.ReferenceContextId == 777);
+
+        MiaIA::Core::ModelContextSnapshot emptyContext;
+        assert(MiaIAClient::CreateModelContext(
+            "Empty comparison",
+            emptyContext));
+        assert(!MiaIAClient::TryCompareModelContexts(
+            referenceId,
+            emptyContext.Id,
+            preserved));
+        assert(preserved.ReferenceContextId == 777);
+        const auto emptyOutput = MiaIACommandProcessor::Execute(
+            "model compare " + std::to_string(referenceId) + " " +
+            std::to_string(emptyContext.Id)).Output;
+        assert(emptyOutput.find("is empty") != std::string::npos);
+
+        MiaIA::Core::ModelContextSnapshot incompatibleContext;
+        assert(MiaIAClient::CreateModelContext(
+            "Incompatible",
+            incompatibleContext));
+        assert(MiaIAClient::CreateDenseNetwork(3, 1, 0, 2));
+        assert(MiaIAClient::TryCompareModelContexts(
+            referenceId,
+            incompatibleContext.Id,
+            comparison));
+        assert(!comparison.Model.Topology.Compatible);
+        assert(comparison.Model.Neurons.empty());
+        assert(comparison.Model.Connections.empty());
+
+        assert(MiaIAClient::SelectModelContext(currentContext.Id));
+        const auto cliOutput = MiaIACommandProcessor::Execute(
+            "model compare " + std::to_string(referenceId) + " " +
+            std::to_string(currentContext.Id) + " 1").Output;
+        assert(cliOutput.find("Model Comparison") != std::string::npos);
+        assert(cliOutput.find("Delta convention: current - reference") !=
+            std::string::npos);
+        assert(cliOutput.find("Compatible: yes") != std::string::npos);
+
+        MiaIA::Studio::StudioController controller;
+        assert(controller.CompareModelContexts(
+            referenceId,
+            currentContext.Id));
+        assert(controller.State().ModelComparison.HasComparison);
+        assert(controller.State().ModelComparison.Comparison.Model.
+            ChangedWeightCount == 1);
+        controller.ClearModelContextComparison();
+        assert(!controller.State().ModelComparison.HasComparison);
+
+        assert(MiaIAClient::NewProject());
+    });
+
     runner.Run("Shared CLI command processor", [&]()
     {
     using MiaIA::CLI::MiaIACommandProcessor;

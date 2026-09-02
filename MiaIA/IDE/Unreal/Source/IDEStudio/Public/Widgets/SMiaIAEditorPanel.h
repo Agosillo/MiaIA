@@ -65,6 +65,7 @@ private:
     void ApplyForwardTraceOverlay();
     void ApplyBackwardTraceOverlay();
     void ApplySignalHealthOverlay();
+    void ApplyModelComparisonOverlay();
     bool ExpandExplorerForNeuron(int64 NeuronId);
     bool ExpandExplorerForNeurons(const TSet<int64>& NeuronIds);
     FReply HandleToggleExplorerLayer(int64 LayerId);
@@ -222,6 +223,12 @@ private:
     FReply HandleRestoreModelCheckpoint();
     FReply HandleRemoveModelCheckpoint();
     FReply HandleClearModelCheckpoints();
+    TSharedRef<SWidget> BuildModelComparisonContextMenu(bool bCurrent);
+    FReply HandleSelectModelComparisonContext(
+        uint64 ContextId,
+        bool bCurrent);
+    FReply HandleCompareModelContexts();
+    FReply HandleClearModelComparison();
     FReply HandleSelectTrainingTimelineStep(uint64 StepIndex);
     FReply HandleClearTrainingTimelineView();
     void ShowDialog(const FText& Title, const FText& Content);
@@ -280,6 +287,8 @@ private:
     FText SignalHealthFilterText() const;
     FText SignalHealthSelectionText() const;
     FText ModelCheckpointDetailText() const;
+    FText ModelComparisonContextText(bool bCurrent) const;
+    FText ModelComparisonDetailText() const;
     FText TrainingTimelineSummaryText() const;
     FText TrainingTimelineDetailText() const;
     FText SelectedConnectionEndpointText(bool bToNeuron) const;
@@ -401,6 +410,8 @@ private:
     MiaIA::Core::SignalHealthConfiguration SignalHealthConfiguration;
     uint64 FirstCheckpointComparisonId{};
     uint64 SecondCheckpointComparisonId{};
+    uint64 ModelComparisonReferenceContextId{};
+    int32 ModelComparisonLimit{10};
 
     TSharedPtr<SVerticalBox> ExplorerContent;
     TSharedPtr<SVerticalBox> RelationshipContent;

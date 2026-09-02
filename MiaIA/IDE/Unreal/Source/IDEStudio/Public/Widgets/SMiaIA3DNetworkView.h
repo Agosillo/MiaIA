@@ -55,6 +55,10 @@ public:
         const TMap<int64, EMiaIASignalHealthVisualState>& InNeurons,
         const TMap<int64, EMiaIASignalHealthVisualState>& InConnections,
         bool bInActive);
+    void SetModelComparisonOverlay(
+        const TMap<int64, double>& InBiasDeltas,
+        const TMap<int64, double>& InWeightDeltas,
+        bool bInActive);
     void SetSelectedNeurons(
         const TSet<int64>& InNeuronIds,
         int64 InPrimaryNeuronId);
@@ -195,6 +199,8 @@ private:
     TSet<int64> BackwardTracePlaybackConnections;
     TMap<int64, EMiaIASignalHealthVisualState> SignalHealthNeurons;
     TMap<int64, EMiaIASignalHealthVisualState> SignalHealthConnections;
+    TMap<int64, double> ModelComparisonBiasDeltas;
+    TMap<int64, double> ModelComparisonWeightDeltas;
     TMap<int64, FVector> ManualNodePositions;
     TMap<int64, FVector> ManualLayerOffsets;
     TArray<FNodeRenderData> RenderedNodes;
@@ -228,6 +234,8 @@ private:
     double MaximumForwardTraceContribution{1.0};
     double MaximumBackwardTraceNeuronGradient{1.0};
     double MaximumBackwardTraceConnectionGradient{1.0};
+    double MaximumModelComparisonBiasDelta{1.0};
+    double MaximumModelComparisonWeightDelta{1.0};
     float CameraYaw{-90.0f};
     float CameraPitch{0.0f};
     float CameraDistance{1150.0f};
@@ -241,6 +249,7 @@ private:
     int32 SelectionBlinkFrame{-1};
     bool bCompactMode{};
     bool bSignalHealthActive{};
+    bool bModelComparisonActive{};
     bool bNetworkAggregateMode{};
     bool bForwardTracePlaybackActive{};
     bool bBackwardTracePlaybackActive{};

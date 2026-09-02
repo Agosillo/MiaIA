@@ -110,6 +110,26 @@ bool FMiaIAInstanceService::RemoveContext(
     return controller && controller->RemoveContext(ContextId);
 }
 
+bool FMiaIAInstanceService::CompareModelContexts(
+    FMiaIAInstanceHandle Instance,
+    uint64 ReferenceContextId,
+    uint64 CurrentContextId)
+{
+    MiaIA::Studio::StudioController* controller = Resolve(Instance);
+    return controller && controller->CompareModelContexts(
+        ReferenceContextId,
+        CurrentContextId);
+}
+
+void FMiaIAInstanceService::ClearModelContextComparison(
+    FMiaIAInstanceHandle Instance)
+{
+    if (MiaIA::Studio::StudioController* controller = Resolve(Instance))
+    {
+        controller->ClearModelContextComparison();
+    }
+}
+
 std::vector<MiaIA::Core::ModelContextSnapshot>
 FMiaIAInstanceService::Contexts(FMiaIAInstanceHandle Instance)
 {
@@ -471,6 +491,16 @@ FMiaIAInstanceService::SignalHealthState(FMiaIAInstanceHandle Instance)
     return controller
         ? controller->State().SignalHealth
         : MiaIA::Studio::StudioSignalHealthState{};
+}
+
+MiaIA::Studio::StudioModelComparisonState
+FMiaIAInstanceService::ModelComparisonState(
+    FMiaIAInstanceHandle Instance)
+{
+    const MiaIA::Studio::StudioController* controller = Resolve(Instance);
+    return controller
+        ? controller->State().ModelComparison
+        : MiaIA::Studio::StudioModelComparisonState{};
 }
 
 MiaIA::Studio::StudioModelCheckpointState

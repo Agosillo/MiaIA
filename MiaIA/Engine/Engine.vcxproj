@@ -146,6 +146,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="Analysis\ModelComparator.h" />
     <ClInclude Include="Analysis\SignalHealthAnalyzer.h" />
     <ClInclude Include="Checkpoint\ModelCheckpointStore.h" />
     <ClInclude Include="Data\CsvDatasetImporter.h" />
@@ -185,6 +186,7 @@
     <ClInclude Include="Weights\NetworkWeights.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="Analysis\ModelComparator.cpp" />
     <ClCompile Include="Analysis\SignalHealthAnalyzer.cpp" />
     <ClCompile Include="Checkpoint\ModelCheckpointStore.cpp" />
     <ClCompile Include="Data\CsvDatasetImporter.cpp" />

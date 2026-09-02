@@ -88,11 +88,13 @@ The same project operations are exposed through every current client boundary:
 
 Model-context management is exposed through:
 
-- native SDK: `CreateModelContext`, `GetModelContexts`, `GetActiveModelContext`, `SelectModelContext`, `RenameModelContext`, and `RemoveModelContext`;
-- shared CLI: `model create`, `model list`, `model select`, `model rename`, and `model remove`;
+- native SDK: `CreateModelContext`, `GetModelContexts`, `GetActiveModelContext`, `SelectModelContext`, `RenameModelContext`, `RemoveModelContext`, and immutable `TryCompareModelContexts`;
+- shared CLI: `model create`, `model list`, `model select`, `model rename`, `model remove`, and `model compare`;
 - Unreal Blueprint: the `MiaIA|Project|Model Context` category and `FMiaIAModelContext` snapshots;
 - MiaIA Studio: the model-context selector shared by the Unreal Editor panel and standalone application.
 
 Existing network, dataset, training, debug, and checkpoint operations always target the active model context. Project information reports the total context count and active identity; network availability and context-local counts describe the active context.
+
+Model-context comparison is derived, transient client state. The selected Reference/Current pair, compatibility result, rankings, and graphical overlay are deliberately not persisted in `.mai` v2.
 
 Hosts remain process-local. Opening a project in `Console.exe` does not change the separate project state owned by an Unreal Editor or standalone MiaIA Studio process.

@@ -33,6 +33,12 @@ public:
     static bool RemoveContext(
         FMiaIAInstanceHandle Instance,
         uint64 ContextId);
+    static bool CompareModelContexts(
+        FMiaIAInstanceHandle Instance,
+        uint64 ReferenceContextId,
+        uint64 CurrentContextId);
+    static void ClearModelContextComparison(
+        FMiaIAInstanceHandle Instance);
     static std::vector<MiaIA::Core::ModelContextSnapshot> Contexts(
         FMiaIAInstanceHandle Instance);
     static MiaIA::Core::ModelContextSnapshot ActiveContext(
@@ -114,6 +120,8 @@ public:
     static MiaIA::Studio::StudioBackwardTraceState BackwardTraceState(
         FMiaIAInstanceHandle Instance);
     static MiaIA::Studio::StudioSignalHealthState SignalHealthState(
+        FMiaIAInstanceHandle Instance);
+    static MiaIA::Studio::StudioModelComparisonState ModelComparisonState(
         FMiaIAInstanceHandle Instance);
     static MiaIA::Studio::StudioModelCheckpointState ModelCheckpointState(
         FMiaIAInstanceHandle Instance);

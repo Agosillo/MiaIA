@@ -129,12 +129,13 @@ const std::vector<CommandCatalogEntry>& CommandCatalog()
         { "project open", "project open <path.mai>", "Open a versioned MiaIA project archive.", true },
         { "project save", "project save [path.mai]", "Save to a new path or the current project path.", true },
         { "project info", "project info", "Show current project, active model context, dataset, training, breakpoint, and checkpoint metadata.", true },
-        { "model", "model <create|list|select|rename|remove>", "Manage independent model contexts in the current project.", false },
+        { "model", "model <create|list|select|rename|remove|compare>", "Manage and compare independent model contexts in the current project.", false },
         { "model create", "model create <name>", "Create and select an empty model context.", true },
         { "model list", "model list", "List model contexts and the active context.", true },
         { "model select", "model select <id>", "Select the model context used by existing SDK and Console operations.", true },
         { "model rename", "model rename <id> <name>", "Rename one model context.", true },
         { "model remove", "model remove <id>", "Remove one model context while retaining at least one.", true },
+        { "model compare", "model compare <reference-id> <current-id> [maximum-items]", "Compare compatible model contexts without changing either network.", true },
         { "checkpoint", "checkpoint <create|list|inspect|compare|restore|remove|clear>", "Manage persistent model-local checkpoints.", false },
         { "checkpoint create", "checkpoint create <name>", "Capture the current validated model under a stable model-local ID.", true },
         { "checkpoint list", "checkpoint list", "List captured model checkpoints.", true },
@@ -1312,7 +1313,8 @@ void HandleModelCommand(const std::string& command)
         "  model list\n"
         "  model select <id>\n"
         "  model rename <id> <name>\n"
-        "  model remove <id>\n";
+        "  model remove <id>\n"
+        "  model compare <reference-id> <current-id> [maximum-items]\n";
 
     if (tokens.size() < 2)
     {
@@ -1366,6 +1368,197 @@ void HandleModelCommand(const std::string& command)
 
         std::cout << "Model context #" << context.Id
             << " created and selected: " << context.Name << ".\n";
+        return;
+    }
+
+    if (action == "compare" &&
+        (tokens.size() == 4 || tokens.size() == 5))
+    {
+        std::uint64_t referenceContextId{};
+        std::uint64_t currentContextId{};
+        std::size_t maximumItems{ 10 };
+        std::stringstream referenceStream(tokens[2]);
+        std::stringstream currentStream(tokens[3]);
+
+        if (!(referenceStream >> referenceContextId) ||
+            !referenceStream.eof() ||
+            !(currentStream >> currentContextId) ||
+            !currentStream.eof())
+        {
+            std::cout << usage;
+            return;
+        }
+
+        if (tokens.size() == 5)
+        {
+            std::stringstream maximumStream(tokens[4]);
+            if (!(maximumStream >> maximumItems) ||
+                !maximumStream.eof() ||
+                maximumItems == 0)
+            {
+                std::cout << usage;
+                return;
+            }
+        }
+
+        if (referenceContextId == currentContextId)
+        {
+            std::cout
+                << "Model comparison failed: choose two different contexts.\n";
+            return;
+        }
+
+        const auto contexts = MiaIAClient::GetModelContexts();
+        const auto referenceContext = std::find_if(
+            contexts.begin(),
+            contexts.end(),
+            [referenceContextId](const auto& context)
+            {
+                return context.Id == referenceContextId;
+            });
+        const auto currentContext = std::find_if(
+            contexts.begin(),
+            contexts.end(),
+            [currentContextId](const auto& context)
+            {
+                return context.Id == currentContextId;
+            });
+
+        if (referenceContext == contexts.end())
+        {
+            std::cout << "Model comparison failed: reference context #"
+                << referenceContextId << " does not exist.\n";
+            return;
+        }
+        if (currentContext == contexts.end())
+        {
+            std::cout << "Model comparison failed: current context #"
+                << currentContextId << " does not exist.\n";
+            return;
+        }
+
+        const auto isEmpty = [](const auto& context)
+        {
+            return context.LayerCount == 0 || context.NeuronCount == 0;
+        };
+        if (isEmpty(*referenceContext))
+        {
+            std::cout << "Model comparison failed: reference context #"
+                << referenceContextId << " (" << referenceContext->Name
+                << ") is empty. Create or import a network first.\n";
+            return;
+        }
+        if (isEmpty(*currentContext))
+        {
+            std::cout << "Model comparison failed: current context #"
+                << currentContextId << " (" << currentContext->Name
+                << ") is empty. Create or import a network first.\n";
+            return;
+        }
+
+        MiaIA::Core::ModelContextComparisonSnapshot comparison;
+        if (!MiaIAClient::TryCompareModelContexts(
+            referenceContextId,
+            currentContextId,
+            comparison))
+        {
+            std::cout
+                << "Model comparison failed: both contexts must contain valid networks.\n";
+            return;
+        }
+
+        const auto& topology = comparison.Model.Topology;
+        const auto matchText = [](bool matches)
+        {
+            return matches ? "match" : "different";
+        };
+        std::cout << "Model Comparison\n\n"
+            << "Reference: #" << comparison.ReferenceContextId << " "
+            << comparison.ReferenceContextName << "\n"
+            << "Current: #" << comparison.CurrentContextId << " "
+            << comparison.CurrentContextName << "\n"
+            << "Delta convention: current - reference\n\n"
+            << "Topology compatibility\n"
+            << "Layers: " << topology.Reference.LayerCount << " -> "
+            << topology.Current.LayerCount << " | "
+            << matchText(topology.LayerCountMatches) << "\n"
+            << "Neurons: " << topology.Reference.NeuronCount << " -> "
+            << topology.Current.NeuronCount << " | "
+            << matchText(topology.NeuronCountMatches) << "\n"
+            << "Connections: " << topology.Reference.ConnectionCount
+            << " -> " << topology.Current.ConnectionCount << " | "
+            << matchText(topology.ConnectionCountMatches) << "\n"
+            << "Layer structure: "
+            << matchText(topology.LayerStructureMatches) << "\n"
+            << "Neuron structure: "
+            << matchText(topology.NeuronStructureMatches) << "\n"
+            << "Connection structure: "
+            << matchText(topology.ConnectionStructureMatches) << "\n"
+            << "Compatible: " << (topology.Compatible ? "yes" : "no")
+            << "\n";
+
+        if (!topology.Compatible)
+        {
+            std::cout
+                << "Parameter deltas require matching stable layer, neuron, and connection IDs.\n";
+            return;
+        }
+
+        std::cout << "\nActivation type changes: "
+            << comparison.Model.ActivationTypeChangeCount << "\n"
+            << "Changed biases: " << comparison.Model.ChangedBiasCount
+            << "\n"
+            << "Changed weights: " << comparison.Model.ChangedWeightCount
+            << "\n";
+
+        auto neurons = comparison.Model.Neurons;
+        std::sort(neurons.begin(), neurons.end(), [](const auto& left, const auto& right)
+        {
+            return left.Bias.AbsoluteDelta > right.Bias.AbsoluteDelta;
+        });
+        auto connections = comparison.Model.Connections;
+        std::sort(connections.begin(), connections.end(), [](const auto& left, const auto& right)
+        {
+            return left.Weight.AbsoluteDelta > right.Weight.AbsoluteDelta;
+        });
+
+        std::cout << "\nLargest bias differences\n";
+        std::size_t printed{};
+        for (const auto& item : neurons)
+        {
+            if (printed >= maximumItems || item.Bias.AbsoluteDelta <= 0.0)
+            {
+                break;
+            }
+            std::cout << "Neuron #" << item.Id << " | "
+                << item.Bias.FirstValue << " -> " << item.Bias.SecondValue
+                << " | delta " << item.Bias.Delta << "\n";
+            ++printed;
+        }
+        if (printed == 0)
+        {
+            std::cout << "None\n";
+        }
+
+        std::cout << "\nLargest weight differences\n";
+        printed = 0;
+        for (const auto& item : connections)
+        {
+            if (printed >= maximumItems || item.Weight.AbsoluteDelta <= 0.0)
+            {
+                break;
+            }
+            std::cout << "Connection #" << item.Id << " ("
+                << item.FromNeuron << " -> " << item.ToNeuron << ") | "
+                << item.Weight.FirstValue << " -> "
+                << item.Weight.SecondValue << " | delta "
+                << item.Weight.Delta << "\n";
+            ++printed;
+        }
+        if (printed == 0)
+        {
+            std::cout << "None\n";
+        }
         return;
     }
 

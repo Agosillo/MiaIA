@@ -154,6 +154,29 @@ bool MiaIA::Studio::StudioController::RemoveContext(
     return true;
 }
 
+bool MiaIA::Studio::StudioController::CompareModelContexts(
+    std::uint64_t referenceContextId,
+    std::uint64_t currentContextId)
+{
+    Core::ModelContextComparisonSnapshot comparison;
+    if (!SDK::MiaIAClient::TryCompareModelContexts(
+        referenceContextId,
+        currentContextId,
+        comparison))
+    {
+        return false;
+    }
+
+    CurrentState.ModelComparison.HasComparison = true;
+    CurrentState.ModelComparison.Comparison = std::move(comparison);
+    return true;
+}
+
+void MiaIA::Studio::StudioController::ClearModelContextComparison()
+{
+    CurrentState.ModelComparison = {};
+}
+
 void MiaIA::Studio::StudioController::ResetContextPresentationState()
 {
     CurrentState.Selection = {};
@@ -164,6 +187,7 @@ void MiaIA::Studio::StudioController::ResetContextPresentationState()
     CurrentState.ForwardTrace = {};
     CurrentState.BackwardTrace = {};
     CurrentState.SignalHealth = {};
+    CurrentState.ModelComparison = {};
     CurrentState.ModelCheckpoints = {};
     CurrentState.TrainingTimeline = {};
 }

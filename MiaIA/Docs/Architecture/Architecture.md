@@ -67,7 +67,7 @@ This separation allows a mathematical subsystem to evolve without requiring clie
 
 `MiaIAClient` is the public facade used by clients. It exposes project and model-context management, network creation and editing, complete and focused inspection snapshots, immutable forward execution and backward gradient-flow traces, dataset-wide signal-health diagnostics, ONNX interchange, versioned `.mai` project persistence, datasets, forward execution, sample and full-dataset evaluation, gradient evaluation, atomic sample training, and an ordered dataset epoch.
 
-The process-local SDK state is represented by one `ProjectState`. It owns one or more `ModelContext` values with stable runtime IDs and exactly one active selection. Each model context owns an optional independent network plus its dataset, controlled training session, phase-debug session, and checkpoint store. Existing network, dataset, training, debug, and checkpoint APIs operate inside the active context. The explicit context API can create and select an empty context, list lightweight summaries, rename a context, or remove it while retaining at least one. Automatically generated names remain `Model 1`, `Model 2`, and so on, while the Console deliberately keeps the short `model` management command.
+The process-local SDK state is represented by one `ProjectState`. It owns one or more `ModelContext` values with stable runtime IDs and exactly one active selection. Each model context owns an optional independent network plus its dataset, controlled training session, phase-debug session, and checkpoint store. Existing network, dataset, training, debug, and checkpoint APIs operate inside the active context. The explicit context API can create and select an empty context, list lightweight summaries, rename a context, remove it while retaining at least one, or compare two non-empty contexts without changing the active selection. Automatically generated names remain `Model 1`, `Model 2`, and so on, while the Console deliberately keeps the short `model` management command.
 
 This is multi-context project state, not parallel execution. One process-wide client mutex and one cooperative background worker still serialize SDK access. Creating, selecting, or removing contexts is rejected while the active context is Running or owns an active phase-debug transaction; renaming changes only context metadata. Independent concurrently executing client contexts remain future work.
 
@@ -293,6 +293,12 @@ the store's next identifier. Opening version 1 creates an empty checkpoint store
 same inspection, comparison, and transactional restore contracts apply before and after
 an archive round trip.
 
+### Model-context comparison
+
+`Engine/Analysis/ModelComparator` compares two validated network values without borrowing mutable storage or publishing temporary activations. It first records independent topology summaries and verifies counts, stable layer IDs and order, stable neuron membership, and stable connection IDs plus endpoints. Incompatible networks return a useful topology result but intentionally omit scalar parameter rows. Compatible networks compare activation types, biases, and weights with the signed convention `current - reference` and retain absolute deltas for ranking.
+
+`MiaIAClient::TryCompareModelContexts` resolves both contexts under the shared client lock without selecting either one. Missing, identical, or empty contexts fail without changing the caller-provided result. StudioCore retains a successful comparison only as transient presentation state; it is not serialized into `.mai` v2 and never changes either source network.
+
 ## Snapshot boundary
 
 Clients receive snapshots rather than references to mutable engine storage. A snapshot is a value object suitable for inspection, display, logging, comparison, or transport across an integration boundary.
@@ -310,6 +316,7 @@ Current public snapshots include:
 - background worker state and stop reason.
 - breakpoint definitions, hit counts, and the latest structured trigger;
 - model-checkpoint summaries, details, and comparisons;
+- topology and scalar comparisons between two model contexts;
 - lightweight training-history entries and complete retained steps.
 - two-step training comparisons for loss, output predictions, gradients, weights, and biases.
 

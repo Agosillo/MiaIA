@@ -37,6 +37,7 @@ The MiaIA Studio **0.1 Alpha** release includes:
 - phase-by-phase training debug with candidate-state inspection and rollback;
 - immutable forward and backward gradient-flow traces with graphical playback;
 - multi-model projects built from isolated model contexts, each with its own optional network, dataset, sessions, and checkpoints;
+- immutable comparison of two model contexts with topology compatibility, ranked parameter deltas, and 2D/3D visual overlays;
 - model checkpoints with inspection, comparison, transactional restore, and `.mai` persistence;
 - bounded neuron and connection relationship inspection with exact topology counts;
 - ONNX model interchange and numeric CSV datasets;

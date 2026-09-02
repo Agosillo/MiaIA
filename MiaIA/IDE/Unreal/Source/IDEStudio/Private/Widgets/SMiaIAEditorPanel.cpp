@@ -1848,6 +1848,20 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
                                 &SMiaIAEditorPanel::SelectBottomTab,
                                 6)
                         ]
+                        + SHorizontalBox::Slot()
+                        .AutoWidth()
+                        .Padding(2.0f)
+                        [
+                            SNew(SButton)
+                            .ButtonStyle(&ButtonStyle)
+                            .Text(LOCTEXT(
+                                "ModelComparisonTab",
+                                "Model compare"))
+                            .OnClicked(
+                                this,
+                                &SMiaIAEditorPanel::SelectBottomTab,
+                                7)
+                        ]
                     ]
                     + SVerticalBox::Slot()
                     .FillHeight(1.0f)
@@ -3094,6 +3108,151 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
                                 ]
                             ]
                         ]
+                        + SWidgetSwitcher::Slot()
+                        [
+                            SNew(SVerticalBox)
+                            + SVerticalBox::Slot()
+                            .AutoHeight()
+                            .Padding(2.0f, 2.0f, 2.0f, 6.0f)
+                            [
+                                SNew(SHorizontalBox)
+                                + SHorizontalBox::Slot()
+                                .AutoWidth()
+                                .VAlign(VAlign_Center)
+                                .Padding(2.0f)
+                                [
+                                    SNew(STextBlock)
+                                    .Text(LOCTEXT(
+                                        "ModelComparisonCurrentLabel",
+                                        "Current"))
+                                ]
+                                + SHorizontalBox::Slot()
+                                .FillWidth(1.0f)
+                                .Padding(2.0f)
+                                [
+                                    SNew(SComboButton)
+                                    .ComboButtonStyle(&ComboButtonStyle)
+                                    .ButtonContent()
+                                    [
+                                        SNew(STextBlock)
+                                        .Text_Lambda([this]()
+                                        {
+                                            return ModelComparisonContextText(
+                                                true);
+                                        })
+                                    ]
+                                    .OnGetMenuContent(FOnGetContent::CreateSP(
+                                        this,
+                                        &SMiaIAEditorPanel::
+                                            BuildModelComparisonContextMenu,
+                                        true))
+                                ]
+                                + SHorizontalBox::Slot()
+                                .AutoWidth()
+                                .VAlign(VAlign_Center)
+                                .Padding(8.0f, 2.0f, 2.0f, 2.0f)
+                                [
+                                    SNew(STextBlock)
+                                    .Text(LOCTEXT(
+                                        "ModelComparisonReferenceLabel",
+                                        "Reference"))
+                                ]
+                                + SHorizontalBox::Slot()
+                                .FillWidth(1.0f)
+                                .Padding(2.0f)
+                                [
+                                    SNew(SComboButton)
+                                    .ComboButtonStyle(&ComboButtonStyle)
+                                    .ButtonContent()
+                                    [
+                                        SNew(STextBlock)
+                                        .Text_Lambda([this]()
+                                        {
+                                            return ModelComparisonContextText(
+                                                false);
+                                        })
+                                    ]
+                                    .OnGetMenuContent(FOnGetContent::CreateSP(
+                                        this,
+                                        &SMiaIAEditorPanel::
+                                            BuildModelComparisonContextMenu,
+                                        false))
+                                ]
+                                + SHorizontalBox::Slot()
+                                .AutoWidth()
+                                .VAlign(VAlign_Center)
+                                .Padding(8.0f, 2.0f, 2.0f, 2.0f)
+                                [
+                                    SNew(STextBlock)
+                                    .Text(LOCTEXT(
+                                        "ModelComparisonLimitLabel",
+                                        "Top"))
+                                ]
+                                + SHorizontalBox::Slot()
+                                .AutoWidth()
+                                .Padding(2.0f)
+                                [
+                                    SNew(SSpinBox<int32>)
+                                    .MinValue(1)
+                                    .MaxValue(1000)
+                                    .MinSliderValue(1)
+                                    .MaxSliderValue(100)
+                                    .Value_Lambda([this]()
+                                    {
+                                        return ModelComparisonLimit;
+                                    })
+                                    .OnValueChanged_Lambda([this](int32 value)
+                                    {
+                                        ModelComparisonLimit =
+                                            FMath::Clamp(value, 1, 1000);
+                                    })
+                                ]
+                                + SHorizontalBox::Slot()
+                                .AutoWidth()
+                                .Padding(6.0f, 2.0f, 2.0f, 2.0f)
+                                [
+                                    SNew(SButton)
+                                    .ButtonStyle(&ButtonStyle)
+                                    .Text(LOCTEXT(
+                                        "CompareModelContexts",
+                                        "Compare"))
+                                    .OnClicked(
+                                        this,
+                                        &SMiaIAEditorPanel::
+                                            HandleCompareModelContexts)
+                                ]
+                                + SHorizontalBox::Slot()
+                                .AutoWidth()
+                                .Padding(2.0f)
+                                [
+                                    SNew(SButton)
+                                    .ButtonStyle(&ButtonStyle)
+                                    .Text(LOCTEXT(
+                                        "ClearModelComparison",
+                                        "Clear overlay"))
+                                    .OnClicked(
+                                        this,
+                                        &SMiaIAEditorPanel::
+                                            HandleClearModelComparison)
+                                ]
+                            ]
+                            + SVerticalBox::Slot()
+                            .FillHeight(1.0f)
+                            .Padding(7.0f)
+                            [
+                                SNew(SScrollBox)
+                                .ScrollBarStyle(&ScrollBarStyle)
+                                + SScrollBox::Slot()
+                                [
+                                    SNew(STextBlock)
+                                    .Text(
+                                        this,
+                                        &SMiaIAEditorPanel::
+                                            ModelComparisonDetailText)
+                                    .AutoWrapText(true)
+                                ]
+                            ]
+                        ]
                     ]
                 ]
             ]
@@ -3284,6 +3443,21 @@ void SMiaIAEditorPanel::RefreshData()
     const uint64 previousContextId = ActiveContext.Id;
     Contexts = FMiaIAInstanceService::Contexts(MiaIAInstance);
     ActiveContext = FMiaIAInstanceService::ActiveContext(MiaIAInstance);
+    const bool comparisonReferenceValid =
+        ModelComparisonReferenceContextId != 0 &&
+        ModelComparisonReferenceContextId != ActiveContext.Id &&
+        std::any_of(
+            Contexts.begin(),
+            Contexts.end(),
+            [this](const auto& context)
+            {
+                return context.Id == ModelComparisonReferenceContextId;
+            });
+    if (!comparisonReferenceValid)
+    {
+        ModelComparisonReferenceContextId = 0;
+        FMiaIAInstanceService::ClearModelContextComparison(MiaIAInstance);
+    }
     if (previousContextId != 0 && previousContextId != ActiveContext.Id)
     {
         ResetActiveContextPresentation();
@@ -3635,6 +3809,7 @@ void SMiaIAEditorPanel::RefreshData()
     ApplyForwardTraceOverlay();
     ApplyBackwardTraceOverlay();
     ApplySignalHealthOverlay();
+    ApplyModelComparisonOverlay();
 
     if (topologyChanged)
     {
@@ -3989,6 +4164,56 @@ void SMiaIAEditorPanel::ApplySignalHealthOverlay()
             neurons,
             connections,
             state.Active);
+    }
+}
+
+void SMiaIAEditorPanel::ApplyModelComparisonOverlay()
+{
+    TMap<int64, double> biasDeltas;
+    TMap<int64, double> weightDeltas;
+    const MiaIA::Studio::StudioModelComparisonState state =
+        FMiaIAInstanceService::ModelComparisonState(MiaIAInstance);
+    const bool active = state.HasComparison &&
+        state.Comparison.CurrentContextId == ActiveContext.Id &&
+        state.Comparison.Model.Topology.Compatible &&
+        (state.Comparison.Model.ChangedBiasCount > 0 ||
+            state.Comparison.Model.ChangedWeightCount > 0);
+
+    if (active)
+    {
+        for (const auto& neuron : state.Comparison.Model.Neurons)
+        {
+            if (neuron.Bias.AbsoluteDelta > 0.0)
+            {
+                biasDeltas.Add(
+                    static_cast<int64>(neuron.Id),
+                    neuron.Bias.Delta);
+            }
+        }
+        for (const auto& connection : state.Comparison.Model.Connections)
+        {
+            if (connection.Weight.AbsoluteDelta > 0.0)
+            {
+                weightDeltas.Add(
+                    static_cast<int64>(connection.Id),
+                    connection.Weight.Delta);
+            }
+        }
+    }
+
+    if (NetworkView.IsValid())
+    {
+        NetworkView->SetModelComparisonOverlay(
+            biasDeltas,
+            weightDeltas,
+            active);
+    }
+    if (Network3DView.IsValid())
+    {
+        Network3DView->SetModelComparisonOverlay(
+            biasDeltas,
+            weightDeltas,
+            active);
     }
 }
 
@@ -8232,6 +8457,182 @@ TSharedRef<SWidget> SMiaIAEditorPanel::BuildContextMenu()
         ];
 }
 
+TSharedRef<SWidget> SMiaIAEditorPanel::BuildModelComparisonContextMenu(
+    bool bCurrent)
+{
+    TSharedRef<SVerticalBox> content = SNew(SVerticalBox);
+    content->AddSlot()
+        .AutoHeight()
+        .Padding(8.0f, 6.0f, 8.0f, 4.0f)
+        [
+            SNew(STextBlock)
+            .Font(FAppStyle::GetFontStyle(TEXT("NormalFontBold")))
+            .Text(bCurrent
+                ? LOCTEXT(
+                    "ModelComparisonCurrentHeading",
+                    "Select the model to display")
+                : LOCTEXT(
+                    "ModelComparisonReferenceHeading",
+                    "Select the immutable reference"))
+        ];
+
+    for (const MiaIA::Core::ModelContextSnapshot& context : Contexts)
+    {
+        const bool empty = context.LayerCount == 0 ||
+            context.NeuronCount == 0;
+        const FString label = FString::Printf(
+            TEXT("#%llu %s%s | %llu layers | %llu neurons"),
+            context.Id,
+            UTF8_TO_TCHAR(context.Name.c_str()),
+            empty ? TEXT(" | empty") : TEXT(""),
+            static_cast<uint64>(context.LayerCount),
+            static_cast<uint64>(context.NeuronCount));
+        const bool selected = bCurrent
+            ? context.Id == ActiveContext.Id
+            : context.Id == ModelComparisonReferenceContextId;
+
+        content->AddSlot()
+            .AutoHeight()
+            .Padding(4.0f, 1.0f)
+            [
+                SNew(SButton)
+                .ButtonStyle(&ButtonStyle)
+                .Text(FText::FromString(label))
+                .IsEnabled(!selected)
+                .OnClicked(FOnClicked::CreateSP(
+                    this,
+                    &SMiaIAEditorPanel::
+                        HandleSelectModelComparisonContext,
+                    context.Id,
+                    bCurrent))
+            ];
+    }
+
+    return SNew(SBox)
+        .WidthOverride(390.0f)
+        [
+            content
+        ];
+}
+
+FReply SMiaIAEditorPanel::HandleSelectModelComparisonContext(
+    uint64 ContextId,
+    bool bCurrent)
+{
+    FSlateApplication::Get().DismissAllMenus();
+    FMiaIAInstanceService::ClearModelContextComparison(MiaIAInstance);
+
+    if (bCurrent)
+    {
+        if (!FMiaIAInstanceService::SelectContext(MiaIAInstance, ContextId))
+        {
+            ShowDialog(
+                LOCTEXT(
+                    "ModelComparisonCurrentFailedTitle",
+                    "Current model not selected"),
+                LOCTEXT(
+                    "ModelComparisonCurrentFailed",
+                    "The context no longer exists, or training/debugging is currently changing it."));
+            return FReply::Handled();
+        }
+        RefreshAfterContextMutation();
+    }
+    else
+    {
+        ModelComparisonReferenceContextId = ContextId;
+        ApplyModelComparisonOverlay();
+    }
+
+    return FReply::Handled();
+}
+
+FReply SMiaIAEditorPanel::HandleCompareModelContexts()
+{
+    const auto findContext = [this](uint64 contextId)
+        -> const MiaIA::Core::ModelContextSnapshot*
+    {
+        const auto found = std::find_if(
+            Contexts.begin(),
+            Contexts.end(),
+            [contextId](const auto& context)
+            {
+                return context.Id == contextId;
+            });
+        return found == Contexts.end() ? nullptr : &*found;
+    };
+    const MiaIA::Core::ModelContextSnapshot* reference =
+        findContext(ModelComparisonReferenceContextId);
+    const MiaIA::Core::ModelContextSnapshot* current =
+        findContext(ActiveContext.Id);
+
+    if (!reference || !current)
+    {
+        ShowDialog(
+            LOCTEXT(
+                "ModelComparisonSelectionRequiredTitle",
+                "Select Current and Reference"),
+            LOCTEXT(
+                "ModelComparisonSelectionRequired",
+                "Choose two existing model contexts before comparing them."));
+        return FReply::Handled();
+    }
+    if (reference->Id == current->Id)
+    {
+        ShowDialog(
+            LOCTEXT(
+                "ModelComparisonDistinctRequiredTitle",
+                "Choose two different contexts"),
+            LOCTEXT(
+                "ModelComparisonDistinctRequired",
+                "Current and Reference must identify different model contexts."));
+        return FReply::Handled();
+    }
+
+    const auto empty = [](const auto& context)
+    {
+        return context.LayerCount == 0 || context.NeuronCount == 0;
+    };
+    if (empty(*reference) || empty(*current))
+    {
+        const MiaIA::Core::ModelContextSnapshot& emptyContext =
+            empty(*reference) ? *reference : *current;
+        ShowDialog(
+            LOCTEXT(
+                "ModelComparisonEmptyTitle",
+                "Empty model context"),
+            FText::FromString(FString::Printf(
+                TEXT("Context #%llu (%s) is empty. Create or import a network before comparing it."),
+                emptyContext.Id,
+                UTF8_TO_TCHAR(emptyContext.Name.c_str()))));
+        return FReply::Handled();
+    }
+
+    if (!FMiaIAInstanceService::CompareModelContexts(
+        MiaIAInstance,
+        reference->Id,
+        current->Id))
+    {
+        ShowDialog(
+            LOCTEXT(
+                "ModelComparisonFailedTitle",
+                "Model comparison failed"),
+            LOCTEXT(
+                "ModelComparisonFailed",
+                "Both contexts must still exist and contain valid networks."));
+        return FReply::Handled();
+    }
+
+    ApplyModelComparisonOverlay();
+    return FReply::Handled();
+}
+
+FReply SMiaIAEditorPanel::HandleClearModelComparison()
+{
+    FMiaIAInstanceService::ClearModelContextComparison(MiaIAInstance);
+    ApplyModelComparisonOverlay();
+    return FReply::Handled();
+}
+
 FReply SMiaIAEditorPanel::HandleCreateContext()
 {
     FString name = ContextNameInput.IsValid()
@@ -9374,6 +9775,19 @@ EVisibility SMiaIAEditorPanel::LayerDetailVisibility() const
 
 FText SMiaIAEditorPanel::PositiveMetricLegendText() const
 {
+    const MiaIA::Studio::StudioModelComparisonState comparison =
+        FMiaIAInstanceService::ModelComparisonState(MiaIAInstance);
+    if (comparison.HasComparison &&
+        comparison.Comparison.CurrentContextId == ActiveContext.Id &&
+        comparison.Comparison.Model.Topology.Compatible &&
+        (comparison.Comparison.Model.ChangedBiasCount > 0 ||
+            comparison.Comparison.Model.ChangedWeightCount > 0))
+    {
+        return LOCTEXT(
+            "PositiveModelComparisonLegend",
+            "Current > Reference");
+    }
+
     if (FMiaIAInstanceService::BackwardTraceState(MiaIAInstance).Active)
     {
         return LOCTEXT(
@@ -9401,6 +9815,19 @@ FText SMiaIAEditorPanel::PositiveMetricLegendText() const
 
 FText SMiaIAEditorPanel::NegativeMetricLegendText() const
 {
+    const MiaIA::Studio::StudioModelComparisonState comparison =
+        FMiaIAInstanceService::ModelComparisonState(MiaIAInstance);
+    if (comparison.HasComparison &&
+        comparison.Comparison.CurrentContextId == ActiveContext.Id &&
+        comparison.Comparison.Model.Topology.Compatible &&
+        (comparison.Comparison.Model.ChangedBiasCount > 0 ||
+            comparison.Comparison.Model.ChangedWeightCount > 0))
+    {
+        return LOCTEXT(
+            "NegativeModelComparisonLegend",
+            "Current < Reference");
+    }
+
     if (FMiaIAInstanceService::BackwardTraceState(MiaIAInstance).Active)
     {
         return LOCTEXT(
@@ -9732,6 +10159,155 @@ FText SMiaIAEditorPanel::SignalHealthSelectionText() const
     return LOCTEXT(
         "SignalHealthSelectFinding",
         "Signal health active. Select a detailed neuron or connection for its aggregated evidence.");
+}
+
+FText SMiaIAEditorPanel::ModelComparisonContextText(bool bCurrent) const
+{
+    const uint64 contextId = bCurrent
+        ? ActiveContext.Id
+        : ModelComparisonReferenceContextId;
+    if (contextId == 0)
+    {
+        return bCurrent
+            ? LOCTEXT("NoCurrentModelComparison", "No current context")
+            : LOCTEXT("NoReferenceModelComparison", "Select reference...");
+    }
+
+    const auto found = std::find_if(
+        Contexts.begin(),
+        Contexts.end(),
+        [contextId](const auto& context)
+        {
+            return context.Id == contextId;
+        });
+    if (found == Contexts.end())
+    {
+        return LOCTEXT("MissingModelComparisonContext", "Context unavailable");
+    }
+
+    return FText::FromString(FString::Printf(
+        TEXT("#%llu %s%s"),
+        found->Id,
+        UTF8_TO_TCHAR(found->Name.c_str()),
+        found->LayerCount == 0 || found->NeuronCount == 0
+            ? TEXT(" | empty")
+            : TEXT("")));
+}
+
+FText SMiaIAEditorPanel::ModelComparisonDetailText() const
+{
+    const MiaIA::Studio::StudioModelComparisonState state =
+        FMiaIAInstanceService::ModelComparisonState(MiaIAInstance);
+    if (!state.HasComparison)
+    {
+        return LOCTEXT(
+            "ModelComparisonInstructions",
+            "Select the model shown in the canvas as Current and another context as Reference, then compare them.\n\nThe operation is immutable: neither network is changed. Differences use Current - Reference. Compatible comparisons color changed biases and weights in both 2D and 3D detailed views; unchanged elements are dimmed.");
+    }
+
+    const auto& comparison = state.Comparison;
+    const auto& topology = comparison.Model.Topology;
+    const auto matchText = [](bool matches)
+    {
+        return matches ? TEXT("match") : TEXT("different");
+    };
+    FString text = FString::Printf(
+        TEXT("Reference: #%llu %s\nCurrent: #%llu %s\nDelta: Current - Reference\n\nTopology compatibility\nLayers: %llu -> %llu | %s\nNeurons: %llu -> %llu | %s\nConnections: %llu -> %llu | %s\nLayer structure: %s\nNeuron structure: %s\nConnection structure: %s\nCompatible: %s\n"),
+        comparison.ReferenceContextId,
+        UTF8_TO_TCHAR(comparison.ReferenceContextName.c_str()),
+        comparison.CurrentContextId,
+        UTF8_TO_TCHAR(comparison.CurrentContextName.c_str()),
+        static_cast<uint64>(topology.Reference.LayerCount),
+        static_cast<uint64>(topology.Current.LayerCount),
+        matchText(topology.LayerCountMatches),
+        static_cast<uint64>(topology.Reference.NeuronCount),
+        static_cast<uint64>(topology.Current.NeuronCount),
+        matchText(topology.NeuronCountMatches),
+        static_cast<uint64>(topology.Reference.ConnectionCount),
+        static_cast<uint64>(topology.Current.ConnectionCount),
+        matchText(topology.ConnectionCountMatches),
+        matchText(topology.LayerStructureMatches),
+        matchText(topology.NeuronStructureMatches),
+        matchText(topology.ConnectionStructureMatches),
+        topology.Compatible ? TEXT("yes") : TEXT("no"));
+
+    if (!topology.Compatible)
+    {
+        text += TEXT("\nScalar differences and the visual overlay require matching stable layer, neuron, and connection IDs.");
+        return FText::FromString(text);
+    }
+
+    if (comparison.Model.ActivationTypeChangeCount == 0 &&
+        comparison.Model.ChangedBiasCount == 0 &&
+        comparison.Model.ChangedWeightCount == 0)
+    {
+        text += TEXT(
+            "\nModels are identical — no activation, bias, or weight differences were found.\n"
+            "The topology remains displayed with its normal colors because there is nothing to highlight.");
+        return FText::FromString(text);
+    }
+
+    text += FString::Printf(
+        TEXT("\nActivation type changes: %llu\nChanged biases: %llu\nChanged weights: %llu\n\nLargest bias differences\n"),
+        static_cast<uint64>(comparison.Model.ActivationTypeChangeCount),
+        static_cast<uint64>(comparison.Model.ChangedBiasCount),
+        static_cast<uint64>(comparison.Model.ChangedWeightCount));
+
+    auto neurons = comparison.Model.Neurons;
+    std::sort(neurons.begin(), neurons.end(), [](const auto& left, const auto& right)
+    {
+        return left.Bias.AbsoluteDelta > right.Bias.AbsoluteDelta;
+    });
+    int32 printed = 0;
+    for (const auto& item : neurons)
+    {
+        if (printed >= ModelComparisonLimit || item.Bias.AbsoluteDelta <= 0.0)
+        {
+            break;
+        }
+        text += FString::Printf(
+            TEXT("Neuron #%llu | %.6g -> %.6g | delta %.6g\n"),
+            item.Id,
+            item.Bias.FirstValue,
+            item.Bias.SecondValue,
+            item.Bias.Delta);
+        ++printed;
+    }
+    if (printed == 0)
+    {
+        text += TEXT("None\n");
+    }
+
+    text += TEXT("\nLargest weight differences\n");
+    auto connections = comparison.Model.Connections;
+    std::sort(connections.begin(), connections.end(), [](const auto& left, const auto& right)
+    {
+        return left.Weight.AbsoluteDelta > right.Weight.AbsoluteDelta;
+    });
+    printed = 0;
+    for (const auto& item : connections)
+    {
+        if (printed >= ModelComparisonLimit ||
+            item.Weight.AbsoluteDelta <= 0.0)
+        {
+            break;
+        }
+        text += FString::Printf(
+            TEXT("Connection #%llu (%llu -> %llu) | %.6g -> %.6g | delta %.6g\n"),
+            item.Id,
+            item.FromNeuron,
+            item.ToNeuron,
+            item.Weight.FirstValue,
+            item.Weight.SecondValue,
+            item.Weight.Delta);
+        ++printed;
+    }
+    if (printed == 0)
+    {
+        text += TEXT("None\n");
+    }
+
+    return FText::FromString(text);
 }
 
 FText SMiaIAEditorPanel::ModelCheckpointDetailText() const

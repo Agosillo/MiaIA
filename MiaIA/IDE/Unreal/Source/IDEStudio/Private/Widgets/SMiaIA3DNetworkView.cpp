@@ -1022,6 +1022,33 @@ void SMiaIA3DNetworkView::SetSignalHealthOverlay(
     bSceneDirty = true;
 }
 
+void SMiaIA3DNetworkView::SetModelComparisonOverlay(
+    const TMap<int64, double>& InBiasDeltas,
+    const TMap<int64, double>& InWeightDeltas,
+    bool bInActive)
+{
+    ModelComparisonBiasDeltas = InBiasDeltas;
+    ModelComparisonWeightDeltas = InWeightDeltas;
+    bModelComparisonActive = bInActive;
+    MaximumModelComparisonBiasDelta = UE_DOUBLE_SMALL_NUMBER;
+    MaximumModelComparisonWeightDelta = UE_DOUBLE_SMALL_NUMBER;
+
+    for (const TPair<int64, double>& delta : ModelComparisonBiasDeltas)
+    {
+        MaximumModelComparisonBiasDelta = FMath::Max(
+            MaximumModelComparisonBiasDelta,
+            FMath::Abs(delta.Value));
+    }
+    for (const TPair<int64, double>& delta : ModelComparisonWeightDeltas)
+    {
+        MaximumModelComparisonWeightDelta = FMath::Max(
+            MaximumModelComparisonWeightDelta,
+            FMath::Abs(delta.Value));
+    }
+
+    bSceneDirty = true;
+}
+
 void SMiaIA3DNetworkView::SetSelectedNeurons(
     const TSet<int64>& InNeuronIds,
     int64 InPrimaryNeuronId)
@@ -2465,7 +2492,15 @@ void SMiaIA3DNetworkView::RebuildDetailedScene()
                 BackwardTraceNeuronGradients.Find(neuron.Id);
             const EMiaIASignalHealthVisualState* signalHealth =
                 SignalHealthNeurons.Find(neuron.Id);
-            const FLinearColor color = signalHealth
+            const double* comparisonDelta =
+                ModelComparisonBiasDeltas.Find(neuron.Id);
+            const FLinearColor color = comparisonDelta
+                ? SignedNeuronColor(
+                    *comparisonDelta,
+                    MaximumModelComparisonBiasDelta)
+                : bModelComparisonActive
+                    ? palette.InactiveNeuron.CopyWithNewOpacity(0.15f)
+                : signalHealth
                 ? SignalHealthColor(*signalHealth)
                 : bSignalHealthActive
                     ? palette.InactiveNeuron.CopyWithNewOpacity(0.18f)
@@ -2564,7 +2599,11 @@ void SMiaIA3DNetworkView::RebuildDetailedScene()
             BackwardTracePlaybackConnections.Contains(connection.Id);
         const EMiaIASignalHealthVisualState* signalHealth =
             SignalHealthConnections.Find(connection.Id);
-        const double displayedValue = backwardGradient
+        const double* comparisonDelta =
+            ModelComparisonWeightDeltas.Find(connection.Id);
+        const double displayedValue = comparisonDelta
+            ? *comparisonDelta
+            : backwardGradient
             ? *backwardGradient
             : traceContribution
             ? *traceContribution
@@ -2582,6 +2621,9 @@ void SMiaIA3DNetworkView::RebuildDetailedScene()
             static_cast<float>(backwardPlaybackConnection ||
                 playbackConnection
                 ? 1.0
+                : comparisonDelta
+                ? FMath::Abs(displayedValue) /
+                    MaximumModelComparisonWeightDelta
                 : backwardGradient
                 ? FMath::Abs(displayedValue) /
                     MaximumBackwardTraceConnectionGradient
@@ -2598,6 +2640,12 @@ void SMiaIA3DNetworkView::RebuildDetailedScene()
             connection.Id == SelectedConnectionId;
         const FLinearColor color = selected
             ? palette.Selection
+            : comparisonDelta
+                ? SignedConnectionColor(
+                    displayedValue,
+                    MaximumModelComparisonWeightDelta)
+            : bModelComparisonActive
+                ? palette.SubduedText.CopyWithNewOpacity(0.06f)
             : signalHealth
                 ? SignalHealthColor(*signalHealth).CopyWithNewOpacity(0.8f)
             : bSignalHealthActive

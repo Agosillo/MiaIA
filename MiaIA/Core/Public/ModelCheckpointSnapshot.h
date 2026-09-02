@@ -1,5 +1,6 @@
 #pragma once
 
+#include "ModelComparisonSnapshot.h"
 #include "NetworkSnapshot.h"
 
 #include <cstddef>
@@ -24,28 +25,12 @@ namespace MiaIA::Core
         NetworkSnapshot Network;
     };
 
-    struct ModelCheckpointValueComparisonSnapshot
-    {
-        double FirstValue{};
-        double SecondValue{};
-        double Delta{};
-        double AbsoluteDelta{};
-    };
-
-    struct ModelCheckpointNeuronComparisonSnapshot
-    {
-        std::uint64_t Id{};
-        std::uint64_t LayerOrder{};
-        ModelCheckpointValueComparisonSnapshot Bias;
-    };
-
-    struct ModelCheckpointConnectionComparisonSnapshot
-    {
-        std::uint64_t Id{};
-        std::uint64_t FromNeuron{};
-        std::uint64_t ToNeuron{};
-        ModelCheckpointValueComparisonSnapshot Weight;
-    };
+    using ModelCheckpointValueComparisonSnapshot =
+        ModelValueComparisonSnapshot;
+    using ModelCheckpointNeuronComparisonSnapshot =
+        ModelNeuronComparisonSnapshot;
+    using ModelCheckpointConnectionComparisonSnapshot =
+        ModelConnectionComparisonSnapshot;
 
     struct ModelCheckpointComparisonSnapshot
     {
