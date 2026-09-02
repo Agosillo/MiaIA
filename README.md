@@ -16,7 +16,7 @@
 </p>
 
 <p align="center">
-  <a href="https://www.nonop.biz">Website &amp; Downloads</a>
+  <a href="https://www.nonop.biz/miaia">Website &amp; Downloads</a>
   &nbsp;&middot;&nbsp;
   <a href="MiaIA/Docs/README.md">Documentation</a>
   &nbsp;&middot;&nbsp;
@@ -56,7 +56,7 @@ The MiaIA Studio **0.1 Alpha** release includes:
 - The packaged application is currently verified for Windows x64. Other platforms and solution configurations are not release targets yet.
 - Alpha APIs and workflows can change; preserve important interoperable models through ONNX exports where supported.
 
-Official releases are published at [www.nonop.biz](https://www.nonop.biz). The corresponding source code is maintained in this repository.
+Official releases are published at [www.nonop.biz/miaia](https://www.nonop.biz/miaia). The corresponding source code is maintained in this repository.
 
 ## Documentation
 
