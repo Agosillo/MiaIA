@@ -626,7 +626,7 @@ namespace
     constexpr float SpiralTerminalSurfaceGap = 0.75f;
     constexpr float SpiralTokenMinimumRadiusFactor = 2.5f;
     constexpr float SpiralTokenPadding = 8.0f;
-    constexpr float SpiralTokenMinimumLayerStep = 220.0f;
+    constexpr float SpiralTokenMinimumLayerStep = 220.0f / 3.0f;
     constexpr int32 SpiralRingBaseCapacity = 8;
 
     float SpiralTerminalRadius(
