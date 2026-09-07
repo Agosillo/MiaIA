@@ -2,6 +2,7 @@
 
 #include "LossType.h"
 #include "OptimizerType.h"
+#include "TrainingSampleOrder.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -9,7 +10,7 @@
 
 namespace MiaIA::Core
 {
-    inline constexpr std::uint32_t ProjectFormatVersion = 2;
+    inline constexpr std::uint32_t ProjectFormatVersion = 3;
     inline constexpr std::uint32_t MinimumProjectFormatVersion = 1;
 
     struct ProjectTrainingConfigurationSnapshot
@@ -21,6 +22,10 @@ namespace MiaIA::Core
         OptimizerType Optimizer{
             OptimizerType::StochasticGradientDescent
         };
+        TrainingSampleOrder SampleOrder{
+            TrainingSampleOrder::Sequential
+        };
+        std::uint64_t Seed{};
     };
 
     struct ProjectInfoSnapshot

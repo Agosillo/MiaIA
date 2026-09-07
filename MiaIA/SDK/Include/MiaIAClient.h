@@ -185,6 +185,14 @@ namespace MiaIA::SDK
             Core::LossType lossType,
             Core::OptimizerType optimizerType,
             Core::TrainingSessionSnapshot& result);
+        static bool StartTrainingSession(
+            std::size_t epochCount,
+            double learningRate,
+            Core::LossType lossType,
+            Core::OptimizerType optimizerType,
+            Core::TrainingSampleOrder sampleOrder,
+            std::uint64_t seed,
+            Core::TrainingSessionSnapshot& result);
         [[nodiscard]]
         static Core::TrainingSessionSnapshot GetTrainingSession();
         [[nodiscard]]

@@ -79,7 +79,7 @@ The Unreal-based standalone application is packaged through `IDE/Unreal/Build/Pa
 
 ## Alpha limitations
 
-The 0.1 Alpha release focuses on observable feed-forward networks, the documented dense ONNX subset, numeric CSV datasets, mean squared error, and stochastic gradient descent. `.mai` version 2 preserves multi-context project state and checkpoints but deliberately excludes transient training progress, session history, annotations, and visualization layout. Runtime state belongs to one SDK process and is not shared between separate processes. Windows x64 is the currently verified packaged target; alpha APIs and workflows may evolve before a stable release.
+The 0.1 Alpha release focuses on observable feed-forward networks, the documented dense ONNX subset, numeric CSV datasets, mean squared error, and stochastic gradient descent. `.mai` version 3 preserves multi-context project state, checkpoints, and deterministic sample-order configuration but deliberately excludes transient training progress, session history, annotations, and visualization layout. Versions 1 and 2 remain readable. Runtime state belongs to one SDK process and is not shared between separate processes. Windows x64 is the currently verified packaged target; alpha APIs and workflows may evolve before a stable release.
 
 ## Architectural direction
 

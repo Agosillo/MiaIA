@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <cmath>
 #include <filesystem>
 #include <fstream>
@@ -651,7 +652,8 @@ int main()
         assert(std::filesystem::exists(multiModelPath));
 
         auto projectInfo = MiaIAClient::GetProjectInfo();
-        assert(projectInfo.FormatVersion == 2);
+        assert(projectInfo.FormatVersion ==
+            MiaIA::Core::ProjectFormatVersion);
         assert(projectInfo.ContextCount == 3);
         assert(projectInfo.ActiveContextId == firstContextId);
         assert(projectInfo.ActiveContextName == "Model 1");
@@ -722,7 +724,8 @@ int main()
         std::filesystem::remove(emptyProjectPath);
         assert(MiaIAClient::SaveProject(emptyProjectPath.string()));
         projectInfo = MiaIAClient::GetProjectInfo();
-        assert(projectInfo.FormatVersion == 2);
+        assert(projectInfo.FormatVersion ==
+            MiaIA::Core::ProjectFormatVersion);
         assert(!projectInfo.HasModel);
         assert(projectInfo.ContextCount == 1);
         assert(projectInfo.ActiveContextId == 1);
@@ -794,6 +797,8 @@ int main()
             0.05,
             MiaIA::Core::LossType::MeanSquaredError,
             MiaIA::Core::OptimizerType::StochasticGradientDescent,
+            MiaIA::Core::TrainingSampleOrder::ShuffleEachEpoch,
+            8675309,
             sourceSession));
         MiaIA::Core::ModelCheckpointSummarySnapshot sourceCheckpoint;
         assert(MiaIAClient::CaptureModelCheckpoint(
@@ -867,6 +872,9 @@ int main()
             MiaIA::Core::TrainingSessionStatus::Idle);
         assert(forkSession.EpochCount == 3);
         assert(forkSession.LearningRate == 0.05);
+        assert(forkSession.SampleOrder ==
+            MiaIA::Core::TrainingSampleOrder::ShuffleEachEpoch);
+        assert(forkSession.Seed == 8675309);
         assert(forkSession.CompletedSteps == 0);
         assert(forkSession.Steps.empty());
         assert(forkSession.Breakpoints.size() == 1);
@@ -910,6 +918,9 @@ int main()
             MiaIA::Core::TrainingSessionStatus::Idle);
         assert(restoredSession.EpochCount == 3);
         assert(restoredSession.LearningRate == 0.05);
+        assert(restoredSession.SampleOrder ==
+            MiaIA::Core::TrainingSampleOrder::ShuffleEachEpoch);
+        assert(restoredSession.Seed == 8675309);
         assert(restoredSession.Breakpoints.size() == 1);
         assert(MiaIAClient::TryCompareModelContexts(
             sourceContextId,
@@ -1794,6 +1805,7 @@ int main()
     const auto datasetPath = testDirectory / "samples.csv";
     const auto projectPath = testDirectory / "training.mai";
     const auto legacyProjectPath = testDirectory / "legacy-v1.mai";
+    const auto version2ProjectPath = testDirectory / "legacy-v2.mai";
     const auto legacyOnnxPath = testDirectory / "legacy-v1.onnx";
     const auto cliProjectPath = testDirectory / "cli.mai";
     const auto corruptPath = testDirectory / "corrupt.mai";
@@ -1849,6 +1861,8 @@ int main()
         0.05,
         MiaIA::Core::LossType::MeanSquaredError,
         MiaIA::Core::OptimizerType::StochasticGradientDescent,
+        MiaIA::Core::TrainingSampleOrder::ShuffleEachEpoch,
+        987654321,
         session));
     assert(MiaIAClient::CancelTrainingSession());
 
@@ -1883,6 +1897,36 @@ int main()
         legacyProjectPath.string(),
         legacySavedInfo));
     assert(legacySavedInfo.FormatVersion == 1);
+
+    const std::string legacyContextName = "Model 1";
+    MiaIA::Engine::ModelCheckpointStore legacyCheckpoints;
+    MiaIA::Engine::ProjectArchiveView legacyVersion2View;
+    legacyVersion2View.ActiveContextId = 1;
+    legacyVersion2View.NextContextId = 2;
+    legacyVersion2View.Contexts.push_back({
+        1,
+        &legacyContextName,
+        &legacyNetwork,
+        &legacyDataset,
+        &legacySession,
+        &legacyCheckpoints
+    });
+    MiaIA::Core::ProjectInfoSnapshot version2SavedInfo;
+    assert(MiaIA::Engine::ProjectArchive::SaveVersion2(
+        legacyVersion2View,
+        version2ProjectPath.string(),
+        version2SavedInfo));
+    assert(version2SavedInfo.FormatVersion == 2);
+    MiaIA::Engine::ProjectArchiveState version2State;
+    MiaIA::Core::ProjectInfoSnapshot version2LoadedInfo;
+    assert(MiaIA::Engine::ProjectArchive::Load(
+        version2ProjectPath.string(),
+        version2State,
+        version2LoadedInfo));
+    assert(version2LoadedInfo.FormatVersion == 2);
+    assert(version2LoadedInfo.Training.SampleOrder ==
+        MiaIA::Core::TrainingSampleOrder::Sequential);
+    assert(version2LoadedInfo.Training.Seed == 0);
     std::filesystem::remove(legacyOnnxPath);
 
     assert(!MiaIAClient::SaveProject(wrongExtensionPath.string()));
@@ -1904,6 +1948,9 @@ int main()
     assert(projectInfo.Training.Available);
     assert(projectInfo.Training.EpochCount == 3);
     assert(std::fabs(projectInfo.Training.LearningRate - 0.05) < 1e-12);
+    assert(projectInfo.Training.SampleOrder ==
+        MiaIA::Core::TrainingSampleOrder::ShuffleEachEpoch);
+    assert(projectInfo.Training.Seed == 987654321);
     assert(projectInfo.BreakpointCount == 2);
 
     assert(MiaIAClient::NewProject());
@@ -1943,13 +1990,16 @@ int main()
     projectInfo = MiaIAClient::GetProjectInfo();
     assert(projectInfo.DatasetLoaded);
     assert(projectInfo.Training.Available);
+    assert(projectInfo.Training.SampleOrder ==
+        MiaIA::Core::TrainingSampleOrder::ShuffleEachEpoch);
+    assert(projectInfo.Training.Seed == 987654321);
     assert(projectInfo.BreakpointCount == 2);
 
     const auto projectSuggestions =
         MiaIACommandProcessor::GetSuggestions("project ");
     assert(projectSuggestions.size() == 4);
     assert(MiaIACommandProcessor::Execute(
-        "project info").Output.find("Format: .mai v2") !=
+        "project info").Output.find("Format: .mai v3") !=
         std::string::npos);
     assert(MiaIACommandProcessor::Execute(
         "project save cli.mai",
@@ -2013,7 +2063,7 @@ int main()
         std::fstream future(
             futurePath,
             std::ios::binary | std::ios::in | std::ios::out);
-        const char unsupportedVersion[4]{ 3, 0, 0, 0 };
+        const char unsupportedVersion[4]{ 4, 0, 0, 0 };
         future.seekp(8);
         future.write(unsupportedVersion, sizeof(unsupportedVersion));
     }
@@ -2027,6 +2077,7 @@ int main()
     std::filesystem::remove(datasetPath);
     std::filesystem::remove(projectPath);
     std::filesystem::remove(legacyProjectPath);
+    std::filesystem::remove(version2ProjectPath);
     std::filesystem::remove(legacyOnnxPath);
     std::filesystem::remove(cliProjectPath);
     std::filesystem::remove(corruptPath);
@@ -3447,6 +3498,12 @@ int main()
     assert(session.EpochCount == 2);
     assert(session.CurrentEpoch == 0);
     assert(session.NextSampleIndex == 0);
+    assert(session.NextSamplePosition == 0);
+    assert(session.SampleOrder ==
+        MiaIA::Core::TrainingSampleOrder::Sequential);
+    assert(session.Seed == 0);
+    assert(session.CurrentEpochSampleOrder ==
+        std::vector<std::size_t>({ 0, 1 }));
     assert(session.SampleCount == 2);
     assert(session.CompletedSteps == 0);
     assert(session.TotalSteps == 4);
@@ -3477,6 +3534,7 @@ int main()
     assert(session.Status == MiaIA::Core::TrainingSessionStatus::Active);
     assert(session.CurrentEpoch == 0);
     assert(session.NextSampleIndex == 1);
+    assert(session.NextSamplePosition == 1);
     assert(session.CompletedSteps == 1);
     assert(session.Steps.size() == 1);
 
@@ -3489,6 +3547,7 @@ int main()
     assert(session.Status == MiaIA::Core::TrainingSessionStatus::Active);
     assert(session.CurrentEpoch == 1);
     assert(session.NextSampleIndex == 0);
+    assert(session.NextSamplePosition == 0);
     assert(session.CompletedSteps == 2);
 
     assert(MiaIAClient::AdvanceTrainingSession(step));
@@ -3636,6 +3695,152 @@ int main()
 
     MiaIAClient::ClearNetwork();
     std::filesystem::remove(sessionPath);
+
+    });
+
+    runner.Run("Deterministic shuffled training sessions", [&]()
+    {
+    const std::filesystem::path shufflePath =
+        std::filesystem::temp_directory_path() /
+        "miaia_deterministic_shuffle_test.csv";
+
+    {
+        std::ofstream output(shufflePath);
+        assert(output.good());
+        output << "x,target\n";
+        for (int value = 0; value < 8; ++value)
+        {
+            output << value << ',' << (value % 2) << '\n';
+        }
+    }
+
+    auto configure = [&]()
+    {
+        MiaIAClient::ClearDataset();
+        MiaIAClient::ClearNetwork();
+        assert(MiaIAClient::ImportCsvDataset(
+            shufflePath.string(),
+            1,
+            1));
+        assert(MiaIAClient::CreateDenseNetwork(1, 2, 1, 1));
+    };
+
+    auto run = [&](
+        std::uint64_t seed,
+        std::vector<std::size_t>& sampleIndexes,
+        MiaIA::Core::NetworkSnapshot& finalNetwork)
+    {
+        configure();
+        MiaIA::Core::TrainingSessionSnapshot session;
+        assert(MiaIAClient::StartTrainingSession(
+            3,
+            0.01,
+            MiaIA::Core::LossType::MeanSquaredError,
+            MiaIA::Core::OptimizerType::StochasticGradientDescent,
+            MiaIA::Core::TrainingSampleOrder::ShuffleEachEpoch,
+            seed,
+            session));
+        assert(session.SampleOrder ==
+            MiaIA::Core::TrainingSampleOrder::ShuffleEachEpoch);
+        assert(session.Seed == seed);
+        assert(session.NextSamplePosition == 0);
+        assert(session.NextSampleIndex ==
+            session.CurrentEpochSampleOrder.front());
+
+        MiaIA::Core::TrainingRunSnapshot trainingRun;
+        assert(MiaIAClient::RunTrainingSession(24, trainingRun));
+        assert(trainingRun.ExecutedSteps == 24);
+        session = MiaIAClient::GetTrainingSession();
+        assert(session.Status ==
+            MiaIA::Core::TrainingSessionStatus::Completed);
+
+        sampleIndexes.clear();
+        for (const auto& entry :
+            MiaIAClient::GetTrainingSessionHistory())
+        {
+            sampleIndexes.push_back(entry.SampleIndex);
+        }
+        finalNetwork = MiaIAClient::GetSnapshot();
+    };
+
+    std::vector<std::size_t> firstIndexes;
+    std::vector<std::size_t> repeatedIndexes;
+    std::vector<std::size_t> differentIndexes;
+    MiaIA::Core::NetworkSnapshot firstNetwork;
+    MiaIA::Core::NetworkSnapshot repeatedNetwork;
+    MiaIA::Core::NetworkSnapshot differentNetwork;
+
+    run(1234, firstIndexes, firstNetwork);
+    run(1234, repeatedIndexes, repeatedNetwork);
+    run(5678, differentIndexes, differentNetwork);
+
+    const std::vector<std::size_t> expectedFirstEpoch{
+        7, 6, 2, 1, 5, 4, 0, 3
+    };
+    assert(std::vector<std::size_t>(
+        firstIndexes.begin(), firstIndexes.begin() + 8) ==
+        expectedFirstEpoch);
+    assert(firstIndexes == repeatedIndexes);
+    assert(firstIndexes != differentIndexes);
+    assert(firstNetwork.Connections.size() ==
+        repeatedNetwork.Connections.size());
+    for (std::size_t index = 0;
+        index < firstNetwork.Connections.size();
+        ++index)
+    {
+        assert(firstNetwork.Connections[index].Weight ==
+            repeatedNetwork.Connections[index].Weight);
+    }
+    for (std::size_t layerIndex = 0;
+        layerIndex < firstNetwork.Layers.size();
+        ++layerIndex)
+    {
+        for (std::size_t neuronIndex = 0;
+            neuronIndex < firstNetwork.Layers[layerIndex].Neurons.size();
+            ++neuronIndex)
+        {
+            assert(firstNetwork.Layers[layerIndex].Neurons[neuronIndex].Bias ==
+                repeatedNetwork.Layers[layerIndex].Neurons[neuronIndex].Bias);
+        }
+    }
+
+    for (std::size_t epoch = 0; epoch < 3; ++epoch)
+    {
+        std::vector<std::size_t> epochOrder(
+            firstIndexes.begin() + epoch * 8,
+            firstIndexes.begin() + (epoch + 1) * 8);
+        std::sort(epochOrder.begin(), epochOrder.end());
+        assert(epochOrder == std::vector<std::size_t>({
+            0, 1, 2, 3, 4, 5, 6, 7
+        }));
+    }
+
+    configure();
+    MiaIA::Core::TrainingSessionSnapshot rejected;
+    rejected.EpochCount = 999;
+    assert(!MiaIAClient::StartTrainingSession(
+        1,
+        0.01,
+        MiaIA::Core::LossType::MeanSquaredError,
+        MiaIA::Core::OptimizerType::StochasticGradientDescent,
+        static_cast<MiaIA::Core::TrainingSampleOrder>(999),
+        1,
+        rejected));
+    assert(rejected.EpochCount == 999);
+
+    const auto cliStart = MiaIA::CLI::MiaIACommandProcessor::Execute(
+        "train session start 2 0.01 mse shuffle 42");
+    assert(cliStart.Output.find("Shuffle each epoch (seed 42)") !=
+        std::string::npos);
+    assert(MiaIAClient::GetTrainingSession().Seed == 42);
+    assert(MiaIAClient::CancelTrainingSession());
+    assert(MiaIA::CLI::MiaIACommandProcessor::Execute(
+        "train session start 2 0.01 mse shuffle -1").Output.find(
+            "Usage:") != std::string::npos);
+
+    MiaIAClient::ClearDataset();
+    MiaIAClient::ClearNetwork();
+    std::filesystem::remove(shufflePath);
 
     });
 

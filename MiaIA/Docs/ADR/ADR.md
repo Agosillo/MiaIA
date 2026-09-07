@@ -56,11 +56,11 @@ Future decisions that require a detailed comparison of alternatives should be re
 
 **Status:** Accepted; versions 1 and 2 implemented
 
-**Decision:** Use `.mai` as a tagged, versioned project container. Version 1 embeds one supported ONNX model and its dataset, training, and breakpoint metadata. Version 2 preserves every model context, active selection, context-local metadata, and checkpoint store while retaining version-1 read compatibility.
+**Decision:** Use `.mai` as a tagged, versioned project container. Version 1 embeds one supported ONNX model and its dataset, training, and breakpoint metadata. Version 2 preserves every model context, active selection, context-local metadata, and checkpoint store. Version 3 adds deterministic training sample order and seed while retaining version-1/2 read compatibility.
 
 **Reason:** Breakpoints and training context exceed the responsibility of ONNX, while project persistence must remain independent of a specific graphical frontend.
 
-**Consequence:** `.mai` saves are atomic and opens are transactional. A missing referenced dataset does not prevent the affected context and metadata from opening. Normal saves publish version 2; version 1 is migrated in memory when opened. A representable model in the active context retains an explicit ONNX export path. Visualization layout, training history, current training progress, and active debug state remain outside version 2.
+**Consequence:** `.mai` saves are atomic and opens are transactional. A missing referenced dataset does not prevent the affected context and metadata from opening. Normal saves publish version 3; versions 1 and 2 are migrated in memory when opened, with absent sample-order metadata defaulting to sequential order and seed `0`. A representable model in the active context retains an explicit ONNX export path. Visualization layout, training history, current training progress, and active debug state remain outside version 3.
 
 ## ADR-007: Start dataset interchange with explicit numeric CSV
 

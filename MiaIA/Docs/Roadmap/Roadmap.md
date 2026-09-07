@@ -92,12 +92,13 @@ One explicit full-dataset pass is also available through `train epoch`. It reuse
 
 Building on trustworthy single steps and one explicit epoch, the current session layer provides:
 
-- a multi-epoch session lifetime with ordered sample traversal;
-- current epoch and next sample indexes;
+- a multi-epoch session lifetime with sequential or deterministically shuffled per-epoch sample traversal;
+- current epoch, actual next sample index, and position within the current permutation;
 - explicit cancellation and one-step advancement;
 - retained loss and parameter-delta history through full step snapshots;
 - a natural pause boundary between synchronous commands.
 - bounded repeated execution with `run <steps>` and `run all`.
+- explicit unsigned 64-bit seeds with reproducible cross-platform Fisher-Yates ordering;
 
 ## Implemented automatic session control
 
@@ -108,8 +109,6 @@ Building on trustworthy single steps and one explicit epoch, the current session
 
 ## Next training controls
 
-- add deterministic seeding where randomness is introduced;
-- add configurable sample ordering;
 - introduce mini-batches only after single-sample behavior remains transparent.
 
 ## Debugging experience
@@ -154,7 +153,7 @@ The debugging experience should next evolve toward:
 - export the representable model graph to ONNX;
 - broaden ONNX support incrementally with explicit compatibility tests.
 
-The precise version 2 contract and version 1 migration boundary are documented in the [MiaIA project format](../Project/Project.md).
+The precise version 3 contract and version 1/2 migration boundary are documented in the [MiaIA project format](../Project/Project.md).
 
 ## Unreal Engine IDE
 

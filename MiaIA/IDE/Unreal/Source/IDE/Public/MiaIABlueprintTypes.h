@@ -26,6 +26,13 @@ enum class EMiaIATrainingSessionStatus : uint8
 };
 
 UENUM(BlueprintType)
+enum class EMiaIATrainingSampleOrder : uint8
+{
+    Sequential,
+    ShuffleEachEpoch
+};
+
+UENUM(BlueprintType)
 enum class EMiaIATrainingBreakpointKind : uint8
 {
     Phase,
@@ -459,6 +466,9 @@ struct IDE_API FMiaIATrainingSessionSnapshot
     int64 NextSampleIndex{};
 
     UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
+    int64 NextSamplePosition{};
+
+    UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
     int64 SampleCount{};
 
     UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
@@ -469,6 +479,17 @@ struct IDE_API FMiaIATrainingSessionSnapshot
 
     UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
     double LearningRate{};
+
+    UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
+    EMiaIATrainingSampleOrder SampleOrder{
+        EMiaIATrainingSampleOrder::Sequential
+    };
+
+    UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
+    FString Seed;
+
+    UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
+    TArray<int64> CurrentEpochSampleOrder;
 
     UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
     TArray<FMiaIATrainingBreakpoint> Breakpoints;
@@ -666,6 +687,14 @@ struct IDE_API FMiaIAProjectInfo
 
     UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
     double TrainingLearningRate{};
+
+    UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
+    EMiaIATrainingSampleOrder TrainingSampleOrder{
+        EMiaIATrainingSampleOrder::Sequential
+    };
+
+    UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
+    FString TrainingSeed;
 
     UPROPERTY(BlueprintReadOnly, Category = "MiaIA")
     int64 BreakpointCount{};

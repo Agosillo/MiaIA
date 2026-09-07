@@ -6,21 +6,21 @@
 
 ONNX remains the external model-interchange format. A `.mai` project contains one or more model contexts. Each context groups MiaIA-specific state around an optional neural network, while the active context's network can still be imported from or exported to ONNX when its graph belongs to the supported subset.
 
-## Current version: 2
+## Current version: 3
 
-A `.mai` v2 project preserves:
+A `.mai` v3 project preserves:
 
 - every model context, including stable identifiers, names, ordering, and the active selection;
 - the next context identifier, so identifiers remain monotonic after reopening;
 - an optional supported ONNX network for each context; an intentionally empty context is valid;
 - an optional CSV dataset reference per context, including input count, target count, and header policy;
-- an optional training configuration per context with epoch count, learning rate, MSE loss, and SGD optimizer;
+- an optional training configuration per context with epoch count, learning rate, MSE loss, SGD optimizer, sample-order mode, and deterministic seed;
 - every breakpoint definition and enabled state per context;
 - every model checkpoint, including its stable identifier, name, network, and the next checkpoint identifier.
 
 Dataset samples are not embedded. When possible, a stored CSV source is relative to the project file, making a project folder movable as one unit. An absolute source remains absolute. Each checkpoint network is embedded as its own ONNX payload, independently of the context's current network.
 
-Version 2 intentionally does not persist:
+Version 3 intentionally does not persist:
 
 - current training progress, retained step history, or worker state;
 - an active phase-debug transaction or uncommitted candidate values;
@@ -36,13 +36,13 @@ All integer and IEEE-754 `double` values use little-endian byte order. Strings a
 
 The file header is:
 
-| Field | Size | Version 2 value |
+| Field | Size | Version 3 value |
 | --- | ---: | --- |
 | Magic | 8 bytes | `MIAIPRJ\0` |
-| Format version | 32-bit unsigned | `2` |
+| Format version | 32-bit unsigned | `3` |
 | Section count | 32-bit unsigned | Number of following sections |
 
-Every section contains a four-byte ASCII tag, a 64-bit payload size, and exactly that many payload bytes. Version 2 is an ordered stream:
+Every section contains a four-byte ASCII tag, a 64-bit payload size, and exactly that many payload bytes. Version 3 is an ordered stream:
 
 | Tag | Occurrence | Payload |
 | --- | --- | --- |
@@ -50,20 +50,20 @@ Every section contains a four-byte ASCII tag, a 64-bit payload size, and exactly
 | `MODL` | Once per context | Context ID, name, next checkpoint ID, presence flags, and checkpoint count |
 | `ONNX` | Optional after `MODL` | Current supported model network; presence is declared by `MODL` |
 | `DATA` | Optional after the context network | CSV source, input count, target count, and one-byte header flag |
-| `TRNG` | Optional after dataset metadata | Epoch count, learning rate, loss identifier, and optimizer identifier |
+| `TRNG` | Optional after dataset metadata | Epoch count, learning rate, loss identifier, optimizer identifier, sample-order identifier, and unsigned 64-bit seed |
 | `BRKP` | Once per context | Breakpoint count followed by identifier, enabled flag, kind, phase, target, and threshold for each definition |
 | `CKPT` | Once per checkpoint | Checkpoint ID and name |
 | `ONNX` | Once after each `CKPT` | Complete supported checkpoint network |
 
 The flags in `MODL` determine whether the current-network `ONNX`, `DATA`, and `TRNG` sections occur. `BRKP` is present even when its count is zero. The declared checkpoint count determines how many `CKPT`/`ONNX` pairs follow before the next `MODL`.
 
-Readers reject invalid sizes or counts, unsupported versions, unknown context flags, duplicate or out-of-range identifiers, empty names, malformed metadata, invalid enum values, malformed breakpoints, missing or out-of-order required sections, trailing bytes, or networks outside the supported ONNX subset. The complete top-level version must be explicitly supported; version 2 does not silently reinterpret unknown sections.
+Readers reject invalid sizes or counts, unsupported versions, unknown context flags, duplicate or out-of-range identifiers, empty names, malformed metadata, invalid enum values, malformed breakpoints, missing or out-of-order required sections, trailing bytes, or networks outside the supported ONNX subset. The complete top-level version must be explicitly supported; version 3 does not silently reinterpret unknown sections.
 
-## Version 1 compatibility
+## Version 1 and 2 compatibility
 
 Version 1 contains exactly one required `ONNX` section, optional `DATA` and `TRNG` sections, and one required `BRKP` section. It does not contain context metadata or checkpoints.
 
-The current reader accepts version 1 and migrates it in memory to one model context named `Model 1` with ID `1`, active ID `1`, and next context ID `2`. Saving that project writes version 2. The Engine retains a version-1 writer only for compatibility fixtures and migration tests; normal SDK, CLI, Blueprint, and Studio saves always publish version 2.
+The current reader accepts version 1 and migrates it in memory to one model context named `Model 1` with ID `1`, active ID `1`, and next context ID `2`. Version 2 preserves the multi-context/checkpoint structure but has no sample-order fields. Both older versions therefore load training as `Sequential` with seed `0`, and the next normal save writes version 3. The Engine retains version-1 and version-2 writers only for compatibility fixtures and migration tests; normal SDK, CLI, Blueprint, and Studio saves always publish version 3.
 
 ## Save and open behavior
 
@@ -77,7 +77,7 @@ A missing referenced CSV is a recoverable condition rather than archive corrupti
 
 Training progress and phase debugging resume as idle state after opening. New, open, save, context-creation, context-fork, context-selection, and context-removal operations are rejected while background training is running or a phase-debug transaction is active. Pause or cancel first so replacement occurs at a safe boundary.
 
-Forking a context containing a valid network creates and selects a new independent experiment without changing the version 2 container contract. The fork copies the network with the same stable layer, neuron, and connection IDs and parameter values, plus the current dataset, persisted training configuration, and breakpoint definitions. It clears runtime activations, session progress and history, phase-debug state, breakpoint hits, and the checkpoint store. Subsequent saves serialize the fork as an ordinary context, so source and experiment remain independently mutable across a round trip.
+Forking a context containing a valid network creates and selects a new independent experiment without changing the version 3 container contract. The fork copies the network with the same stable layer, neuron, and connection IDs and parameter values, plus the current dataset, persisted training configuration—including sample order and seed—and breakpoint definitions. It clears runtime activations, session progress and history, phase-debug state, breakpoint hits, and the checkpoint store. Subsequent saves serialize the fork as an ordinary context, so source and experiment remain independently mutable across a round trip.
 
 ## Public access
 
@@ -97,6 +97,6 @@ Model-context management is exposed through:
 
 Existing network, dataset, training, debug, and checkpoint operations always target the active model context. Project information reports the total context count and active identity; network availability and context-local counts describe the active context.
 
-Model-context comparison is derived, transient client state. The selected Reference/Current pair, compatibility result, rankings, and graphical overlay are deliberately not persisted in `.mai` v2.
+Model-context comparison is derived, transient client state. The selected Reference/Current pair, compatibility result, rankings, and graphical overlay are deliberately not persisted in `.mai` v3.
 
 Hosts remain process-local. Opening a project in `Console.exe` does not change the separate project state owned by an Unreal Editor or standalone MiaIA Studio process.

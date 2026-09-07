@@ -144,6 +144,14 @@ public:
         double LearningRate,
         FMiaIATrainingSessionSnapshot& OutSession);
 
+    UFUNCTION(BlueprintCallable, Category = "MiaIA|Training")
+    static bool StartTrainingSessionWithOrder(
+        int64 EpochCount,
+        double LearningRate,
+        EMiaIATrainingSampleOrder SampleOrder,
+        int64 Seed,
+        FMiaIATrainingSessionSnapshot& OutSession);
+
     UFUNCTION(BlueprintPure, Category = "MiaIA|Training")
     static FMiaIATrainingSessionSnapshot GetTrainingSession();
 

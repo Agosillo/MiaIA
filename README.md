@@ -52,7 +52,7 @@ The MiaIA Studio **0.1 Alpha** release includes:
 - The native engine currently focuses on observable feed-forward networks and the activations documented by the project.
 - ONNX import and export support the documented dense subset, not arbitrary ONNX graphs or operators.
 - Built-in optimization currently focuses on mean squared error and stochastic gradient descent.
-- `.mai` version 2 does not persist transient training progress, session history, annotations, or visualization layout.
+- `.mai` version 3 persists deterministic sample-order configuration but not transient training progress, session history, annotations, or visualization layout; versions 1 and 2 remain readable.
 - Live model, dataset, training, and checkpoint state is process-local; separate executables do not share one running session.
 - The packaged application is currently verified for Windows x64. Other platforms and solution configurations are not release targets yet.
 - Alpha APIs and workflows can change; preserve important interoperable models through ONNX exports where supported.

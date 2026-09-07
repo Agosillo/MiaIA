@@ -2,6 +2,7 @@
 
 #include "../../Core/Public/LossType.h"
 #include "../../Core/Public/OptimizerType.h"
+#include "../../Core/Public/TrainingSampleOrder.h"
 #include "../../Core/Public/TrainingSessionSnapshot.h"
 #include "../../Core/Public/TrainingStepSnapshot.h"
 #include "../../Core/Public/TrainingRunSnapshot.h"
@@ -27,6 +28,18 @@ namespace MiaIA::Engine
             double learningRate,
             Core::LossType lossType,
             Core::OptimizerType optimizerType,
+            Core::TrainingSession& session,
+            Core::TrainingSessionSnapshot& result);
+
+        static bool Start(
+            const Core::Dataset& dataset,
+            const Core::Network& network,
+            std::size_t epochCount,
+            double learningRate,
+            Core::LossType lossType,
+            Core::OptimizerType optimizerType,
+            Core::TrainingSampleOrder sampleOrder,
+            std::uint64_t seed,
             Core::TrainingSession& session,
             Core::TrainingSessionSnapshot& result);
 

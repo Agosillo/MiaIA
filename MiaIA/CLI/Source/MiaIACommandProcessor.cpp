@@ -4,6 +4,7 @@
 #include <limits>
 #include <string>
 #include <chrono>
+#include <charconv>
 #include <cctype>
 #include <cstdint>
 #include <vector>
@@ -177,7 +178,7 @@ const std::vector<CommandCatalogEntry>& CommandCatalog()
         { "train debug connection", "train debug connection <connection-id>", "Inspect one connection in the current phase.", true },
         { "train debug cancel", "train debug cancel", "Discard the current candidate transaction.", true },
         { "train session", "train session <action>", "Control a multi-epoch training session.", false },
-        { "train session start", "train session start <epochs> <learning-rate> mse", "Start a paused controlled session.", true },
+        { "train session start", "train session start <epochs> <learning-rate> mse [sequential|shuffle <seed>]", "Start a paused controlled session.", true },
         { "train session status", "train session status", "Show session state and progress.", true },
         { "train session next", "train session next", "Execute the next atomic session sample.", true },
         { "train session run", "train session run <steps|all>", "Run a bounded synchronous block.", true },
@@ -393,7 +394,7 @@ void PrintHelp()
         << "  train breakpoint clear\n"
         << "      Inspect or edit the breakpoint collection\n\n"
 
-        << "  train session start <epochs> <learning-rate> mse\n"
+        << "  train session start <epochs> <learning-rate> mse [sequential|shuffle <seed>]\n"
         << "      Start a manually controlled training session\n\n"
 
         << "  train session status\n"
@@ -1143,6 +1144,8 @@ void ExportOnnx(const std::string& command)
 }
 
 std::string UnquotePath(const std::string& value);
+const char* TrainingSampleOrderName(
+    MiaIA::Core::TrainingSampleOrder order);
 
 void PrintProjectInfo(
     const MiaIA::Core::ProjectInfoSnapshot& info)
@@ -1185,7 +1188,15 @@ void PrintProjectInfo(
             << "\nTraining epochs: " << info.Training.EpochCount
             << "\nLearning rate: " << info.Training.LearningRate
             << "\nLoss: MSE"
-            << "\nOptimizer: SGD";
+            << "\nOptimizer: SGD"
+            << "\nSample order: "
+            << TrainingSampleOrderName(info.Training.SampleOrder);
+
+        if (info.Training.SampleOrder ==
+            MiaIA::Core::TrainingSampleOrder::ShuffleEachEpoch)
+        {
+            std::cout << " (seed " << info.Training.Seed << ")";
+        }
     }
     else
     {
@@ -2166,6 +2177,33 @@ const char* TrainingWorkerStopReasonName(
     return "Unknown";
 }
 
+const char* TrainingSampleOrderName(
+    MiaIA::Core::TrainingSampleOrder order)
+{
+    switch (order)
+    {
+    case MiaIA::Core::TrainingSampleOrder::Sequential:
+        return "Sequential";
+    case MiaIA::Core::TrainingSampleOrder::ShuffleEachEpoch:
+        return "Shuffle each epoch";
+    }
+
+    return "Unknown";
+}
+
+bool TryParseUInt64(const std::string& text, std::uint64_t& value)
+{
+    if (text.empty() || text.front() == '-')
+    {
+        return false;
+    }
+
+    const char* begin = text.data();
+    const char* end = begin + text.size();
+    const auto parsed = std::from_chars(begin, end, value);
+    return parsed.ec == std::errc{} && parsed.ptr == end;
+}
+
 void PrintValueComparison(
     const MiaIA::Core::TrainingValueComparisonSnapshot& comparison)
 {
@@ -2195,7 +2233,15 @@ void PrintTrainingSession(
         << "\nEpochs: " << session.CurrentEpoch
         << " / " << session.EpochCount
         << "\nSteps: " << session.CompletedSteps
-        << " / " << session.TotalSteps;
+        << " / " << session.TotalSteps
+        << "\nSample order: "
+        << TrainingSampleOrderName(session.SampleOrder);
+
+    if (session.SampleOrder ==
+        MiaIA::Core::TrainingSampleOrder::ShuffleEachEpoch)
+    {
+        std::cout << " (seed " << session.Seed << ")";
+    }
 
     if (session.WorkerStopReason !=
         MiaIA::Core::TrainingWorkerStopReason::None)
@@ -2211,8 +2257,28 @@ void PrintTrainingSession(
         std::cout
             << "\nCurrent epoch: " << session.CurrentEpoch + 1
             << "\nNext sample: " << session.NextSampleIndex
+            << " (position " << session.NextSamplePosition + 1
+            << " / " << session.SampleCount << ")"
             << "\nLearning rate: " << session.LearningRate
             << "\nOptimizer: SGD";
+
+        if (!session.CurrentEpochSampleOrder.empty())
+        {
+            constexpr std::size_t MaximumDisplayedSamples = 32;
+            std::cout << "\nCurrent epoch order:";
+            const std::size_t displayed = (std::min)(
+                session.CurrentEpochSampleOrder.size(),
+                MaximumDisplayedSamples);
+            for (std::size_t index = 0; index < displayed; ++index)
+            {
+                std::cout << ' '
+                    << session.CurrentEpochSampleOrder[index];
+            }
+            if (displayed < session.CurrentEpochSampleOrder.size())
+            {
+                std::cout << " ...";
+            }
+        }
     }
 
     if (session.HasBreakpointHit)
@@ -2238,7 +2304,8 @@ void PrintTrainingSession(
 void PrintTrainingSessionUsage()
 {
     std::cout
-        << "Usage: train session start <epochs> <learning-rate> mse\n"
+        << "Usage: train session start <epochs> <learning-rate> mse "
+           "[sequential|shuffle <seed>]\n"
         << "       train session status\n"
         << "       train session debug\n"
         << "       train session history\n"
@@ -3045,12 +3112,37 @@ void HandleTrainCommand(const std::string& command)
             std::size_t epochCount{};
             double learningRate{};
             std::string lossName;
+            MiaIA::Core::TrainingSampleOrder sampleOrder =
+                MiaIA::Core::TrainingSampleOrder::Sequential;
+            std::uint64_t seed{};
 
             if (!(stream >> epochCount >> learningRate >> lossName) ||
                 lossName != "mse")
             {
                 PrintTrainingSessionUsage();
                 return;
+            }
+
+            std::string orderName;
+            if (stream >> orderName)
+            {
+                if (orderName == "shuffle")
+                {
+                    std::string seedText;
+                    if (!(stream >> seedText) ||
+                        !TryParseUInt64(seedText, seed))
+                    {
+                        PrintTrainingSessionUsage();
+                        return;
+                    }
+                    sampleOrder = MiaIA::Core::TrainingSampleOrder::
+                        ShuffleEachEpoch;
+                }
+                else if (orderName != "sequential")
+                {
+                    PrintTrainingSessionUsage();
+                    return;
+                }
             }
 
             stream >> std::ws;
@@ -3068,6 +3160,8 @@ void HandleTrainCommand(const std::string& command)
                 learningRate,
                 MiaIA::Core::LossType::MeanSquaredError,
                 MiaIA::Core::OptimizerType::StochasticGradientDescent,
+                sampleOrder,
+                seed,
                 session))
             {
                 std::cout

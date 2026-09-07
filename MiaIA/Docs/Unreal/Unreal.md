@@ -20,13 +20,14 @@ The IDE module converts SDK snapshots into Unreal-reflected types:
 
 - `EMiaIATrainingDebugPhase`;
 - `EMiaIATrainingSessionStatus`;
+- `EMiaIATrainingSampleOrder`;
 - `EMiaIATrainingBreakpointKind`;
 - `EMiaIAActivationType`;
 - `FMiaIAModelContext`;
 - `FMiaIAProjectInfo` with context count, active identity, and active checkpoint count;
 - `FMiaIANetworkSnapshot` with reflected layer, neuron, and connection arrays;
 - `FMiaIATrainingDebugSnapshot`;
-- `FMiaIATrainingSessionSnapshot`;
+- `FMiaIATrainingSessionSnapshot`, including the order mode, seed, next permutation position, and current epoch order;
 - `FMiaIATrainingBreakpoint` and `FMiaIATrainingBreakpointHit`;
 - `FMiaIATrainingDebugNeuron`;
 - `FMiaIATrainingDebugConnection`.
@@ -57,6 +58,7 @@ Configure Network Parameters
 Get Network Snapshot
 Import Csv Dataset
 Start Training Session
+Start Training Session With Order
 Get Training Session
 Resume Training Session
 Pause Training Session
@@ -78,7 +80,7 @@ Execute Command
 
 `Create Dense Network` preserves the original Sigmoid, `0.1` weight, and zero-bias defaults. `Create Configured Dense Network` adds separate hidden and output activation pins plus uniform initial weight and non-input bias pins. `Configure Network Parameters` uses explicit update switches to atomically change any subset of those parameter groups in an existing network and reports how many values actually changed. The input layer remains raw data and therefore has no activation-selection or bias-update pin. Replacing all weights or non-input biases after training overwrites the corresponding learned values.
 
-The training nodes currently select MSE and SGD internally because those are the only implemented loss and optimizer choices. Future enum pins should be added when the Engine supports more than one valid choice.
+The training nodes currently select MSE and SGD internally because those are the only implemented loss and optimizer choices. `Start Training Session` remains the sequential compatibility node. `Start Training Session With Order` adds `Sequential`/`Shuffle Each Epoch` and a non-negative signed 64-bit Blueprint seed; reflected snapshots return the seed as decimal text so projects created through the native SDK or Console can represent the full unsigned 64-bit range without overflow. Future loss and optimizer enum pins should be added when the Engine supports more than one valid choice.
 
 The project nodes use the same `.mai` archive implementation as Console and MiaIA Studio. Their reflected information value reports the format version, current path, context count, active context identity and network availability, dataset schema, training configuration, breakpoint count, and checkpoint count without exposing STL types. The `MiaIA|Project|Model Context` nodes use lightweight reflected snapshots and the same mutation guards as the native SDK, including a fork node that returns the newly selected context while preserving its source. The interchange nodes import or export only the active context's supported ONNX model portion.
 
@@ -140,7 +142,7 @@ The animation is slowed down for documentation. The demonstration itself advance
 - **Gradient trace** accepts separate whitespace-separated input and target vectors and runs the immutable SDK backward trace with mean squared error. Its output-to-input player reveals output gradients, connection flow, and source-layer gradients with the same controls and speed range. Positive and negative semantic colors represent gradient sign and normalized intensity represents magnitude. The Inspector shows exact `dL/da`, `dL/dz`, bias gradient, weight gradient, and source-gradient contribution for the selected element. Forward and Gradient traces are mutually exclusive presentation modes; neither modifies activations, weights, or biases.
 - **Session and debug status** report training progress and the currently inspected phase.
 - **Console** is the first and initially selected lower tab. It uses a narrow command-suggestion column on the left and a larger output/input workspace on the right. It accepts the same commands as `Console.exe` and operates on the same process-local state displayed by the panel and used by Blueprint nodes. `Clear output` removes only the displayed transcript, preserves Up/Down command history and all MiaIA state, and returns keyboard focus to the command input.
-- **Training timeline** reports live session configuration and progress, colors the Before, Forward, Backward, Update, Verify, and Commit sequence, and places a yellow cursor under the exact current phase. It lists up to the newest 200 committed steps. Selecting a step loads its retained targets, predictions, errors, loss delta, and parameter-update counts through the shared instance service; the bounded Slate list does not truncate native history and never recomputes training mathematics. `Clear view` hides existing rows and detail locally, allows later steps to appear, and never changes session progress or retained Engine history.
+- **Training timeline** reports live session configuration and progress, including sequential/shuffled order, deterministic seed, actual next sample and permutation position; it colors the Before, Forward, Backward, Update, Verify, and Commit sequence and places a yellow cursor under the exact current phase. It lists up to the newest 200 committed steps. Selecting a step loads its retained targets, predictions, errors, loss delta, and parameter-update counts through the shared instance service; the bounded Slate list does not truncate native history and never recomputes training mathematics. `Clear view` hides existing rows and detail locally, allows later steps to appear, and never changes session progress or retained Engine history.
 - **Breakpoints** creates phase, neuron-activation, neuron-gradient, and connection-update conditions through the public SDK facade. Each entry can be enabled, disabled, or removed and reports its hit count; the tab also shows the latest structured trigger.
 - **Help** opens the built-in interaction reference or the versioned About dialog in both hosts.
 
@@ -313,7 +315,7 @@ The Unreal-hosted and packaged Studio surfaces expose the active context's check
 store through the same SDK and shared CLI boundary. The tab supports capture, refresh, selection,
 comparison slots A/B, transactional restore, individual removal, and clear-all. Restore
 is unavailable while training or phase debugging is actively mutating the network.
-Version 2 `.mai` saves retain each model's checkpoints and stable next identifier;
+Version 3 `.mai` saves retain each model's checkpoints, stable next identifier, and training sample-order configuration;
 version 1 projects migrate with an empty store.
 
 ## Build order

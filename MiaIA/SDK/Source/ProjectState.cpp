@@ -117,6 +117,9 @@ namespace MiaIA::SDK::Detail
             source->TrainingSession.LearningRate;
         fork.TrainingSession.Loss = source->TrainingSession.Loss;
         fork.TrainingSession.Optimizer = source->TrainingSession.Optimizer;
+        fork.TrainingSession.SampleOrder =
+            source->TrainingSession.SampleOrder;
+        fork.TrainingSession.Seed = source->TrainingSession.Seed;
         fork.TrainingSession.Breakpoints =
             source->TrainingSession.Breakpoints;
         fork.TrainingSession.NextBreakpointId =
@@ -246,6 +249,9 @@ namespace MiaIA::SDK::Detail
                 active.TrainingSession.LearningRate;
             result.Training.Loss = active.TrainingSession.Loss;
             result.Training.Optimizer = active.TrainingSession.Optimizer;
+            result.Training.SampleOrder =
+                active.TrainingSession.SampleOrder;
+            result.Training.Seed = active.TrainingSession.Seed;
         }
 
         result.BreakpointCount =

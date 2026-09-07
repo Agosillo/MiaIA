@@ -81,6 +81,35 @@ namespace MiaIA::SDK
             result);
     }
 
+    bool MiaIAClient::StartTrainingSession(
+        std::size_t epochCount,
+        double learningRate,
+        Core::LossType lossType,
+        Core::OptimizerType optimizerType,
+        Core::TrainingSampleOrder sampleOrder,
+        std::uint64_t seed,
+        Core::TrainingSessionSnapshot& result)
+    {
+        const std::scoped_lock lock(Detail::ClientMutex());
+
+        if (Detail::IsTrainingDebugActive())
+        {
+            return false;
+        }
+
+        return Engine::TrainingSessionController::Start(
+            Detail::ClientDataset(),
+            Detail::ClientNetwork(),
+            epochCount,
+            learningRate,
+            lossType,
+            optimizerType,
+            sampleOrder,
+            seed,
+            Detail::ClientTrainingSession(),
+            result);
+    }
+
     Core::TrainingSessionSnapshot MiaIAClient::GetTrainingSession()
     {
         const std::scoped_lock lock(Detail::ClientMutex());

@@ -38,6 +38,7 @@ namespace
     constexpr std::array<char, 4> CheckpointSection{ 'C', 'K', 'P', 'T' };
     constexpr std::uint32_t Version1 = 1;
     constexpr std::uint32_t Version2 = 2;
+    constexpr std::uint32_t Version3 = 3;
     constexpr std::uint64_t MaximumSectionCount = 4000000;
     constexpr std::uint64_t MaximumContextCount = 100000;
     constexpr std::uint64_t MaximumMetadataSectionSize = 64ull * 1024 * 1024;
@@ -55,6 +56,7 @@ namespace
     using MiaIA::Core::TrainingBreakpointSpec;
     using MiaIA::Core::TrainingDebugPhase;
     using MiaIA::Core::TrainingSession;
+    using MiaIA::Core::TrainingSampleOrder;
     using MiaIA::Engine::ModelCheckpointArchiveEntry;
     using MiaIA::Engine::ModelCheckpointArchiveEntryView;
     using MiaIA::Engine::ProjectArchiveContextState;
@@ -534,13 +536,20 @@ namespace
     }
 
     std::vector<std::uint8_t> BuildTrainingPayload(
-        const TrainingSession& session)
+        const TrainingSession& session,
+        std::uint32_t formatVersion)
     {
         PayloadWriter writer;
         writer.WriteUInt64(session.EpochCount);
         writer.WriteDouble(session.LearningRate);
         writer.WriteUInt32(static_cast<std::uint32_t>(session.Loss));
         writer.WriteUInt32(static_cast<std::uint32_t>(session.Optimizer));
+        if (formatVersion >= Version3)
+        {
+            writer.WriteUInt32(static_cast<std::uint32_t>(
+                session.SampleOrder));
+            writer.WriteUInt64(session.Seed);
+        }
         return writer.Data();
     }
 
@@ -598,6 +607,7 @@ namespace
 
     bool ParseTrainingPayload(
         const std::vector<std::uint8_t>& payload,
+        std::uint32_t formatVersion,
         TrainingSession& session,
         ProjectInfoSnapshot& info)
     {
@@ -606,11 +616,17 @@ namespace
         double learningRate{};
         std::uint32_t loss{};
         std::uint32_t optimizer{};
+        std::uint32_t sampleOrder = static_cast<std::uint32_t>(
+            TrainingSampleOrder::Sequential);
+        std::uint64_t seed{};
 
         if (!reader.ReadUInt64(epochCount) ||
             !reader.ReadDouble(learningRate) ||
             !reader.ReadUInt32(loss) ||
             !reader.ReadUInt32(optimizer) ||
+            (formatVersion >= Version3 &&
+                (!reader.ReadUInt32(sampleOrder) ||
+                    !reader.ReadUInt64(seed))) ||
             !reader.AtEnd() ||
             epochCount == 0 ||
             epochCount > std::numeric_limits<std::size_t>::max() ||
@@ -618,7 +634,9 @@ namespace
             loss != static_cast<std::uint32_t>(
                 LossType::MeanSquaredError) ||
             optimizer != static_cast<std::uint32_t>(
-                OptimizerType::StochasticGradientDescent))
+                OptimizerType::StochasticGradientDescent) ||
+            sampleOrder > static_cast<std::uint32_t>(
+                TrainingSampleOrder::ShuffleEachEpoch))
         {
             return false;
         }
@@ -627,11 +645,15 @@ namespace
         session.LearningRate = learningRate;
         session.Loss = static_cast<LossType>(loss);
         session.Optimizer = static_cast<OptimizerType>(optimizer);
+        session.SampleOrder = static_cast<TrainingSampleOrder>(sampleOrder);
+        session.Seed = seed;
         info.Training.Available = true;
         info.Training.EpochCount = session.EpochCount;
         info.Training.LearningRate = session.LearningRate;
         info.Training.Loss = session.Loss;
         info.Training.Optimizer = session.Optimizer;
+        info.Training.SampleOrder = session.SampleOrder;
+        info.Training.Seed = session.Seed;
         return true;
     }
 
@@ -736,6 +758,8 @@ namespace
             info.Training.LearningRate = session.LearningRate;
             info.Training.Loss = session.Loss;
             info.Training.Optimizer = session.Optimizer;
+            info.Training.SampleOrder = session.SampleOrder;
+            info.Training.Seed = session.Seed;
         }
     }
 }
@@ -828,7 +852,7 @@ bool MiaIA::Engine::ProjectArchive::SaveVersion1(
         (hasTraining && !WritePayloadSection(
             output,
             TrainingSection,
-            BuildTrainingPayload(trainingSession))) ||
+            BuildTrainingPayload(trainingSession, Version1))) ||
         !WritePayloadSection(
             output,
             BreakpointSection,
@@ -1027,7 +1051,11 @@ bool LoadVersion1(
     info.BreakpointCount = importedSession.Breakpoints.size();
 
     if (trainingFound &&
-        !ParseTrainingPayload(trainingPayload, importedSession, info))
+        !ParseTrainingPayload(
+            trainingPayload,
+            Version1,
+            importedSession,
+            info))
     {
         return false;
     }
@@ -1363,7 +1391,11 @@ namespace
                 view.Name == nullptr || !HasText(*view.Name) ||
                 view.Name->size() > MaximumContextNameLength ||
                 view.Network == nullptr || view.Dataset == nullptr ||
-                view.TrainingSession == nullptr || view.Checkpoints == nullptr)
+                view.TrainingSession == nullptr || view.Checkpoints == nullptr ||
+                (view.TrainingSession->SampleOrder !=
+                        TrainingSampleOrder::Sequential &&
+                    view.TrainingSession->SampleOrder !=
+                        TrainingSampleOrder::ShuffleEachEpoch))
             {
                 return false;
             }
@@ -1455,8 +1487,9 @@ namespace
         return activeFound && sectionCount <= MaximumSectionCount;
     }
 
-    bool LoadVersion2(
+    bool LoadVersion2Or3(
         const std::string& path,
+        std::uint32_t expectedVersion,
         ProjectArchiveState& project,
         ProjectInfoSnapshot& result)
     {
@@ -1475,7 +1508,7 @@ namespace
         input.read(magic.data(), magic.size());
         if (!input || magic != ArchiveMagic ||
             !ReadUnsigned(input, version, sizeof(std::uint32_t)) ||
-            version != Version2 ||
+            version != expectedVersion ||
             !ReadUnsigned(input, sectionCount, sizeof(std::uint32_t)) ||
             sectionCount == 0 || sectionCount > MaximumSectionCount)
         {
@@ -1564,6 +1597,7 @@ namespace
                         payload) ||
                     !ParseTrainingPayload(
                         payload,
+                        expectedVersion,
                         model.TrainingSession,
                         ignoredInfo))
                 {
@@ -1643,7 +1677,7 @@ namespace
         ProjectInfoSnapshot info;
         FillSavedInfo(
             projectPath,
-            Version2,
+            expectedVersion,
             imported.Contexts.size(),
             active->Id,
             active->Name,
@@ -1659,12 +1693,14 @@ namespace
     }
 }
 
-bool MiaIA::Engine::ProjectArchive::Save(
+bool MiaIA::Engine::ProjectArchive::SaveForVersion(
     const ProjectArchiveView& project,
     const std::string& path,
+    std::uint32_t formatVersion,
     Core::ProjectInfoSnapshot& result)
 {
-    if (path.empty())
+    if (path.empty() ||
+        (formatVersion != Version2 && formatVersion != Version3))
     {
         return false;
     }
@@ -1697,6 +1733,21 @@ bool MiaIA::Engine::ProjectArchive::Save(
         return false;
     }
 
+    if (formatVersion < Version3 &&
+        std::any_of(
+            models.begin(),
+            models.end(),
+            [](const PreparedContext& model)
+            {
+                return model.HasTraining &&
+                    (model.View->TrainingSession->SampleOrder !=
+                        TrainingSampleOrder::Sequential ||
+                        model.View->TrainingSession->Seed != 0);
+            }))
+    {
+        return false;
+    }
+
     const std::filesystem::path temporaryPath = UniqueTemporaryPath(
         directory,
         projectPath.filename().string(),
@@ -1714,7 +1765,7 @@ bool MiaIA::Engine::ProjectArchive::Save(
     }
 
     output.write(ArchiveMagic.data(), ArchiveMagic.size());
-    if (!WriteUnsigned(output, Version2, sizeof(std::uint32_t)) ||
+    if (!WriteUnsigned(output, formatVersion, sizeof(std::uint32_t)) ||
         !WriteUnsigned(output, sectionCount, sizeof(std::uint32_t)) ||
         !WritePayloadSection(output, ProjectSection, BuildProjectPayload(project)))
     {
@@ -1738,7 +1789,9 @@ bool MiaIA::Engine::ProjectArchive::Save(
             (model.HasTraining && !WritePayloadSection(
                 output,
                 TrainingSection,
-                BuildTrainingPayload(*model.View->TrainingSession))) ||
+                BuildTrainingPayload(
+                    *model.View->TrainingSession,
+                    formatVersion))) ||
             !WritePayloadSection(
                 output,
                 BreakpointSection,
@@ -1780,7 +1833,7 @@ bool MiaIA::Engine::ProjectArchive::Save(
         });
     FillSavedInfo(
         projectPath,
-        Version2,
+        formatVersion,
         project.Contexts.size(),
         active->Id,
         *active->Name,
@@ -1791,6 +1844,22 @@ bool MiaIA::Engine::ProjectArchive::Save(
         active->Checkpoints->List().size(),
         result);
     return true;
+}
+
+bool MiaIA::Engine::ProjectArchive::Save(
+    const ProjectArchiveView& project,
+    const std::string& path,
+    Core::ProjectInfoSnapshot& result)
+{
+    return SaveForVersion(project, path, Version3, result);
+}
+
+bool MiaIA::Engine::ProjectArchive::SaveVersion2(
+    const ProjectArchiveView& project,
+    const std::string& path,
+    Core::ProjectInfoSnapshot& result)
+{
+    return SaveForVersion(project, path, Version2, result);
 }
 
 bool MiaIA::Engine::ProjectArchive::Load(
@@ -1815,9 +1884,9 @@ bool MiaIA::Engine::ProjectArchive::Load(
         return false;
     }
 
-    if (version == Version2)
+    if (version == Version2 || version == Version3)
     {
-        return LoadVersion2(path, project, result);
+        return LoadVersion2Or3(path, version, project, result);
     }
 
     if (version != Version1)

@@ -126,7 +126,7 @@ Closes the Console. The current in-memory network and dataset are discarded.
 
 ## Model contexts
 
-Every project retains at least one model context. Context IDs are stable and monotonic during the current process and across a `.mai` v2 round trip. A new project resets to context `1`, named `Model 1`; a version 1 archive migrates to the same default identity. Creating a context selects it immediately. The network, dataset, controlled training session, phase-debug transaction, and checkpoints are isolated per context.
+Every project retains at least one model context. Context IDs are stable and monotonic during the current process and across a `.mai` v3 round trip. A new project resets to context `1`, named `Model 1`; a version 1 archive migrates to the same default identity. Creating a context selects it immediately. The network, dataset, controlled training session, phase-debug transaction, and checkpoints are isolated per context.
 
 ```text
 model create Experiment B
@@ -463,7 +463,7 @@ project open experiment.mai
 project open "C:\MiaIA Projects\xor.mai"
 ```
 
-If a recorded CSV source is unavailable, opening still restores the affected context, its training configuration, breakpoints, and checkpoints. The command prints a warning when the active context's reference is unavailable, and `project info` reports its schema. Version 2 restores every context and the active selection. Opening version 1 creates context `1` named `Model 1`; saving it writes version 2.
+If a recorded CSV source is unavailable, opening still restores the affected context, its training configuration, breakpoints, and checkpoints. The command prints a warning when the active context's reference is unavailable, and `project info` reports its schema. Version 3 restores every context, the active selection, and deterministic sample-order configuration. Opening version 1 or 2 supplies `Sequential` order with seed `0`; saving it writes version 3.
 
 ### `project save`
 
@@ -478,7 +478,7 @@ project save "C:\MiaIA Projects\xor.mai"
 project save
 ```
 
-The destination must use `.mai`. Version 2 stores every context, including intentionally empty contexts. Every current network and checkpoint network that is present must be representable by the supported ONNX subset. Dataset samples remain in their CSV file; each context stores only its source reference and schema.
+The destination must use `.mai`. Version 3 stores every context, including intentionally empty contexts, plus each configured sample-order mode and seed. Every current network and checkpoint network that is present must be representable by the supported ONNX subset. Dataset samples remain in their CSV file; each context stores only its source reference and schema.
 
 ### `project info`
 
@@ -488,7 +488,7 @@ project info
 
 Prints the current path and format version, context count, active context identity and network availability, dataset source and status, training configuration, breakpoint count, and checkpoint count.
 
-The [MiaIA project format](../Project/Project.md) documents the precise version 2 contract, version 1 migration, exclusions, and failure behavior.
+The [MiaIA project format](../Project/Project.md) documents the precise version 3 contract, version 1/2 migration, exclusions, and failure behavior.
 
 ## ONNX interchange
 
@@ -714,7 +714,7 @@ checkpoint clear
 ```
 
 Names may contain spaces. Each checkpoint receives a stable, monotonically increasing
-context-local ID that survives a version 2 archive round trip. Comparison matches neurons and connections by stable ID,
+context-local ID that survives a version 3 archive round trip. Comparison matches neurons and connections by stable ID,
 reports `second - first`, and orders the displayed bias and weight changes by absolute
 magnitude. A topology mismatch is reported instead of producing misleading deltas.
 
@@ -866,10 +866,14 @@ Breakpoint editing is rejected while background training or a phase transaction 
 ### `train session start`
 
 ```text
-train session start <epochs> <learning-rate> mse
+train session start <epochs> <learning-rate> mse [sequential|shuffle <seed>]
 ```
 
-Creates a controlled multi-epoch session. The dataset must be non-empty, the network dimensions must match it, the epoch count and learning rate must be positive, and no other session may be Active or Running. Starting does not train a sample: the session waits Active before its first step.
+Creates a controlled multi-epoch session. Omitting the final arguments, or specifying `sequential`, visits samples in CSV order. `shuffle <seed>` creates a deterministic Fisher-Yates permutation for every epoch; the same dataset, starting model, configuration, and unsigned 64-bit seed produce the same sample sequence and parameter result. The dataset must be non-empty, the network dimensions must match it, the epoch count and learning rate must be positive, and no other session may be Active or Running. Starting does not train a sample: the session waits Active before its first step.
+
+```text
+train session start 20 0.01 mse shuffle 42
+```
 
 ### `train session status`
 
@@ -877,7 +881,7 @@ Creates a controlled multi-epoch session. The dataset must be non-empty, the net
 train session status
 ```
 
-Prints the session state, completed and configured epochs, completed and total steps, and—while Active or Running—the current epoch and next sample index. It also reports why the last background worker stopped. Status inspection never changes the network or session.
+Prints the session state, completed and configured epochs, completed and total steps, sample-order mode and seed, and—while Active or Running—the current epoch, next actual sample index, its position in the epoch permutation, and a bounded preview of that order. It also reports why the last background worker stopped. Status inspection never changes the network or session.
 
 ### `train session next`
 

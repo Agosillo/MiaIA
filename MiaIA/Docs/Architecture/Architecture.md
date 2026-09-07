@@ -255,7 +255,7 @@ Start session with epoch count and optimizer configuration
     -> remain paused before the following sample
 ```
 
-A session starts Active at a safe step boundary. `next` executes exactly one sample, while bounded runs compose multiple steps synchronously. Clients can inspect snapshots or intentionally edit compatible network parameters while the session is Active. Dataset size and network compatibility are checked again before every advance. A rejected step preserves the network, session cursor, history, and caller result.
+A session starts Active at a safe step boundary. `next` executes exactly one sample, while bounded runs compose multiple steps synchronously. Sample traversal is either sequential or a deterministic Fisher-Yates permutation rebuilt for each epoch from an unsigned 64-bit seed and epoch index. The implementation owns its SplitMix64 value mapping rather than relying on implementation-defined standard-library distributions, so the same initial state and seed produce the same step sequence across supported builds. Snapshots distinguish the actual next dataset index from its position in the current permutation. Clients can inspect snapshots or intentionally edit compatible network parameters while the session is Active. Dataset size and network compatibility are checked again before every advance. A rejected step preserves the network, session cursor, history, and caller result.
 
 `resume` changes an Active session to Running and launches one SDK-owned background worker. `pause` requests cooperative stop, waits for the current atomic sample step to finish, joins the worker, and returns the session to Active. The network is therefore never exposed halfway through an update. Completion occurs after the configured number of ordered epochs. Cancellation stops and joins a running worker but does not roll back successful steps.
 
@@ -288,7 +288,7 @@ then replaces the client model in one operation. A missing or invalid checkpoint
 partially mutate the active network. Model-changing checkpoint operations use the same
 training/debug mutation guard as ordinary network editing.
 
-`.mai` format version 2 persists each checkpoint ID, name, supported ONNX network, and
+`.mai` format version 3 persists each checkpoint ID, name, supported ONNX network, and
 the store's next identifier. Opening version 1 creates an empty checkpoint store. The
 same inspection, comparison, and transactional restore contracts apply before and after
 an archive round trip.
@@ -297,7 +297,7 @@ an archive round trip.
 
 `Engine/Analysis/ModelComparator` compares two validated network values without borrowing mutable storage or publishing temporary activations. It first records independent topology summaries and verifies counts, stable layer IDs and order, stable neuron membership, and stable connection IDs plus endpoints. Incompatible networks return a useful topology result but intentionally omit scalar parameter rows. Compatible networks compare activation types, biases, and weights with the signed convention `current - reference` and retain absolute deltas for ranking.
 
-`MiaIAClient::TryCompareModelContexts` resolves both contexts under the shared client lock without selecting either one. Missing, identical, or empty contexts fail without changing the caller-provided result. StudioCore retains a successful comparison only as transient presentation state; it is not serialized into `.mai` v2 and never changes either source network.
+`MiaIAClient::TryCompareModelContexts` resolves both contexts under the shared client lock without selecting either one. Missing, identical, or empty contexts fail without changing the caller-provided result. StudioCore retains a successful comparison only as transient presentation state; it is not serialized into `.mai` v3 and never changes either source network.
 
 ## Snapshot boundary
 
@@ -338,9 +338,9 @@ CSV contains samples, not MiaIA editor or debug metadata.
 
 ### `.mai` project format
 
-`ProjectArchive` implements the versioned `.mai` container independently of any frontend. Version 2 writes an ordered tagged stream containing project identity state followed by every context's stable ID, name, optional supported ONNX network, CSV reference, training configuration, breakpoints, and checkpoint store. Empty model contexts are valid. ONNX payloads pass through temporary files so large networks are streamed instead of duplicated into metadata buffers.
+`ProjectArchive` implements the versioned `.mai` container independently of any frontend. Version 3 writes an ordered tagged stream containing project identity state followed by every context's stable ID, name, optional supported ONNX network, CSV reference, training configuration—including sample order and seed—breakpoints, and checkpoint store. Empty model contexts are valid. ONNX payloads pass through temporary files so large networks are streamed instead of duplicated into metadata buffers.
 
-Writes use a sibling temporary file followed by replacement, and reads construct a validated `ProjectArchiveState` before `MiaIAClient` publishes it. Version 1 remains readable and migrates to model `1` named `Model 1`; the next save publishes version 2. Dataset samples remain external, and an unavailable reference preserves its schema while the rest of the model opens normally. Current training progress, retained history, active phase-debug state, visualization layout, and user preferences remain outside version 2. See the [project format contract](../Project/Project.md).
+Writes use a sibling temporary file followed by replacement, and reads construct a validated `ProjectArchiveState` before `MiaIAClient` publishes it. Versions 1 and 2 remain readable; missing sample-order metadata becomes `Sequential` with seed `0`, and the next save publishes version 3. Dataset samples remain external, and an unavailable reference preserves its schema while the rest of the model opens normally. Current training progress, retained history, active phase-debug state, visualization layout, and user preferences remain outside version 3. See the [project format contract](../Project/Project.md).
 
 ## Validation and failure behavior
 
@@ -356,8 +356,8 @@ Clients should treat a `false` result as a rejected operation and should not inf
 - MSE is the only loss type;
 - SGD is the only optimizer;
 - background execution uses one cooperative worker and one process-local state lock;
-- no mini-batches or configurable sample ordering yet;
-- `.mai` v2 persists multi-context project state and checkpoints, reads v1, and does not persist training progress, history, or visualization layout;
+- no mini-batches yet; sample ordering is sequential or deterministic per-epoch shuffle;
+- `.mai` v3 persists multi-context project state, checkpoints, and sample-order configuration, reads v1/v2, and does not persist training progress, history, or visualization layout;
 - Unreal visualization and Blueprint coverage are incomplete.
 
 These constraints describe the current implementation, not the intended final scope.

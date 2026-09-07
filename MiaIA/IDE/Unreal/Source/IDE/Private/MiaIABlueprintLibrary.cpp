@@ -263,6 +263,22 @@ namespace
         return EMiaIATrainingSessionStatus::Idle;
     }
 
+    EMiaIATrainingSampleOrder ToBlueprint(
+        MiaIA::Core::TrainingSampleOrder order)
+    {
+        return order == MiaIA::Core::TrainingSampleOrder::ShuffleEachEpoch
+            ? EMiaIATrainingSampleOrder::ShuffleEachEpoch
+            : EMiaIATrainingSampleOrder::Sequential;
+    }
+
+    MiaIA::Core::TrainingSampleOrder ToCore(
+        EMiaIATrainingSampleOrder order)
+    {
+        return order == EMiaIATrainingSampleOrder::ShuffleEachEpoch
+            ? MiaIA::Core::TrainingSampleOrder::ShuffleEachEpoch
+            : MiaIA::Core::TrainingSampleOrder::Sequential;
+    }
+
     EMiaIATrainingBreakpointKind ToBlueprint(
         MiaIA::Core::TrainingBreakpointKind kind)
     {
@@ -493,11 +509,24 @@ namespace
         result.CurrentEpoch = static_cast<int64>(source.CurrentEpoch);
         result.NextSampleIndex =
             static_cast<int64>(source.NextSampleIndex);
+        result.NextSamplePosition =
+            static_cast<int64>(source.NextSamplePosition);
         result.SampleCount = static_cast<int64>(source.SampleCount);
         result.CompletedSteps =
             static_cast<int64>(source.CompletedSteps);
         result.TotalSteps = static_cast<int64>(source.TotalSteps);
         result.LearningRate = source.LearningRate;
+        result.SampleOrder = ToBlueprint(source.SampleOrder);
+        result.Seed = UTF8_TO_TCHAR(
+            std::to_string(source.Seed).c_str());
+        result.CurrentEpochSampleOrder.Reserve(
+            static_cast<int32>(source.CurrentEpochSampleOrder.size()));
+        for (const std::size_t sampleIndex :
+            source.CurrentEpochSampleOrder)
+        {
+            result.CurrentEpochSampleOrder.Add(
+                static_cast<int64>(sampleIndex));
+        }
         result.Breakpoints.Reserve(
             static_cast<int32>(source.Breakpoints.size()));
 
@@ -577,6 +606,10 @@ namespace
         result.TrainingEpochCount = static_cast<int64>(
             source.Training.EpochCount);
         result.TrainingLearningRate = source.Training.LearningRate;
+        result.TrainingSampleOrder = ToBlueprint(
+            source.Training.SampleOrder);
+        result.TrainingSeed = UTF8_TO_TCHAR(
+            std::to_string(source.Training.Seed).c_str());
         result.BreakpointCount = static_cast<int64>(
             source.BreakpointCount);
         result.CheckpointCount = static_cast<int64>(
@@ -1034,6 +1067,35 @@ bool UMiaIABlueprintLibrary::StartTrainingSession(
         MiaIA::Core::LossType::MeanSquaredError,
         MiaIA::Core::OptimizerType::StochasticGradientDescent,
         session))
+    {
+        return false;
+    }
+
+    OutSession = ToBlueprint(session);
+    return true;
+}
+
+bool UMiaIABlueprintLibrary::StartTrainingSessionWithOrder(
+    int64 EpochCount,
+    double LearningRate,
+    EMiaIATrainingSampleOrder SampleOrder,
+    int64 Seed,
+    FMiaIATrainingSessionSnapshot& OutSession)
+{
+    if (EpochCount <= 0 || Seed < 0)
+    {
+        return false;
+    }
+
+    MiaIA::Core::TrainingSessionSnapshot session;
+    if (!MiaIA::SDK::MiaIAClient::StartTrainingSession(
+            static_cast<std::size_t>(EpochCount),
+            LearningRate,
+            MiaIA::Core::LossType::MeanSquaredError,
+            MiaIA::Core::OptimizerType::StochasticGradientDescent,
+            ToCore(SampleOrder),
+            static_cast<std::uint64_t>(Seed),
+            session))
     {
         return false;
     }

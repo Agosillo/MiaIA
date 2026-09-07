@@ -191,6 +191,7 @@
     <ClInclude Include="Public\TrainingBreakpointSnapshot.h" />
     <ClInclude Include="Public\TrainingBreakpointSpec.h" />
     <ClInclude Include="Public\TrainingRunStopReason.h" />
+    <ClInclude Include="Public\TrainingSampleOrder.h" />
     <ClInclude Include="Public\TrainingSessionSnapshot.h" />
     <ClInclude Include="Public\TrainingSessionStatus.h" />
     <ClInclude Include="Public\TrainingWorkerStopReason.h" />

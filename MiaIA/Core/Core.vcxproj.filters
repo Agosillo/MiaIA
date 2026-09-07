@@ -108,6 +108,9 @@
     <ClInclude Include="Public\TrainingSessionStatus.h">
       <Filter>File di intestazione</Filter>
     </ClInclude>
+    <ClInclude Include="Public\TrainingSampleOrder.h">
+      <Filter>File di intestazione</Filter>
+    </ClInclude>
     <ClInclude Include="Public\TrainingRunSnapshot.h">
       <Filter>File di intestazione</Filter>
     </ClInclude>

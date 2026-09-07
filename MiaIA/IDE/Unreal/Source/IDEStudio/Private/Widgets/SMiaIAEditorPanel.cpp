@@ -482,6 +482,13 @@ namespace
         return LOCTEXT("SessionUnknown", "Unknown");
     }
 
+    FText SampleOrderName(EMiaIATrainingSampleOrder Order)
+    {
+        return Order == EMiaIATrainingSampleOrder::ShuffleEachEpoch
+            ? LOCTEXT("SampleOrderShuffle", "Shuffle each epoch")
+            : LOCTEXT("SampleOrderSequential", "Sequential");
+    }
+
     FText DebugPhaseName(EMiaIATrainingDebugPhase Phase)
     {
         switch (Phase)
@@ -523,6 +530,13 @@ namespace
         }
 
         return LOCTEXT("NativeSessionUnknown", "Unknown");
+    }
+
+    FText NativeSampleOrderName(MiaIA::Core::TrainingSampleOrder Order)
+    {
+        return Order == MiaIA::Core::TrainingSampleOrder::ShuffleEachEpoch
+            ? LOCTEXT("NativeSampleOrderShuffle", "Shuffle each epoch")
+            : LOCTEXT("NativeSampleOrderSequential", "Sequential");
     }
 
     FText NativeDebugPhaseName(MiaIA::Core::TrainingDebugPhase Phase)
@@ -9055,9 +9069,17 @@ FReply SMiaIAEditorPanel::HandleProjectInfo()
     if (info.bTrainingAvailable)
     {
         content += FString::Printf(
-            TEXT("\nTraining epochs: %lld\nLearning rate: %.12g\nLoss: MSE\nOptimizer: SGD"),
+            TEXT("\nTraining epochs: %lld\nLearning rate: %.12g\nLoss: MSE\nOptimizer: SGD\nSample order: %s"),
             static_cast<long long>(info.TrainingEpochCount),
-            info.TrainingLearningRate);
+            info.TrainingLearningRate,
+            *SampleOrderName(info.TrainingSampleOrder).ToString());
+        if (info.TrainingSampleOrder ==
+            EMiaIATrainingSampleOrder::ShuffleEachEpoch)
+        {
+            content += FString::Printf(
+                TEXT(" (seed %s)"),
+                *info.TrainingSeed);
+        }
     }
     else
     {
@@ -10472,18 +10494,33 @@ FText SMiaIAEditorPanel::TrainingTimelineSummaryText() const
         : static_cast<uint64>(FMath::Min(
             session.CurrentEpoch + 1,
             session.EpochCount));
+    const uint64 displayedSamplePosition =
+        session.SampleCount == 0 ||
+            session.CurrentEpoch >= session.EpochCount
+        ? 0
+        : static_cast<uint64>(session.NextSamplePosition + 1);
     FString summary = FString::Printf(
-        TEXT("Status: %s  |  Epoch %llu/%llu  |  Steps %llu/%llu  |  Next sample %llu/%llu  |  LR %.6g  |  %s  |  %s"),
+        TEXT("Status: %s  |  Epoch %llu/%llu  |  Steps %llu/%llu  |  Next sample %llu (position %llu/%llu)  |  Order %s  |  LR %.6g  |  %s  |  %s"),
         *NativeSessionStatusName(session.Status).ToString(),
         displayedEpoch,
         static_cast<uint64>(session.EpochCount),
         static_cast<uint64>(session.CompletedSteps),
         static_cast<uint64>(session.TotalSteps),
         static_cast<uint64>(session.NextSampleIndex),
+        displayedSamplePosition,
         static_cast<uint64>(session.SampleCount),
+        *NativeSampleOrderName(session.SampleOrder).ToString(),
         session.LearningRate,
         *NativeLossName(session.Loss).ToString(),
         *NativeOptimizerName(session.Optimizer).ToString());
+
+    if (session.SampleOrder ==
+        MiaIA::Core::TrainingSampleOrder::ShuffleEachEpoch)
+    {
+        summary += FString::Printf(
+            TEXT("  |  Seed %llu"),
+            static_cast<uint64>(session.Seed));
+    }
 
     if (TrainingTimeline.Debug.Phase !=
         MiaIA::Core::TrainingDebugPhase::Idle)

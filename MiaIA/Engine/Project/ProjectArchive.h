@@ -26,9 +26,21 @@ namespace MiaIA::Engine
             const std::string& path,
             Core::ProjectInfoSnapshot& result);
 
+        static bool SaveVersion2(
+            const ProjectArchiveView& project,
+            const std::string& path,
+            Core::ProjectInfoSnapshot& result);
+
         static bool Load(
             const std::string& path,
             ProjectArchiveState& project,
+            Core::ProjectInfoSnapshot& result);
+
+    private:
+        static bool SaveForVersion(
+            const ProjectArchiveView& project,
+            const std::string& path,
+            std::uint32_t formatVersion,
             Core::ProjectInfoSnapshot& result);
     };
 }
