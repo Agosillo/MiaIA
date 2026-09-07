@@ -69,7 +69,8 @@ The roadmap is organized by dependency rather than by a fixed release date. Math
 - shared CLI, SDK, Blueprint, and MiaIA Studio breakpoint authoring;
 - process-local `ProjectState` ownership of multiple stable-ID `ModelContext` values;
 - isolated per-context networks, datasets, training/debug sessions, and checkpoint stores;
-- active-context SDK, shared CLI, Unreal Blueprint, StudioCore, and graphical Studio create, list, select, rename, and remove operations;
+- active-context SDK, shared CLI, Unreal Blueprint, StudioCore, and graphical Studio create, fork, list, select, rename, and remove operations;
+- clean model-experiment forks that preserve stable network identities, dataset and training setup while resetting runtime and checkpoint state;
 - atomic `.mai` v2 persistence of every context, active selection, context-local metadata, and checkpoint store;
 - transactional `.mai` v1 reading and in-memory migration to the multi-context project contract.
 

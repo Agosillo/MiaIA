@@ -1,5 +1,7 @@
 #include "ProjectState.h"
 
+#include "../../Engine/Validation/NetworkValidator.h"
+
 #include <algorithm>
 #include <cctype>
 #include <limits>
@@ -74,6 +76,59 @@ namespace MiaIA::SDK::Detail
 
         const std::uint64_t contextId = NextContextId++;
         Contexts.push_back({ contextId, name });
+        ActiveContextId = contextId;
+        Info = Core::ProjectInfoSnapshot{};
+        result = BuildSnapshot(Contexts.back(), true);
+        return true;
+    }
+
+    bool ProjectState::ForkContext(
+        std::uint64_t sourceContextId,
+        const std::string& name,
+        Core::ModelContextSnapshot& result)
+    {
+        const ModelContext* source = FindContext(sourceContextId);
+        if (source == nullptr ||
+            !Engine::NetworkValidator::ValidateForForward(source->Network) ||
+            !IsValidName(name) ||
+            NextContextId == std::numeric_limits<std::uint64_t>::max())
+        {
+            return false;
+        }
+
+        ModelContext fork;
+        fork.Id = NextContextId;
+        fork.Name = name;
+        fork.Network = source->Network;
+        fork.Dataset = source->Dataset;
+
+        for (Core::Layer& layer : fork.Network.Layers)
+        {
+            for (Core::Neuron& neuron : layer.Neurons)
+            {
+                neuron.Activation = 0.0;
+            }
+        }
+
+        fork.TrainingSession.EpochCount =
+            source->TrainingSession.EpochCount;
+        fork.TrainingSession.SampleCount = fork.Dataset.Samples.size();
+        fork.TrainingSession.LearningRate =
+            source->TrainingSession.LearningRate;
+        fork.TrainingSession.Loss = source->TrainingSession.Loss;
+        fork.TrainingSession.Optimizer = source->TrainingSession.Optimizer;
+        fork.TrainingSession.Breakpoints =
+            source->TrainingSession.Breakpoints;
+        fork.TrainingSession.NextBreakpointId =
+            source->TrainingSession.NextBreakpointId;
+        for (Core::TrainingBreakpointSnapshot& breakpoint :
+            fork.TrainingSession.Breakpoints)
+        {
+            breakpoint.HitCount = 0;
+        }
+
+        const std::uint64_t contextId = NextContextId++;
+        Contexts.push_back(std::move(fork));
         ActiveContextId = contextId;
         Info = Core::ProjectInfoSnapshot{};
         result = BuildSnapshot(Contexts.back(), true);

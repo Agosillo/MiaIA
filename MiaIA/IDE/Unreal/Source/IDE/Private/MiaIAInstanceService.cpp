@@ -83,6 +83,17 @@ bool FMiaIAInstanceService::CreateContext(
     return controller && controller->CreateContext(TCHAR_TO_UTF8(*Name));
 }
 
+bool FMiaIAInstanceService::ForkContext(
+    FMiaIAInstanceHandle Instance,
+    uint64 SourceContextId,
+    const FString& Name)
+{
+    MiaIA::Studio::StudioController* controller = Resolve(Instance);
+    return controller && controller->ForkContext(
+        SourceContextId,
+        TCHAR_TO_UTF8(*Name));
+}
+
 bool FMiaIAInstanceService::SelectContext(
     FMiaIAInstanceHandle Instance,
     uint64 ContextId)

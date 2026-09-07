@@ -191,6 +191,9 @@ namespace MiaIA::Studio
         void Refresh();
         void RefreshContexts();
         bool CreateContext(const std::string& name);
+        bool ForkContext(
+            std::uint64_t sourceContextId,
+            const std::string& name);
         bool SelectContext(std::uint64_t contextId);
         bool RenameContext(
             std::uint64_t contextId,

@@ -75,7 +75,9 @@ Opening is transactional. Engine code parses and validates a complete independen
 
 A missing referenced CSV is a recoverable condition rather than archive corruption. The affected context, training configuration, breakpoints, and checkpoints open normally; project information reports its dataset reference as unavailable when that context is active. Restoring the file at the recorded path and reopening the project restores the samples.
 
-Training progress and phase debugging resume as idle state after opening. New, open, save, context-selection, and context-removal operations are rejected while background training is running or a phase-debug transaction is active. Pause or cancel first so replacement occurs at a safe boundary.
+Training progress and phase debugging resume as idle state after opening. New, open, save, context-creation, context-fork, context-selection, and context-removal operations are rejected while background training is running or a phase-debug transaction is active. Pause or cancel first so replacement occurs at a safe boundary.
+
+Forking a context containing a valid network creates and selects a new independent experiment without changing the version 2 container contract. The fork copies the network with the same stable layer, neuron, and connection IDs and parameter values, plus the current dataset, persisted training configuration, and breakpoint definitions. It clears runtime activations, session progress and history, phase-debug state, breakpoint hits, and the checkpoint store. Subsequent saves serialize the fork as an ordinary context, so source and experiment remain independently mutable across a round trip.
 
 ## Public access
 
@@ -88,10 +90,10 @@ The same project operations are exposed through every current client boundary:
 
 Model-context management is exposed through:
 
-- native SDK: `CreateModelContext`, `GetModelContexts`, `GetActiveModelContext`, `SelectModelContext`, `RenameModelContext`, `RemoveModelContext`, and immutable `TryCompareModelContexts`;
-- shared CLI: `model create`, `model list`, `model select`, `model rename`, `model remove`, and `model compare`;
+- native SDK: `CreateModelContext`, `ForkModelContext`, `GetModelContexts`, `GetActiveModelContext`, `SelectModelContext`, `RenameModelContext`, `RemoveModelContext`, and immutable `TryCompareModelContexts`;
+- shared CLI: `model create`, `model fork`, `model list`, `model select`, `model rename`, `model remove`, and `model compare`;
 - Unreal Blueprint: the `MiaIA|Project|Model Context` category and `FMiaIAModelContext` snapshots;
-- MiaIA Studio: the model-context selector shared by the Unreal Editor panel and standalone application.
+- MiaIA Studio: the model-context selector shared by the Unreal Editor panel and standalone application, including `Create experiment from active model`.
 
 Existing network, dataset, training, debug, and checkpoint operations always target the active model context. Project information reports the total context count and active identity; network availability and context-local counts describe the active context.
 

@@ -23,6 +23,24 @@ namespace MiaIA::SDK
         return Detail::ClientProjectState().CreateContext(name, result);
     }
 
+    bool MiaIAClient::ForkModelContext(
+        std::uint64_t sourceContextId,
+        const std::string& name,
+        Core::ModelContextSnapshot& result)
+    {
+        const std::scoped_lock lock(Detail::ClientMutex());
+
+        if (Detail::IsClientMutationBlocked())
+        {
+            return false;
+        }
+
+        return Detail::ClientProjectState().ForkContext(
+            sourceContextId,
+            name,
+            result);
+    }
+
     std::vector<Core::ModelContextSnapshot>
     MiaIAClient::GetModelContexts()
     {

@@ -117,6 +117,23 @@ bool MiaIA::Studio::StudioController::CreateContext(
     return true;
 }
 
+bool MiaIA::Studio::StudioController::ForkContext(
+    std::uint64_t sourceContextId,
+    const std::string& name)
+{
+    Core::ModelContextSnapshot created;
+    if (!SDK::MiaIAClient::ForkModelContext(
+        sourceContextId,
+        name,
+        created))
+    {
+        return false;
+    }
+
+    Refresh();
+    return true;
+}
+
 bool MiaIA::Studio::StudioController::SelectContext(
     std::uint64_t contextId)
 {

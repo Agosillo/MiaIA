@@ -811,7 +811,7 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
                     .ComboButtonStyle(&ComboButtonStyle)
                     .ToolTipText(LOCTEXT(
                         "ContextMenuTooltip",
-                        "Create, select, rename, or remove a model context in the current project."))
+                        "Create, fork, select, rename, or remove a model context in the current project."))
                     .ButtonContent()
                     [
                         SNew(STextBlock)
@@ -8395,7 +8395,7 @@ TSharedRef<SWidget> SMiaIAEditorPanel::BuildContextMenu()
             SNew(STextBlock)
             .Text(LOCTEXT(
                 "ContextNameHeading",
-                "Name for a new model context or the active context"))
+                "Name for a new, forked, or active model context"))
         ];
 
     content->AddSlot()
@@ -8433,6 +8433,26 @@ TSharedRef<SWidget> SMiaIAEditorPanel::BuildContextMenu()
                     this,
                     &SMiaIAEditorPanel::HandleRenameActiveContext)
             ]
+        ];
+
+    content->AddSlot()
+        .AutoHeight()
+        .Padding(6.0f, 0.0f, 6.0f, 4.0f)
+        [
+            SNew(SButton)
+            .ButtonStyle(&ButtonStyle)
+            .Text(LOCTEXT(
+                "ForkActiveContext",
+                "Create experiment from active model"))
+            .ToolTipText(LOCTEXT(
+                "ForkActiveContextTooltip",
+                "Create and select an independent model context with the active network, dataset, training configuration, and breakpoints."))
+            .IsEnabled(ActiveContext.Id != 0 &&
+                ActiveContext.LayerCount > 0 &&
+                ActiveContext.NeuronCount > 0)
+            .OnClicked(
+                this,
+                &SMiaIAEditorPanel::HandleForkActiveContext)
         ];
 
     content->AddSlot()
@@ -8659,6 +8679,43 @@ FReply SMiaIAEditorPanel::HandleCreateContext()
         TEXT("\n> model create \"%s\"\nModel context #%llu created and selected.\n"),
         *name,
         ActiveContext.Id);
+    UpdateConsoleOutput();
+    return FReply::Handled();
+}
+
+FReply SMiaIAEditorPanel::HandleForkActiveContext()
+{
+    FString name = ContextNameInput.IsValid()
+        ? ContextNameInput->GetText().ToString()
+        : FString();
+    name.TrimStartAndEndInline();
+    const uint64 sourceContextId = ActiveContext.Id;
+    FSlateApplication::Get().DismissAllMenus();
+
+    if (sourceContextId == 0 || name.IsEmpty() ||
+        !FMiaIAInstanceService::ForkContext(
+            MiaIAInstance,
+            sourceContextId,
+            name))
+    {
+        ShowDialog(
+            LOCTEXT(
+                "ForkContextFailedTitle",
+                "Create Model Experiment Failed"),
+            LOCTEXT(
+                "ForkContextFailedContent",
+                "Enter a valid name and start from a non-empty model, then pause training or cancel phase debugging before creating the experiment."));
+        return FReply::Handled();
+    }
+
+    RefreshAfterContextMutation();
+    ModelComparisonReferenceContextId = sourceContextId;
+    ConsoleHistory += FString::Printf(
+        TEXT("\n> model fork %llu \"%s\"\nModel context #%llu forked from #%llu and selected.\n"),
+        sourceContextId,
+        *name,
+        ActiveContext.Id,
+        sourceContextId);
     UpdateConsoleOutput();
     return FReply::Handled();
 }

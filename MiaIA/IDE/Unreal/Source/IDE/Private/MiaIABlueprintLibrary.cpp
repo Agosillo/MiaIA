@@ -654,6 +654,28 @@ bool UMiaIABlueprintLibrary::CreateModelContext(
     return created;
 }
 
+bool UMiaIABlueprintLibrary::ForkModelContext(
+    int64 SourceContextId,
+    const FString& Name,
+    FMiaIAModelContext& OutContext)
+{
+    if (SourceContextId <= 0)
+    {
+        return false;
+    }
+
+    MiaIA::Core::ModelContextSnapshot context;
+    const bool created = MiaIA::SDK::MiaIAClient::ForkModelContext(
+        static_cast<uint64>(SourceContextId),
+        std::string(TCHAR_TO_UTF8(*Name)),
+        context);
+    if (created)
+    {
+        OutContext = ToBlueprint(context);
+    }
+    return created;
+}
+
 TArray<FMiaIAModelContext> UMiaIABlueprintLibrary::GetModelContexts()
 {
     TArray<FMiaIAModelContext> result;

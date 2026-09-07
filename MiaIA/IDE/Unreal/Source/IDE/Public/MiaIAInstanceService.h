@@ -23,6 +23,10 @@ public:
     static bool CreateContext(
         FMiaIAInstanceHandle Instance,
         const FString& Name);
+    static bool ForkContext(
+        FMiaIAInstanceHandle Instance,
+        uint64 SourceContextId,
+        const FString& Name);
     static bool SelectContext(
         FMiaIAInstanceHandle Instance,
         uint64 ContextId);

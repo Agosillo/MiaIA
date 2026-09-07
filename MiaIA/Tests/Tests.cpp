@@ -747,6 +747,218 @@ int main()
         std::filesystem::remove(multiModelPath);
     });
 
+    runner.Run("Model context fork experiments", [&]()
+    {
+        using MiaIA::CLI::MiaIACommandProcessor;
+
+        const auto datasetPath =
+            std::filesystem::temp_directory_path() /
+            "miaia_model_context_fork.csv";
+        const auto projectPath =
+            std::filesystem::temp_directory_path() /
+            "miaia_model_context_fork.mai";
+        {
+            std::ofstream output(datasetPath);
+            assert(output.good());
+            output << "input1,input2,target\n1,-1,1\n";
+        }
+        std::filesystem::remove(projectPath);
+
+        assert(MiaIAClient::NewProject());
+        const std::uint64_t sourceContextId =
+            MiaIAClient::GetActiveModelContext().Id;
+        assert(MiaIAClient::CreateDenseNetwork(2, 2, 1, 1));
+        assert(MiaIAClient::SetLayerActivation(
+            2,
+            MiaIA::Core::ActivationType::Tanh));
+        assert(MiaIAClient::SetConnectionWeight(1, 0.25));
+        assert(MiaIAClient::SetNeuronBias(1003, -0.5));
+        assert(MiaIAClient::ImportCsvDataset(
+            datasetPath.string(),
+            2,
+            1));
+
+        MiaIA::Core::TrainingBreakpointSpec breakpointSpec;
+        breakpointSpec.Kind =
+            MiaIA::Core::TrainingBreakpointKind::Phase;
+        breakpointSpec.Phase =
+            MiaIA::Core::TrainingDebugPhase::Committed;
+        MiaIA::Core::TrainingBreakpointSnapshot sourceBreakpoint;
+        assert(MiaIAClient::AddTrainingBreakpoint(
+            breakpointSpec,
+            sourceBreakpoint));
+
+        MiaIA::Core::TrainingSessionSnapshot sourceSession;
+        assert(MiaIAClient::StartTrainingSession(
+            3,
+            0.05,
+            MiaIA::Core::LossType::MeanSquaredError,
+            MiaIA::Core::OptimizerType::StochasticGradientDescent,
+            sourceSession));
+        MiaIA::Core::ModelCheckpointSummarySnapshot sourceCheckpoint;
+        assert(MiaIAClient::CaptureModelCheckpoint(
+            "source checkpoint",
+            sourceCheckpoint));
+        assert(MiaIAClient::SetInputValues({ 1.0, -1.0 }));
+        assert(MiaIAClient::Forward());
+        const auto sourceNetwork = MiaIAClient::GetSnapshot();
+        assert(sourceNetwork.Layers[0].Neurons[0].Activation == 1.0);
+
+        MiaIA::Core::ModelContextSnapshot rejected;
+        rejected.Id = 777;
+        assert(!MiaIAClient::ForkModelContext(
+            999999,
+            "Missing source",
+            rejected));
+        assert(rejected.Id == 777);
+        assert(!MiaIAClient::ForkModelContext(
+            sourceContextId,
+            "   ",
+            rejected));
+        assert(rejected.Id == 777);
+        assert(MiaIAClient::GetModelContexts().size() == 1);
+
+        MiaIA::Core::ModelContextSnapshot fork;
+        assert(MiaIAClient::ForkModelContext(
+            sourceContextId,
+            "Learning rate experiment",
+            fork));
+        assert(fork.Id != sourceContextId);
+        assert(fork.Active);
+        assert(fork.Name == "Learning rate experiment");
+        assert(fork.LayerCount == 3);
+        assert(fork.NeuronCount == 5);
+        assert(fork.ConnectionCount == 6);
+        assert(fork.DatasetSampleCount == 1);
+        assert(fork.TrainingStatus ==
+            MiaIA::Core::TrainingSessionStatus::Idle);
+        assert(fork.CheckpointCount == 0);
+
+        const auto forkNetwork = MiaIAClient::GetSnapshot();
+        assert(forkNetwork.Layers.size() == sourceNetwork.Layers.size());
+        assert(forkNetwork.Connections.size() ==
+            sourceNetwork.Connections.size());
+        assert(forkNetwork.Layers[1].Activation ==
+            sourceNetwork.Layers[1].Activation);
+        assert(forkNetwork.Layers[1].Neurons[0].Id ==
+            sourceNetwork.Layers[1].Neurons[0].Id);
+        assert(forkNetwork.Layers[1].Neurons[0].Bias == -0.5);
+        assert(forkNetwork.Connections[0].Id ==
+            sourceNetwork.Connections[0].Id);
+        assert(forkNetwork.Connections[0].Weight == 0.25);
+        for (const auto& layer : forkNetwork.Layers)
+        {
+            for (const auto& neuron : layer.Neurons)
+            {
+                assert(neuron.Activation == 0.0);
+            }
+        }
+
+        const auto forkDataset = MiaIAClient::GetDatasetSummary();
+        assert(forkDataset.SampleCount == 1);
+        assert(forkDataset.Source == datasetPath.string());
+        MiaIA::Core::SampleSnapshot forkSample;
+        assert(MiaIAClient::TryGetDatasetSample(0, forkSample));
+        assert(forkSample.Inputs == std::vector<double>({ 1.0, -1.0 }));
+        assert(forkSample.Targets == std::vector<double>({ 1.0 }));
+
+        const auto forkSession = MiaIAClient::GetTrainingSession();
+        assert(forkSession.Status ==
+            MiaIA::Core::TrainingSessionStatus::Idle);
+        assert(forkSession.EpochCount == 3);
+        assert(forkSession.LearningRate == 0.05);
+        assert(forkSession.CompletedSteps == 0);
+        assert(forkSession.Steps.empty());
+        assert(forkSession.Breakpoints.size() == 1);
+        assert(forkSession.Breakpoints[0].Id == sourceBreakpoint.Id);
+        assert(forkSession.Breakpoints[0].HitCount == 0);
+        assert(MiaIAClient::GetModelCheckpoints().empty());
+
+        MiaIA::Core::ModelContextComparisonSnapshot comparison;
+        assert(MiaIAClient::TryCompareModelContexts(
+            sourceContextId,
+            fork.Id,
+            comparison));
+        assert(comparison.Model.Topology.Compatible);
+        assert(comparison.Model.ActivationTypeChangeCount == 0);
+        assert(comparison.Model.ChangedBiasCount == 0);
+        assert(comparison.Model.ChangedWeightCount == 0);
+
+        assert(MiaIAClient::SetConnectionWeight(1, -0.75));
+        assert(MiaIAClient::SetNeuronBias(1003, 0.75));
+        assert(MiaIAClient::SelectModelContext(sourceContextId));
+        double sourceWeight{};
+        assert(MiaIAClient::GetConnectionWeight(1, sourceWeight));
+        assert(sourceWeight == 0.25);
+        MiaIA::Core::NeuronSnapshot sourceNeuron;
+        assert(MiaIAClient::TryGetNeuron(1003, sourceNeuron));
+        assert(sourceNeuron.Bias == -0.5);
+        assert(MiaIAClient::GetModelCheckpoints().size() == 1);
+
+        assert(MiaIAClient::SelectModelContext(fork.Id));
+        assert(MiaIAClient::SaveProject(projectPath.string()));
+        assert(MiaIAClient::NewProject());
+        assert(MiaIAClient::OpenProject(projectPath.string()));
+        const auto restoredContexts = MiaIAClient::GetModelContexts();
+        assert(restoredContexts.size() == 2);
+        assert(restoredContexts[1].Id == fork.Id);
+        assert(restoredContexts[1].Active);
+        assert(restoredContexts[1].DatasetSampleCount == 1);
+        assert(restoredContexts[1].CheckpointCount == 0);
+        const auto restoredSession = MiaIAClient::GetTrainingSession();
+        assert(restoredSession.Status ==
+            MiaIA::Core::TrainingSessionStatus::Idle);
+        assert(restoredSession.EpochCount == 3);
+        assert(restoredSession.LearningRate == 0.05);
+        assert(restoredSession.Breakpoints.size() == 1);
+        assert(MiaIAClient::TryCompareModelContexts(
+            sourceContextId,
+            fork.Id,
+            comparison));
+        assert(comparison.Model.ChangedBiasCount == 1);
+        assert(comparison.Model.ChangedWeightCount == 1);
+
+        assert(MiaIAClient::SelectModelContext(sourceContextId));
+        const auto cliFork = MiaIACommandProcessor::Execute(
+            "model fork " + std::to_string(sourceContextId) +
+            " CLI experiment");
+        assert(cliFork.Output.find("forked from") != std::string::npos);
+        assert(MiaIAClient::GetActiveModelContext().Name ==
+            "CLI experiment");
+
+        assert(MiaIAClient::SelectModelContext(sourceContextId));
+        MiaIA::Studio::StudioController controller;
+        assert(controller.ForkContext(
+            sourceContextId,
+            "Studio experiment"));
+        assert(controller.State().ActiveContext.Name ==
+            "Studio experiment");
+        assert(controller.State().ActiveContext.LayerCount == 3);
+        assert(controller.State().ActiveContext.CheckpointCount == 0);
+
+        assert(MiaIAClient::NewProject());
+        MiaIA::Core::ModelContextSnapshot emptyFork;
+        emptyFork.Id = 888;
+        assert(!MiaIAClient::ForkModelContext(
+            1,
+            "Empty fork",
+            emptyFork));
+        assert(emptyFork.Id == 888);
+        assert(MiaIAClient::GetModelContexts().size() == 1);
+
+        assert(MiaIAClient::CreateDenseNetwork(1, 1, 0, 1));
+        assert(MiaIAClient::RemoveConnection(1));
+        assert(!MiaIAClient::ForkModelContext(
+            1,
+            "Invalid network fork",
+            emptyFork));
+        assert(emptyFork.Id == 888);
+        assert(MiaIAClient::GetModelContexts().size() == 1);
+
+        std::filesystem::remove(datasetPath);
+        std::filesystem::remove(projectPath);
+    });
+
     runner.Run("Immutable model context comparison", [&]()
     {
         using MiaIA::CLI::MiaIACommandProcessor;
@@ -3700,6 +3912,11 @@ int main()
     rejectedModel.Id = 4242;
     assert(!MiaIAClient::CreateModelContext(
         "Blocked while training",
+        rejectedModel));
+    assert(rejectedModel.Id == 4242);
+    assert(!MiaIAClient::ForkModelContext(
+        1,
+        "Blocked fork while training",
         rejectedModel));
     assert(rejectedModel.Id == 4242);
     assert(!MiaIAClient::SelectModelContext(inactiveModel.Id));

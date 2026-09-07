@@ -33,6 +33,12 @@ public:
         const FString& Name,
         FMiaIAModelContext& OutContext);
 
+    UFUNCTION(BlueprintCallable, Category = "MiaIA|Project|Model Context")
+    static bool ForkModelContext(
+        int64 SourceContextId,
+        const FString& Name,
+        FMiaIAModelContext& OutContext);
+
     UFUNCTION(BlueprintPure, Category = "MiaIA|Project|Model Context")
     static TArray<FMiaIAModelContext> GetModelContexts();
 

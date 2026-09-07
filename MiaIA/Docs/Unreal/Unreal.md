@@ -12,7 +12,7 @@ The complete Unreal project lives under `MiaIA/IDE/Unreal`. Future graphical IDE
 
 Unreal compiles the runtime API and the reusable Studio panel into separate DLL modules. Linking `StudioController` independently into both modules would duplicate the static SDK's process-local project state: a model created by Blueprint or the integrated CLI could then appear empty to the panel. The public `FMiaIAInstanceHandle` and `FMiaIAInstanceService` prevent that split. The panel holds only an opaque handle, and the service executes model management, refresh, trace, diagnostics, checkpoint, and training-timeline operations inside `IDE.dll`, beside the Blueprint and CLI adapters.
 
-The registry currently contains one lazily created `default` frontend instance. Its native `ProjectState` can own multiple isolated `ModelContext` values. Blueprint, the integrated CLI, and the graphical toolbar can create, list, select, rename, or remove them; network, dataset, training, debug, and checkpoint operations then address the active context. The handle remains a multi-module ownership boundary rather than an independent concurrently executing SDK context.
+The registry currently contains one lazily created `default` frontend instance. Its native `ProjectState` can own multiple isolated `ModelContext` values. Blueprint, the integrated CLI, and the graphical toolbar can create, fork, list, select, rename, or remove them; network, dataset, training, debug, and checkpoint operations then address the active context. The handle remains a multi-module ownership boundary rather than an independent concurrently executing SDK context.
 
 ## Blueprint types
 
@@ -43,6 +43,7 @@ Open Project
 Save Project
 Get Project Info
 Create Model Context
+Fork Model Context
 Get Model Contexts
 Get Active Model Context
 Select Model Context
@@ -79,7 +80,7 @@ Execute Command
 
 The training nodes currently select MSE and SGD internally because those are the only implemented loss and optimizer choices. Future enum pins should be added when the Engine supports more than one valid choice.
 
-The project nodes use the same `.mai` archive implementation as Console and MiaIA Studio. Their reflected information value reports the format version, current path, context count, active context identity and network availability, dataset schema, training configuration, breakpoint count, and checkpoint count without exposing STL types. The `MiaIA|Project|Model Context` nodes use lightweight reflected snapshots and the same mutation guards as the native SDK. The interchange nodes import or export only the active context's supported ONNX model portion.
+The project nodes use the same `.mai` archive implementation as Console and MiaIA Studio. Their reflected information value reports the format version, current path, context count, active context identity and network availability, dataset schema, training configuration, breakpoint count, and checkpoint count without exposing STL types. The `MiaIA|Project|Model Context` nodes use lightweight reflected snapshots and the same mutation guards as the native SDK, including a fork node that returns the newly selected context while preserving its source. The interchange nodes import or export only the active context's supported ONNX model portion.
 
 ## Minimal Blueprint workflow
 
@@ -106,7 +107,7 @@ The Blueprint asset is generated only after the initial Asset Registry scan and 
 
 ## MiaIA Studio editor panel
 
-MiaIA Studio opens automatically and receives focus after Unreal Editor and the Asset Registry finish initializing. Its dock location is managed by the normal Unreal layout system: dock it in the central workspace once and subsequent project launches restore that placement. If the tab is closed, reopen it from `Window > MiaIA Studio`. It reads the same shared `MiaIAClient` state used by the Console and Blueprint nodes; it does not create a separate SDK state or duplicate Engine mathematics. The `Project` toolbar menu creates, opens, saves, and describes `.mai` projects and imports or exports the active context's supported ONNX model in both the editor and packaged application. The adjacent model-context selector lists all project contexts, creates and selects a named empty context, switches the active context, renames it, or removes it after confirmation while retaining at least one. Play in Editor is not started automatically.
+MiaIA Studio opens automatically and receives focus after Unreal Editor and the Asset Registry finish initializing. Its dock location is managed by the normal Unreal layout system: dock it in the central workspace once and subsequent project launches restore that placement. If the tab is closed, reopen it from `Window > MiaIA Studio`. It reads the same shared `MiaIAClient` state used by the Console and Blueprint nodes; it does not create a separate SDK state or duplicate Engine mathematics. The `Project` toolbar menu creates, opens, saves, and describes `.mai` projects and imports or exports the active context's supported ONNX model in both the editor and packaged application. The adjacent model-context selector lists all project contexts, creates and selects a named empty context, creates a clean experiment fork from the active model, switches the active context, renames it, or removes it after confirmation while retaining at least one. Play in Editor is not started automatically.
 
 ![MiaIA editor panel](Assets/miaia-editor-panel.png)
 

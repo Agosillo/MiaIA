@@ -31,6 +31,10 @@ namespace MiaIA::SDK::Detail
         bool CreateContext(
             const std::string& name,
             Core::ModelContextSnapshot& result);
+        bool ForkContext(
+            std::uint64_t sourceContextId,
+            const std::string& name,
+            Core::ModelContextSnapshot& result);
         bool SelectContext(std::uint64_t contextId);
         bool RenameContext(
             std::uint64_t contextId,

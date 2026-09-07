@@ -136,6 +136,7 @@ private:
     TSharedRef<SWidget> BuildProjectMenu();
     TSharedRef<SWidget> BuildContextMenu();
     FReply HandleCreateContext();
+    FReply HandleForkActiveContext();
     FReply HandleSelectContext(uint64 ContextId);
     FReply HandleRenameActiveContext();
     FReply HandleRemoveActiveContext();

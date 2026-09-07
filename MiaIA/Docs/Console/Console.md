@@ -37,6 +37,7 @@ project
 
 model
     -> model create <name>
+    -> model fork <source-id> <name>
     -> model list
     -> model select <id>
     -> model rename <id> <name>
@@ -129,6 +130,7 @@ Every project retains at least one model context. Context IDs are stable and mon
 
 ```text
 model create Experiment B
+model fork 1 Learning rate 0.05
 model list
 model select 1
 model rename 2 Comparison model
@@ -136,7 +138,9 @@ model compare 1 2 10
 model remove 2
 ```
 
-`model list` marks the active context with `*` and prints `empty` immediately after its name when it has no network, followed by topology, dataset-sample, and checkpoint counts. Create, select, and remove are rejected while the active context is Running or phase debugging is active. At least one context must remain. Rename changes only context metadata. The short `model` command name is retained deliberately; it manages model contexts without exposing the longer architectural term in routine console use.
+`model list` marks the active context with `*` and prints `empty` immediately after its name when it has no network, followed by topology, dataset-sample, and checkpoint counts. Create, fork, select, and remove are rejected while the active context is Running or phase debugging is active. At least one context must remain. Rename changes only context metadata. The short `model` command name is retained deliberately; it manages model contexts without exposing the longer architectural term in routine console use.
+
+`model fork` creates and selects a new independent experiment from any existing context containing a valid network. The fork retains the source network's topology, activation types, stable layer/neuron/connection IDs, weights, and biases, and copies the loaded dataset, training configuration, and breakpoint definitions. Runtime neuron activations, session progress and history, debug state, breakpoint hits, and checkpoints start clean. Changing or training the fork therefore cannot mutate the source, while their shared stable network identities make direct `model compare` results meaningful. The operation fails without creating a context when its source is missing, empty, or invalid, its name is invalid, or mutation is currently blocked.
 
 `model compare` is read-only and does not require either context to be active. It first reports layer, neuron, and connection counts plus stable-ID structural compatibility. Compatible networks then report activation-type changes and rank the largest bias and weight differences; deltas use `current - reference`. The optional positive limit defaults to `10` for each ranked section. Scalar differences are unavailable for incompatible topologies, and a missing, identical, invalid, or `empty` context is rejected explicitly without changing either network or the caller's previous result.
 

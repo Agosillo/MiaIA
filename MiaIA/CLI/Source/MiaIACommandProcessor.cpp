@@ -129,8 +129,9 @@ const std::vector<CommandCatalogEntry>& CommandCatalog()
         { "project open", "project open <path.mai>", "Open a versioned MiaIA project archive.", true },
         { "project save", "project save [path.mai]", "Save to a new path or the current project path.", true },
         { "project info", "project info", "Show current project, active model context, dataset, training, breakpoint, and checkpoint metadata.", true },
-        { "model", "model <create|list|select|rename|remove|compare>", "Manage and compare independent model contexts in the current project.", false },
+        { "model", "model <create|fork|list|select|rename|remove|compare>", "Manage and compare independent model contexts in the current project.", false },
         { "model create", "model create <name>", "Create and select an empty model context.", true },
+        { "model fork", "model fork <source-id> <name>", "Create and select an independent experiment from an existing model context.", true },
         { "model list", "model list", "List model contexts and the active context.", true },
         { "model select", "model select <id>", "Select the model context used by existing SDK and Console operations.", true },
         { "model rename", "model rename <id> <name>", "Rename one model context.", true },
@@ -308,6 +309,7 @@ void PrintHelp()
         << "      Show the current project and restored component status\n\n"
 
         << "  model create <name>\n"
+        << "  model fork <source-id> <name>\n"
         << "  model list\n"
         << "  model select <id>\n"
         << "  model rename <id> <name>\n"
@@ -1310,6 +1312,7 @@ void HandleModelCommand(const std::string& command)
     const std::string usage =
         "Usage:\n"
         "  model create <name>\n"
+        "  model fork <source-id> <name>\n"
         "  model list\n"
         "  model select <id>\n"
         "  model rename <id> <name>\n"
@@ -1368,6 +1371,37 @@ void HandleModelCommand(const std::string& command)
 
         std::cout << "Model context #" << context.Id
             << " created and selected: " << context.Name << ".\n";
+        return;
+    }
+
+    if (action == "fork" && tokens.size() >= 4)
+    {
+        std::uint64_t sourceContextId{};
+        std::stringstream sourceStream(tokens[2]);
+        const std::size_t idPosition = command.find(tokens[2]);
+        const std::string name = idPosition == std::string::npos
+            ? ""
+            : UnquotePath(command.substr(
+                idPosition + tokens[2].size()));
+        MiaIA::Core::ModelContextSnapshot context;
+
+        if (!(sourceStream >> sourceContextId) ||
+            !sourceStream.eof() || name.empty() ||
+            !MiaIAClient::ForkModelContext(
+                sourceContextId,
+                name,
+                context))
+        {
+            std::cout
+                << "Model context fork failed. Check that the source ID "
+                   "contains a network, use a valid name, and pause training "
+                   "or phase debugging first.\n";
+            return;
+        }
+
+        std::cout << "Model context #" << context.Id
+            << " forked from #" << sourceContextId
+            << " and selected: " << context.Name << ".\n";
         return;
     }
 

@@ -123,6 +123,10 @@ namespace MiaIA::SDK
         static bool CreateModelContext(
             const std::string& name,
             Core::ModelContextSnapshot& result);
+        static bool ForkModelContext(
+            std::uint64_t sourceContextId,
+            const std::string& name,
+            Core::ModelContextSnapshot& result);
         [[nodiscard]]
         static std::vector<Core::ModelContextSnapshot>
             GetModelContexts();
