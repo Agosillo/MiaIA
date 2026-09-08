@@ -1,10 +1,15 @@
 #include "Widgets/SMiaIAEditorPanel.h"
 
+#if MIAIA_WITH_WIT_AI
+#include "Assistant/MiaIAWitCommandAssistant.h"
+#include "Async/Async.h"
+#endif
 #include "MiaIACommandProcessor.h"
 #include "MiaIABlueprintLibrary.h"
 #include "StudioTopology.h"
 #include "Framework/Application/SlateApplication.h"
 #include "HAL/PlatformMisc.h"
+#include "HAL/PlatformProcess.h"
 #include "InputCoreTypes.h"
 #include "Containers/UnrealString.h"
 #include "Misc/ConfigCacheIni.h"
@@ -69,6 +74,15 @@ namespace
         TEXT("AlwaysShowSelectionCursor");
     constexpr TCHAR NeuronGapSettingsKey[] = TEXT("NeuronGap");
     constexpr TCHAR LayerGapSettingsKey[] = TEXT("LayerGap");
+#if MIAIA_WITH_WIT_AI
+    constexpr TCHAR AssistantSettingsSection[] =
+        TEXT("MiaIAStudio.OnlineAssistant");
+    constexpr TCHAR AssistantEnglishTokenSettingsKey[] =
+        TEXT("EnglishClientAccessToken");
+    constexpr TCHAR AssistantItalianTokenSettingsKey[] =
+        TEXT("ItalianClientAccessToken");
+    constexpr TCHAR AssistantPackagedSettingsSection[] = TEXT("WitAI");
+#endif
     constexpr int32 MinimumTopologyLimit = 1;
     constexpr int32 MaximumDetailedNeuronLimit = 100000000;
     constexpr int32 MaximumDetailedConnectionLimit = 1000000000;
@@ -79,6 +93,159 @@ namespace
     constexpr int32 MaximumInspectorConnectionSliderLimit = 50;
     constexpr std::size_t MaximumTrainingTimelineRows = 200;
     constexpr double DefaultForwardTraceFrameDurationSeconds = 0.65;
+
+#if MIAIA_WITH_WIT_AI
+    struct FAssistantTokenResolution
+    {
+        FString Token;
+        FString Source;
+    };
+
+    FString FromUtf8(const std::string& Value)
+    {
+        if (Value.empty())
+        {
+            return FString();
+        }
+
+        const bool isAscii = std::all_of(
+            Value.begin(),
+            Value.end(),
+            [](const unsigned char Character)
+            {
+                return Character <= 0x7f;
+            });
+
+        if (isAscii)
+        {
+            FString result;
+            result.Reserve(static_cast<int32>(Value.size()));
+
+            for (const unsigned char character : Value)
+            {
+                result.AppendChar(static_cast<TCHAR>(character));
+            }
+
+            return result;
+        }
+
+        const FUTF8ToTCHAR converted(Value.c_str());
+        FString result;
+        result.AppendChars(converted.Get(), converted.Length());
+        return result;
+    }
+
+    FString LoadAssistantUserToken(const TCHAR* Key)
+    {
+        FString token;
+
+        if (GConfig)
+        {
+            GConfig->GetString(
+                AssistantSettingsSection,
+                Key,
+                token,
+                GGameUserSettingsIni);
+        }
+
+        token.TrimStartAndEndInline();
+        return token;
+    }
+
+    void SaveAssistantUserToken(const TCHAR* Key, const FString& Token)
+    {
+        if (!GConfig)
+        {
+            return;
+        }
+
+        FString token = Token;
+        token.TrimStartAndEndInline();
+
+        if (token.IsEmpty())
+        {
+            GConfig->RemoveKey(
+                AssistantSettingsSection,
+                Key,
+                GGameUserSettingsIni);
+        }
+        else
+        {
+            GConfig->SetString(
+                AssistantSettingsSection,
+                Key,
+                *token,
+                GGameUserSettingsIni);
+        }
+
+        GConfig->Flush(false, GGameUserSettingsIni);
+    }
+
+    FString LoadAssistantPackagedToken(const TCHAR* Key)
+    {
+        const FString path = FPaths::Combine(
+            FPlatformProcess::BaseDir(),
+            TEXT("MiaIAAssistant.ini"));
+        FConfigFile configuration;
+        FString token;
+
+        if (FPaths::FileExists(path))
+        {
+            configuration.Read(path);
+            configuration.GetString(
+                AssistantPackagedSettingsSection,
+                Key,
+                token);
+        }
+
+        token.TrimStartAndEndInline();
+        return token;
+    }
+
+    FAssistantTokenResolution ResolveAssistantToken(
+        const TCHAR* SettingsKey,
+        const TCHAR* EnvironmentVariable,
+        const TCHAR* FallbackEnvironmentVariable = nullptr)
+    {
+        FAssistantTokenResolution resolution;
+#if !UE_BUILD_SHIPPING
+        resolution.Token = LoadAssistantUserToken(SettingsKey);
+
+        if (!resolution.Token.IsEmpty())
+        {
+            resolution.Source = TEXT("user setting");
+            return resolution;
+        }
+#endif
+
+        resolution.Token = LoadAssistantPackagedToken(SettingsKey);
+
+        if (!resolution.Token.IsEmpty())
+        {
+            resolution.Source = TEXT("packaged default");
+            return resolution;
+        }
+
+        resolution.Token = FPlatformMisc::GetEnvironmentVariable(
+            EnvironmentVariable);
+        resolution.Token.TrimStartAndEndInline();
+
+        if (resolution.Token.IsEmpty() &&
+            FallbackEnvironmentVariable != nullptr)
+        {
+            resolution.Token = FPlatformMisc::GetEnvironmentVariable(
+                FallbackEnvironmentVariable);
+            resolution.Token.TrimStartAndEndInline();
+        }
+
+        if (!resolution.Token.IsEmpty())
+        {
+            resolution.Source = TEXT("environment");
+        }
+
+        return resolution;
+    }
+#endif
 
     FString DataRefreshModeName(EMiaIADataRefreshMode Mode)
     {
@@ -758,6 +925,9 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
         DefaultInspectorConnectionLimit,
         MaximumInspectorConnectionLimit);
     RefreshWidgetStyles();
+#if MIAIA_WITH_WIT_AI
+    RebuildOnlineAssistantProvider();
+#endif
     ConsoleHistory = TEXT(
         "MiaIA Studio Console\n"
         "Type 'help' to list the shared CLI commands. "
@@ -2428,6 +2598,14 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
                             .Value(0.76f)
                             [
                                 SNew(SVerticalBox)
+#if MIAIA_WITH_WIT_AI
+                                + SVerticalBox::Slot()
+                                .AutoHeight()
+                                .Padding(4.0f, 2.0f, 0.0f, 6.0f)
+                                [
+                                    BuildOnlineAssistantPanel(panelBorder)
+                                ]
+#endif
                                 + SVerticalBox::Slot()
                                 .FillHeight(1.0f)
                                 [
@@ -2462,9 +2640,16 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
                                             SEditableTextBox)
                                         .Style(&InputStyle)
                                         .ClearKeyboardFocusOnCommit(false)
+#if MIAIA_WITH_WIT_AI
+                                        .HintText(
+                                            this,
+                                            &SMiaIAEditorPanel::
+                                                ConsoleInputHintText)
+#else
                                         .HintText(LOCTEXT(
                                             "ConsoleInputHint",
                                             "Enter a MiaIA command and press Enter"))
+#endif
                                         .OnTextChanged(
                                             this,
                                             &SMiaIAEditorPanel::HandleConsoleTextChanged)
@@ -2481,9 +2666,19 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
                                     [
                                         SNew(SButton)
                                         .ButtonStyle(&ButtonStyle)
+#if MIAIA_WITH_WIT_AI
+                                        .Text(
+                                            this,
+                                            &SMiaIAEditorPanel::ConsoleSendText)
+                                        .IsEnabled_Lambda([this]()
+                                        {
+                                            return !bOnlineAssistantRequestPending;
+                                        })
+#else
                                         .Text(LOCTEXT(
                                             "ConsoleSend",
                                             "Send"))
+#endif
                                         .OnClicked(
                                             this,
                                             &SMiaIAEditorPanel::HandleConsoleSend)
@@ -9451,6 +9646,69 @@ void SMiaIAEditorPanel::HandleConsoleCommandCommitted(
         return;
     }
 
+#if MIAIA_WITH_WIT_AI
+    if (bOnlineAssistantEnabled)
+    {
+        if (bHasAssistantProposal)
+        {
+            FString response = command.ToLower();
+            while (response.EndsWith(TEXT(".")) ||
+                response.EndsWith(TEXT("!")) ||
+                response.EndsWith(TEXT("?")))
+            {
+                response.LeftChopInline(1);
+                response.TrimEndInline();
+            }
+
+            if (response == TEXT("confirm") ||
+                response == TEXT("yes") ||
+                response == TEXT("ok") ||
+                response == TEXT("execute") ||
+                response == TEXT("conferma") ||
+                response == TEXT("confermo") ||
+                response == TEXT("si") ||
+                response == TEXT("sì") ||
+                response == TEXT("esegui"))
+            {
+                HandleConfirmAssistantProposal();
+                return;
+            }
+
+            if (response == TEXT("cancel") ||
+                response == TEXT("no") ||
+                response == TEXT("discard") ||
+                response == TEXT("annulla") ||
+                response == TEXT("scarta"))
+            {
+                HandleDiscardAssistantProposal();
+                SetConsoleInputText(FString());
+                if (ConsoleInput.IsValid())
+                {
+                    FSlateApplication::Get().SetKeyboardFocus(
+                        ConsoleInput,
+                        EFocusCause::SetDirectly);
+                }
+                return;
+            }
+        }
+
+        RequestOnlineAssistant(command);
+        return;
+    }
+#endif
+
+    ExecuteConsoleCommand(command);
+}
+
+void SMiaIAEditorPanel::ExecuteConsoleCommand(const FString& Command)
+{
+    const FString command = Command.TrimStartAndEnd();
+
+    if (command.IsEmpty())
+    {
+        return;
+    }
+
     if (ConsoleCommandHistory.IsEmpty() ||
         ConsoleCommandHistory.Last() != command)
     {
@@ -9515,6 +9773,811 @@ void SMiaIAEditorPanel::HandleConsoleCommandCommitted(
             EFocusCause::SetDirectly);
     }
 }
+
+#if MIAIA_WITH_WIT_AI
+TSharedRef<SWidget> SMiaIAEditorPanel::BuildOnlineAssistantPanel(
+    const FSlateBrush* PanelBorder)
+{
+    return SNew(SBorder)
+        .BorderImage(PanelBorder)
+        .BorderBackgroundColor(this, &SMiaIAEditorPanel::PanelColor)
+        .Padding(FMargin(7.0f, 5.0f))
+        [
+            SNew(SVerticalBox)
+            + SVerticalBox::Slot()
+            .AutoHeight()
+            [
+                SNew(SHorizontalBox)
+                + SHorizontalBox::Slot()
+                .AutoWidth()
+                .VAlign(VAlign_Center)
+                .Padding(0.0f, 0.0f, 12.0f, 0.0f)
+                [
+                    SNew(STextBlock)
+                    .Text(LOCTEXT(
+                        "CommandAssistantHeading",
+                        "Command assistant"))
+                    .Font(FAppStyle::GetFontStyle(TEXT("SmallFontBold")))
+                ]
+                + SHorizontalBox::Slot()
+                .AutoWidth()
+                .VAlign(VAlign_Center)
+                [
+                    SNew(SCheckBox)
+                    .IsEnabled_Lambda([this]()
+                    {
+                        return OnlineAssistant &&
+                            OnlineAssistant->IsAvailable();
+                    })
+                    .IsChecked_Lambda([this]()
+                    {
+                        return bOnlineAssistantEnabled
+                            ? ECheckBoxState::Checked
+                            : ECheckBoxState::Unchecked;
+                    })
+                    .OnCheckStateChanged(
+                        this,
+                        &SMiaIAEditorPanel::
+                            HandleOnlineAssistantCheckChanged)
+                    .ToolTipText(LOCTEXT(
+                        "OnlineAssistantToggleTooltip",
+                        "When enabled, Console text is sent to Wit.ai/Meta for interpretation."))
+                    [
+                        SNew(STextBlock)
+                        .Text(LOCTEXT(
+                            "OnlineAssistantToggle",
+                            "Online"))
+                    ]
+                ]
+                + SHorizontalBox::Slot()
+                .AutoWidth()
+                .VAlign(VAlign_Center)
+                .Padding(12.0f, 0.0f, 0.0f, 0.0f)
+                [
+                    SNew(SCheckBox)
+                    .IsEnabled_Lambda([this]()
+                    {
+                        return bOnlineAssistantEnabled;
+                    })
+                    .IsChecked_Lambda([this]()
+                    {
+                        return bAssistantAutoConfirmFullyConfident
+                            ? ECheckBoxState::Checked
+                            : ECheckBoxState::Unchecked;
+                    })
+                    .OnCheckStateChanged(
+                        this,
+                        &SMiaIAEditorPanel::
+                            HandleAssistantAutoConfirmCheckChanged)
+                    .ToolTipText(LOCTEXT(
+                        "AssistantAutoConfirmTooltip",
+                        "Automatically execute a locally validated proposal only when the intent and every returned entity have exact 100% confidence."))
+                    [
+                        SNew(STextBlock)
+                        .Text(LOCTEXT(
+                            "AssistantAutoConfirmToggle",
+                            "Confident mode (exact 100% only)"))
+                    ]
+                ]
+            ]
+            + SVerticalBox::Slot()
+            .AutoHeight()
+            .Padding(0.0f, 5.0f, 0.0f, 0.0f)
+            [
+                SNew(SHorizontalBox)
+                + SHorizontalBox::Slot()
+                .AutoWidth()
+                .VAlign(VAlign_Center)
+                [
+                    SNew(STextBlock)
+                    .Text(LOCTEXT("AssistantLanguageLabel", "Language"))
+                ]
+                + SHorizontalBox::Slot()
+                .AutoWidth()
+                .VAlign(VAlign_Center)
+                .Padding(6.0f, 0.0f, 0.0f, 0.0f)
+                [
+                    SNew(SComboButton)
+                    .ComboButtonStyle(&ComboButtonStyle)
+                    .ToolTipText(LOCTEXT(
+                        "AssistantLanguageTooltip",
+                        "Choose the language-specific private Wit.ai application."))
+                    .ButtonContent()
+                    [
+                        SNew(STextBlock)
+                        .Text(
+                            this,
+                            &SMiaIAEditorPanel::AssistantLanguageText)
+                    ]
+                    .OnGetMenuContent(
+                        this,
+                        &SMiaIAEditorPanel::BuildAssistantLanguageMenu)
+                ]
+#if !UE_BUILD_SHIPPING
+                + SHorizontalBox::Slot()
+                .AutoWidth()
+                .VAlign(VAlign_Center)
+                .Padding(7.0f, 0.0f, 0.0f, 0.0f)
+                [
+                    SNew(SButton)
+                    .ButtonStyle(&ButtonStyle)
+                    .Text(LOCTEXT(
+                        "AssistantSettingsButton",
+                        "Settings"))
+                    .ToolTipText(LOCTEXT(
+                        "AssistantSettingsButtonTooltip",
+                        "Configure Development client tokens. Each token selects its private Wit.ai app."))
+                    .OnClicked(
+                        this,
+                        &SMiaIAEditorPanel::HandleToggleAssistantSettings)
+                ]
+#endif
+                + SHorizontalBox::Slot()
+                .FillWidth(1.0f)
+                .VAlign(VAlign_Center)
+                .Padding(12.0f, 0.0f, 0.0f, 0.0f)
+                [
+                    SNew(STextBlock)
+                    .Text(
+                        this,
+                        &SMiaIAEditorPanel::OnlineAssistantStatusText)
+                    .AutoWrapText(true)
+                ]
+            ]
+#if !UE_BUILD_SHIPPING
+            + SVerticalBox::Slot()
+            .AutoHeight()
+            .Padding(0.0f, 7.0f, 0.0f, 0.0f)
+            [
+                SNew(SBorder)
+                .BorderImage(PanelBorder)
+                .BorderBackgroundColor(
+                    this,
+                    &SMiaIAEditorPanel::PanelColor)
+                .Padding(8.0f)
+                .Visibility(
+                    this,
+                    &SMiaIAEditorPanel::AssistantSettingsVisibility)
+                [
+                    SNew(SVerticalBox)
+                    + SVerticalBox::Slot()
+                    .AutoHeight()
+                    [
+                        SNew(STextBlock)
+                        .Text(LOCTEXT(
+                            "AssistantCredentialWarning",
+                            "Development only - Client Access Tokens. Replacing a token switches its private Wit.ai app. Never enter a Server Access Token."))
+                        .AutoWrapText(true)
+                    ]
+                    + SVerticalBox::Slot()
+                    .AutoHeight()
+                    .Padding(0.0f, 7.0f, 0.0f, 2.0f)
+                    [
+                        SNew(STextBlock)
+                        .Text(LOCTEXT(
+                            "AssistantEnglishTokenLabel",
+                            "English Client Access Token"))
+                    ]
+                    + SVerticalBox::Slot()
+                    .AutoHeight()
+                    [
+                        SAssignNew(
+                            AssistantEnglishTokenInput,
+                            SEditableTextBox)
+                        .Style(&InputStyle)
+                        .IsPassword(true)
+                        .HintText(LOCTEXT(
+                            "AssistantEnglishTokenHint",
+                            "Blank keeps the packaged/environment default"))
+                    ]
+                    + SVerticalBox::Slot()
+                    .AutoHeight()
+                    .Padding(0.0f, 7.0f, 0.0f, 2.0f)
+                    [
+                        SNew(STextBlock)
+                        .Text(LOCTEXT(
+                            "AssistantItalianTokenLabel",
+                            "Italian Client Access Token"))
+                    ]
+                    + SVerticalBox::Slot()
+                    .AutoHeight()
+                    [
+                        SAssignNew(
+                            AssistantItalianTokenInput,
+                            SEditableTextBox)
+                        .Style(&InputStyle)
+                        .IsPassword(true)
+                        .HintText(LOCTEXT(
+                            "AssistantItalianTokenHint",
+                            "Blank keeps the packaged/environment default"))
+                    ]
+                    + SVerticalBox::Slot()
+                    .AutoHeight()
+                    .Padding(0.0f, 7.0f, 0.0f, 0.0f)
+                    [
+                        SNew(STextBlock)
+                        .Text(
+                            this,
+                            &SMiaIAEditorPanel::
+                                AssistantCredentialSummaryText)
+                        .AutoWrapText(true)
+                    ]
+                    + SVerticalBox::Slot()
+                    .AutoHeight()
+                    .HAlign(HAlign_Right)
+                    .Padding(0.0f, 8.0f, 0.0f, 0.0f)
+                    [
+                        SNew(SHorizontalBox)
+                        + SHorizontalBox::Slot()
+                        .AutoWidth()
+                        [
+                            SNew(SButton)
+                            .ButtonStyle(&ButtonStyle)
+                            .Text(LOCTEXT(
+                                "CancelAssistantSettings",
+                                "Cancel"))
+                            .OnClicked(
+                                this,
+                                &SMiaIAEditorPanel::
+                                    HandleCancelAssistantSettings)
+                        ]
+                        + SHorizontalBox::Slot()
+                        .AutoWidth()
+                        .Padding(6.0f, 0.0f, 0.0f, 0.0f)
+                        [
+                            SNew(SButton)
+                            .ButtonStyle(&ButtonStyle)
+                            .Text(LOCTEXT(
+                                "SaveAssistantSettings",
+                                "Save tokens"))
+                            .OnClicked(
+                                this,
+                                &SMiaIAEditorPanel::
+                                    HandleSaveAssistantSettings)
+                        ]
+                    ]
+                ]
+            ]
+#endif
+            + SVerticalBox::Slot()
+            .AutoHeight()
+            .Padding(0.0f, 7.0f, 0.0f, 0.0f)
+            [
+                SNew(SBorder)
+                .BorderImage(PanelBorder)
+                .BorderBackgroundColor(
+                    this,
+                    &SMiaIAEditorPanel::PanelColor)
+                .Padding(6.0f)
+                .Visibility(
+                    this,
+                    &SMiaIAEditorPanel::AssistantProposalVisibility)
+                [
+                    SNew(SVerticalBox)
+                    + SVerticalBox::Slot()
+                    .AutoHeight()
+                    [
+                        SNew(STextBlock)
+                        .Text(
+                            this,
+                            &SMiaIAEditorPanel::AssistantProposalText)
+                        .AutoWrapText(true)
+                    ]
+                    + SVerticalBox::Slot()
+                    .AutoHeight()
+                    .Padding(0.0f, 6.0f, 0.0f, 0.0f)
+                    [
+                        SNew(SHorizontalBox)
+                        + SHorizontalBox::Slot()
+                        .AutoWidth()
+                        [
+                            SNew(SButton)
+                            .ButtonStyle(&ButtonStyle)
+                            .Text(LOCTEXT(
+                                "ConfirmAssistantProposal",
+                                "Confirm command"))
+                            .OnClicked(
+                                this,
+                                &SMiaIAEditorPanel::
+                                    HandleConfirmAssistantProposal)
+                        ]
+                        + SHorizontalBox::Slot()
+                        .AutoWidth()
+                        .Padding(6.0f, 0.0f, 0.0f, 0.0f)
+                        [
+                            SNew(SButton)
+                            .ButtonStyle(&ButtonStyle)
+                            .Text(LOCTEXT(
+                                "DiscardAssistantProposal",
+                                "Discard"))
+                            .OnClicked(
+                                this,
+                                &SMiaIAEditorPanel::
+                                    HandleDiscardAssistantProposal)
+                        ]
+                    ]
+                ]
+            ]
+        ];
+}
+
+void SMiaIAEditorPanel::RebuildOnlineAssistantProvider()
+{
+    const FAssistantTokenResolution token = AssistantLanguage ==
+        EMiaIAAssistantLanguage::Italian
+        ? ResolveAssistantToken(
+            AssistantItalianTokenSettingsKey,
+            TEXT("MIAIA_WIT_TOKEN_IT"))
+        : ResolveAssistantToken(
+            AssistantEnglishTokenSettingsKey,
+            TEXT("MIAIA_WIT_TOKEN_EN"),
+            TEXT("MIAIA_WIT_TOKEN"));
+    const FString missingMessage = AssistantLanguage ==
+        EMiaIAAssistantLanguage::Italian
+        ? TEXT("No Italian client token configured. Open Assistant settings.")
+        : TEXT("No English client token configured. Open Assistant settings.");
+    OnlineAssistant = std::make_unique<FMiaIAWitCommandAssistant>(
+        token.Token,
+        missingMessage);
+    OnlineAssistantStatus = FromUtf8(
+        OnlineAssistant->AvailabilityMessage());
+}
+
+TSharedRef<SWidget> SMiaIAEditorPanel::BuildAssistantLanguageMenu()
+{
+    return SNew(SBox)
+        .WidthOverride(160.0f)
+        .Padding(4.0f)
+        [
+            SNew(SVerticalBox)
+            + SVerticalBox::Slot()
+            .AutoHeight()
+            [
+                SNew(SButton)
+                .ButtonStyle(&ButtonStyle)
+                .Text(LOCTEXT("AssistantLanguageEnglish", "English"))
+                .OnClicked(
+                    this,
+                    &SMiaIAEditorPanel::SelectAssistantLanguage,
+                    EMiaIAAssistantLanguage::English)
+            ]
+            + SVerticalBox::Slot()
+            .AutoHeight()
+            .Padding(0.0f, 3.0f, 0.0f, 0.0f)
+            [
+                SNew(SButton)
+                .ButtonStyle(&ButtonStyle)
+                .Text(LOCTEXT("AssistantLanguageItalian", "Italiano"))
+                .OnClicked(
+                    this,
+                    &SMiaIAEditorPanel::SelectAssistantLanguage,
+                    EMiaIAAssistantLanguage::Italian)
+            ]
+        ];
+}
+
+FReply SMiaIAEditorPanel::SelectAssistantLanguage(
+    EMiaIAAssistantLanguage InLanguage)
+{
+    FSlateApplication::Get().DismissAllMenus();
+
+    if (AssistantLanguage == InLanguage)
+    {
+        return FReply::Handled();
+    }
+
+    AssistantLanguage = InLanguage;
+    ++OnlineAssistantRequestSerial;
+    bOnlineAssistantEnabled = false;
+    bOnlineAssistantRequestPending = false;
+    bHasAssistantProposal = false;
+    AssistantProposal = {};
+    RebuildOnlineAssistantProvider();
+    RebuildConsoleSuggestions(
+        ConsoleInput.IsValid()
+            ? ConsoleInput->GetText().ToString()
+            : FString());
+    return FReply::Handled();
+}
+
+FText SMiaIAEditorPanel::AssistantLanguageText() const
+{
+    return AssistantLanguage == EMiaIAAssistantLanguage::Italian
+        ? LOCTEXT("AssistantLanguageItalian", "Italiano")
+        : LOCTEXT("AssistantLanguageEnglish", "English");
+}
+
+FReply SMiaIAEditorPanel::HandleToggleAssistantSettings()
+{
+    bAssistantSettingsExpanded = !bAssistantSettingsExpanded;
+
+    if (bAssistantSettingsExpanded)
+    {
+        if (AssistantEnglishTokenInput.IsValid())
+        {
+            AssistantEnglishTokenInput->SetText(FText::FromString(
+                LoadAssistantUserToken(
+                    AssistantEnglishTokenSettingsKey)));
+        }
+
+        if (AssistantItalianTokenInput.IsValid())
+        {
+            AssistantItalianTokenInput->SetText(FText::FromString(
+                LoadAssistantUserToken(
+                    AssistantItalianTokenSettingsKey)));
+        }
+    }
+
+    return FReply::Handled();
+}
+
+FReply SMiaIAEditorPanel::HandleSaveAssistantSettings()
+{
+    if (!AssistantEnglishTokenInput.IsValid() ||
+        !AssistantItalianTokenInput.IsValid())
+    {
+        return FReply::Handled();
+    }
+
+    SaveAssistantUserToken(
+        AssistantEnglishTokenSettingsKey,
+        AssistantEnglishTokenInput->GetText().ToString());
+    SaveAssistantUserToken(
+        AssistantItalianTokenSettingsKey,
+        AssistantItalianTokenInput->GetText().ToString());
+    ++OnlineAssistantRequestSerial;
+    bOnlineAssistantEnabled = false;
+    bOnlineAssistantRequestPending = false;
+    bHasAssistantProposal = false;
+    AssistantProposal = {};
+    bAssistantSettingsExpanded = false;
+    RebuildOnlineAssistantProvider();
+    return FReply::Handled();
+}
+
+FReply SMiaIAEditorPanel::HandleCancelAssistantSettings()
+{
+    bAssistantSettingsExpanded = false;
+    return FReply::Handled();
+}
+
+void SMiaIAEditorPanel::HandleOnlineAssistantCheckChanged(
+    ECheckBoxState NewState)
+{
+    const bool enable = NewState == ECheckBoxState::Checked;
+
+    if (enable &&
+        (!OnlineAssistant || !OnlineAssistant->IsAvailable()))
+    {
+        bOnlineAssistantEnabled = false;
+        OnlineAssistantStatus = OnlineAssistant
+            ? FromUtf8(OnlineAssistant->AvailabilityMessage())
+            : TEXT("The Wit.ai provider is unavailable.");
+        return;
+    }
+
+    bOnlineAssistantEnabled = enable;
+    ++OnlineAssistantRequestSerial;
+    bOnlineAssistantRequestPending = false;
+    bHasAssistantProposal = false;
+    AssistantProposal = {};
+    if (!enable)
+    {
+        OnlineAssistantStatus =
+            TEXT("Disabled. Console input executes exact MiaIA commands.");
+    }
+    else if (AssistantLanguage == EMiaIAAssistantLanguage::Italian)
+    {
+        OnlineAssistantStatus =
+            TEXT("Attivo. Inserisci una richiesta in italiano.");
+    }
+    else
+    {
+        OnlineAssistantStatus =
+            TEXT("Enabled. Enter an English request.");
+    }
+    RebuildConsoleSuggestions(
+        ConsoleInput.IsValid()
+            ? ConsoleInput->GetText().ToString()
+            : FString());
+}
+
+void SMiaIAEditorPanel::HandleAssistantAutoConfirmCheckChanged(
+    ECheckBoxState NewState)
+{
+    bAssistantAutoConfirmFullyConfident =
+        NewState == ECheckBoxState::Checked;
+    OnlineAssistantStatus = bAssistantAutoConfirmFullyConfident
+        ? TEXT("Confident mode enabled. Only exact 100% proposals auto-execute.")
+        : TEXT("Confident mode disabled. Every proposal requires confirmation.");
+}
+
+void SMiaIAEditorPanel::RequestOnlineAssistant(const FString& Text)
+{
+    if (bOnlineAssistantRequestPending || !OnlineAssistant ||
+        !OnlineAssistant->IsAvailable())
+    {
+        OnlineAssistantStatus = OnlineAssistant
+            ? FromUtf8(OnlineAssistant->AvailabilityMessage())
+            : TEXT("The Wit.ai provider is unavailable.");
+        return;
+    }
+
+    const FString requestText = Text.TrimStartAndEnd();
+    if (requestText.IsEmpty())
+    {
+        return;
+    }
+
+    if (ConsoleCommandHistory.IsEmpty() ||
+        ConsoleCommandHistory.Last() != requestText)
+    {
+        ConsoleCommandHistory.Add(requestText);
+    }
+
+    ConsoleHistoryIndex = ConsoleCommandHistory.Num();
+    ConsoleHistoryDraft.Empty();
+    bHasAssistantProposal = false;
+    AssistantProposal = {};
+    bOnlineAssistantRequestPending = true;
+    OnlineAssistantStatus = TEXT("Interpreting with Wit.ai...");
+    const uint64 requestSerial = ++OnlineAssistantRequestSerial;
+    ConsoleHistory += FString::Printf(
+        TEXT("\n? %s\nAssistant: interpreting...\n"),
+        *requestText);
+    UpdateConsoleOutput();
+    SetConsoleInputText(FString());
+
+    TWeakPtr<SMiaIAEditorPanel> weakThis = SharedThis(this);
+    const bool started = OnlineAssistant->Interpret(
+        std::string(TCHAR_TO_UTF8(*requestText)),
+        [weakThis, requestSerial](
+            MiaIA::Studio::CommandAssistantUnderstanding understanding)
+        {
+            AsyncTask(
+                ENamedThreads::GameThread,
+                [weakThis,
+                    requestSerial,
+                    understanding = std::move(understanding)]() mutable
+                {
+                    if (const TSharedPtr<SMiaIAEditorPanel> panel =
+                        weakThis.Pin())
+                    {
+                        panel->HandleOnlineAssistantResult(
+                            requestSerial,
+                            std::move(understanding));
+                    }
+                });
+        });
+
+    if (!started)
+    {
+        bOnlineAssistantRequestPending = false;
+        OnlineAssistantStatus =
+            TEXT("The Wit.ai request could not be started.");
+        ConsoleHistory +=
+            TEXT("Assistant: request could not be started.\n");
+        UpdateConsoleOutput();
+    }
+}
+
+void SMiaIAEditorPanel::HandleOnlineAssistantResult(
+    uint64 RequestSerial,
+    MiaIA::Studio::CommandAssistantUnderstanding Understanding)
+{
+    if (RequestSerial != OnlineAssistantRequestSerial ||
+        !bOnlineAssistantEnabled)
+    {
+        return;
+    }
+
+    bOnlineAssistantRequestPending = false;
+
+    if (!Understanding.Error.empty())
+    {
+        OnlineAssistantStatus = FromUtf8(Understanding.Error);
+
+        if (OnlineAssistantStatus.IsEmpty())
+        {
+            OnlineAssistantStatus =
+                TEXT("Wit.ai returned an unreadable diagnostic message.");
+        }
+
+        bHasAssistantProposal = false;
+        AssistantProposal = {};
+        ConsoleHistory += FString::Printf(
+            TEXT("Assistant: %s (intent: none, confidence: %.2f%%)\n"),
+            *OnlineAssistantStatus,
+            Understanding.Confidence * 100.0);
+        UpdateConsoleOutput();
+        return;
+    }
+
+    MiaIA::Studio::CommandProposal proposal;
+
+    if (!MiaIA::Studio::CommandAssistant::Propose(
+        Understanding,
+        proposal))
+    {
+        std::string error = proposal.Error;
+
+        if (error.empty())
+        {
+            error = "Wit.ai returned no usable intent or diagnostic message.";
+        }
+
+        AssistantProposal = std::move(proposal);
+        bHasAssistantProposal = false;
+        OnlineAssistantStatus = FromUtf8(error);
+        ConsoleHistory += FString::Printf(
+            TEXT("Assistant: %s (intent: %s, confidence: %.2f%%)\n"),
+            *OnlineAssistantStatus,
+            Understanding.Intent.empty()
+                ? TEXT("none")
+                : *FromUtf8(Understanding.Intent),
+            Understanding.Confidence * 100.0);
+        UpdateConsoleOutput();
+        return;
+    }
+
+    AssistantProposal = std::move(proposal);
+
+    if (bAssistantAutoConfirmFullyConfident &&
+        AssistantProposal.FullyConfident)
+    {
+        const FString command = FromUtf8(AssistantProposal.Command);
+        ConsoleHistory += TEXT(
+            "Assistant: exact 100% confidence; command auto-confirmed.\n");
+        bHasAssistantProposal = false;
+        AssistantProposal = {};
+        OnlineAssistantStatus =
+            TEXT("Command auto-confirmed at exact 100% confidence.");
+        ExecuteConsoleCommand(command);
+        return;
+    }
+
+    bHasAssistantProposal = true;
+    OnlineAssistantStatus =
+        TEXT("Review the proposed command before confirming it.");
+    ConsoleHistory += FString::Printf(
+        TEXT("Assistant proposed: %s\n"),
+        *FromUtf8(AssistantProposal.Command));
+    UpdateConsoleOutput();
+}
+
+FReply SMiaIAEditorPanel::HandleConfirmAssistantProposal()
+{
+    if (!bHasAssistantProposal || AssistantProposal.Command.empty())
+    {
+        return FReply::Handled();
+    }
+
+    const FString command = FromUtf8(AssistantProposal.Command);
+    bHasAssistantProposal = false;
+    AssistantProposal = {};
+    OnlineAssistantStatus =
+        AssistantLanguage == EMiaIAAssistantLanguage::Italian
+        ? TEXT("Comando confermato. Inserisci un'altra richiesta in italiano.")
+        : TEXT("Command confirmed. Enter another English request.");
+    ExecuteConsoleCommand(command);
+    return FReply::Handled();
+}
+
+FReply SMiaIAEditorPanel::HandleDiscardAssistantProposal()
+{
+    if (bHasAssistantProposal)
+    {
+        ConsoleHistory += TEXT("Assistant proposal discarded.\n");
+        UpdateConsoleOutput();
+    }
+
+    bHasAssistantProposal = false;
+    AssistantProposal = {};
+    OnlineAssistantStatus =
+        AssistantLanguage == EMiaIAAssistantLanguage::Italian
+        ? TEXT("Proposta scartata. Inserisci un'altra richiesta in italiano.")
+        : TEXT("Proposal discarded. Enter another English request.");
+    return FReply::Handled();
+}
+
+FText SMiaIAEditorPanel::OnlineAssistantStatusText() const
+{
+    return FText::FromString(OnlineAssistantStatus);
+}
+
+FText SMiaIAEditorPanel::AssistantProposalText() const
+{
+    if (!bHasAssistantProposal)
+    {
+        return FText::GetEmpty();
+    }
+
+    return FText::FromString(FString::Printf(
+        TEXT("Recognized: %s\nIntent: %s (%.2f%%)\nProposed command: %s"),
+        UTF8_TO_TCHAR(AssistantProposal.SourceText.c_str()),
+        UTF8_TO_TCHAR(AssistantProposal.Intent.c_str()),
+        AssistantProposal.Confidence * 100.0,
+        UTF8_TO_TCHAR(AssistantProposal.Command.c_str())));
+}
+
+FText SMiaIAEditorPanel::ConsoleInputHintText() const
+{
+    if (bOnlineAssistantEnabled && bHasAssistantProposal)
+    {
+        return AssistantLanguage == EMiaIAAssistantLanguage::Italian
+            ? LOCTEXT(
+                "OnlineAssistantConfirmationHintItalian",
+                "Scrivi conferma/si/ok oppure annulla/no/scarta")
+            : LOCTEXT(
+                "OnlineAssistantConfirmationHint",
+                "Type confirm/yes/ok or cancel/no/discard");
+    }
+
+    if (bOnlineAssistantEnabled &&
+        AssistantLanguage == EMiaIAAssistantLanguage::Italian)
+    {
+        return LOCTEXT(
+            "OnlineAssistantInputHintItalian",
+            "Descrivi un'azione MiaIA in italiano");
+    }
+
+    return bOnlineAssistantEnabled
+        ? LOCTEXT(
+            "OnlineAssistantInputHint",
+            "Describe a MiaIA action in English")
+        : LOCTEXT(
+            "ConsoleInputHint",
+            "Enter a MiaIA command and press Enter");
+}
+
+FText SMiaIAEditorPanel::ConsoleSendText() const
+{
+    if (bOnlineAssistantEnabled && bHasAssistantProposal)
+    {
+        return LOCTEXT("ConsoleAssistantRespond", "Respond");
+    }
+
+    return bOnlineAssistantEnabled
+        ? LOCTEXT("ConsoleInterpret", "Interpret")
+        : LOCTEXT("ConsoleSend", "Send");
+}
+
+FText SMiaIAEditorPanel::AssistantCredentialSummaryText() const
+{
+    const FAssistantTokenResolution english = ResolveAssistantToken(
+        AssistantEnglishTokenSettingsKey,
+        TEXT("MIAIA_WIT_TOKEN_EN"),
+        TEXT("MIAIA_WIT_TOKEN"));
+    const FAssistantTokenResolution italian = ResolveAssistantToken(
+        AssistantItalianTokenSettingsKey,
+        TEXT("MIAIA_WIT_TOKEN_IT"));
+    const FString englishStatus = english.Token.IsEmpty()
+        ? TEXT("not configured")
+        : english.Source;
+    const FString italianStatus = italian.Token.IsEmpty()
+        ? TEXT("not configured")
+        : italian.Source;
+    return FText::FromString(FString::Printf(
+        TEXT("Active sources - English: %s; Italian: %s. "
+             "Saving a blank field removes its user override."),
+        *englishStatus,
+        *italianStatus));
+}
+
+EVisibility SMiaIAEditorPanel::AssistantSettingsVisibility() const
+{
+    return bAssistantSettingsExpanded
+        ? EVisibility::Visible
+        : EVisibility::Collapsed;
+}
+
+EVisibility SMiaIAEditorPanel::AssistantProposalVisibility() const
+{
+    return bHasAssistantProposal
+        ? EVisibility::Visible
+        : EVisibility::Collapsed;
+}
+#endif
 
 void SMiaIAEditorPanel::HandleConsoleTextChanged(const FText& Text)
 {
@@ -9650,6 +10713,12 @@ void SMiaIAEditorPanel::RebuildConsoleSuggestions(
     }
 
     ConsoleSuggestionsContent->ClearChildren();
+#if MIAIA_WITH_WIT_AI
+    if (bOnlineAssistantEnabled)
+    {
+        return;
+    }
+#endif
     const std::size_t maximumResults =
         Input.TrimStartAndEnd().IsEmpty()
             ? std::numeric_limits<std::size_t>::max()

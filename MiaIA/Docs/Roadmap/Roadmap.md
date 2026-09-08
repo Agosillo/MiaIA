@@ -164,7 +164,10 @@ The precise version 3 contract and version 1/2 migration boundary are documented
 - added a lightweight network overview and automatic compact layer rendering for large topologies;
 - added reflected project/model-context snapshots and Blueprint context lifecycle operations;
 - added one graphical model-context selector shared by the editor and standalone Studio hosts;
+- added a normally compiled, runtime opt-in Wit.ai text assistant that maps provider-neutral intents to validated Console command proposals, requires explicit confirmation, and supports replaceable per-user or release-packaged Client Access Tokens for English and Italian private apps;
 - broaden Blueprint coverage to the remaining appropriate SDK operations;
+- add microphone capture and Wit.ai speech interpretation above the existing proposal contract;
+- add a local command-assistant provider when MiaIA's own language capabilities are mature enough;
 - refine the IDE command console with persistent history and asynchronous long-running execution;
 - render paged cross-layer relationship results directly on compact topology scenes;
 - expand neuron coloring beyond activation and current debug state;
@@ -179,6 +182,7 @@ The platform-neutral Studio application foundation, shared Unreal runtime host, 
 - extend the current sphere-and-cylinder 3D scene with filtering, paged compact-scene relationships, and richer layout tools;
 - persist user visualization layouts in future MiaIA workspace metadata rather than ONNX;
 - retain StudioCore as the shared application boundary for a possible future Qt frontend.
+- put public online-assistant credentials behind a controlled service boundary before enabling the feature in a Store release.
 
 ## Additional clients
 

@@ -10,6 +10,7 @@
 #include <onnx/onnx_pb.h>
 #include "TestHarness.h"
 #include "../CLI/Include/MiaIACommandProcessor.h"
+#include "../IDE/StudioCore/Include/CommandAssistant.h"
 #include "../IDE/StudioCore/Include/StudioController.h"
 #include "../SDK/Include/MiaIAClient.h"
 #include "../Core/Execution/Activation.h"
@@ -48,6 +49,160 @@ int main()
     using MiaIA::SDK::MiaIAClient;
 
     MiaIA::Tests::TestRunner runner;
+
+    runner.Run("Studio command assistant proposals", [&]()
+    {
+        using namespace MiaIA::Studio;
+
+        CommandProposal proposal;
+        CommandAssistantUnderstanding understanding{
+            "Create a model named XOR experiment",
+            "miaia_model_create",
+            0.98,
+            {
+                { "model_name", "model_name", "XOR experiment", 0.99 }
+            }
+        };
+
+        assert(CommandAssistant::Propose(understanding, proposal));
+        assert(proposal.Command == "model create \"XOR experiment\"");
+        assert(proposal.SourceText == understanding.Text);
+        assert(proposal.Intent == understanding.Intent);
+        assert(proposal.Confidence == understanding.Confidence);
+        assert(!proposal.FullyConfident);
+
+        understanding = {
+            "Show every model",
+            "miaia_model_list",
+            1.0,
+            {}
+        };
+        assert(CommandAssistant::Propose(understanding, proposal));
+        assert(proposal.Command == "model list");
+        assert(proposal.FullyConfident);
+
+        understanding = {
+            "Select model two",
+            "miaia_model_select",
+            1.0,
+            {
+                { "wit$number", "model_id", "2", 0.999999 }
+            }
+        };
+        assert(CommandAssistant::Propose(understanding, proposal));
+        assert(proposal.Command == "model select 2");
+        assert(!proposal.FullyConfident);
+
+        understanding = {
+            "Create a network with two inputs, four hidden neurons, "
+                "three hidden layers, and one output",
+            "miaia_network_create",
+            0.96,
+            {
+                { "inputs", {}, "2", 1.0 },
+                { "hidden_width", {}, "4", 1.0 },
+                { "hidden_layers", {}, "3", 1.0 },
+                { "outputs", {}, "1", 1.0 }
+            }
+        };
+        assert(CommandAssistant::Propose(understanding, proposal));
+        assert(proposal.Command == "create 2 4 3 1");
+
+        understanding = {
+            "Start twenty epochs at point zero one with shuffle seed 42",
+            "miaia_training_start",
+            0.94,
+            {
+                { "epochs", {}, "20", 1.0 },
+                { "learning_rate", {}, "0.01", 1.0 },
+                { "sample_order", {}, "shuffle", 1.0 },
+                { "seed", {}, "42", 1.0 }
+            }
+        };
+        assert(CommandAssistant::Propose(understanding, proposal));
+        assert(proposal.Command ==
+            "train session start 20 0.01 mse shuffle 42");
+
+        understanding = {
+            "Avvia venti epoche con ordine casuale e seed 42",
+            "miaia_training_start",
+            0.94,
+            {
+                { "epochs", {}, "20", 1.0 },
+                { "learning_rate", {}, "0.01", 1.0 },
+                { "sample_order", {}, "casuale", 1.0 },
+                { "seed", {}, "42", 1.0 }
+            }
+        };
+        assert(CommandAssistant::Propose(understanding, proposal));
+        assert(proposal.Command ==
+            "train session start 20 0.01 mse shuffle 42");
+
+        understanding = {
+            "Run every remaining training step",
+            "miaia_training_run",
+            0.91,
+            {}
+        };
+        assert(CommandAssistant::Propose(understanding, proposal));
+        assert(proposal.Command == "train session run all");
+
+        understanding = {
+            "Esegui tutti i passi rimanenti",
+            "miaia_training_run",
+            0.91,
+            {
+                { "steps", {}, "tutti", 1.0 }
+            }
+        };
+        assert(CommandAssistant::Propose(understanding, proposal));
+        assert(proposal.Command == "train session run all");
+
+        understanding = {
+            "Open my project",
+            "miaia_project_open",
+            0.93,
+            {
+                { "project_path", {}, "C:\\Models\\xor.mai", 1.0 }
+            }
+        };
+        assert(CommandAssistant::Propose(understanding, proposal));
+        assert(proposal.Command ==
+            "project open \"C:\\Models\\xor.mai\"");
+
+        understanding = {
+            "Maybe start training",
+            "miaia_training_start",
+            0.42,
+            {
+                { "epochs", {}, "20", 1.0 },
+                { "learning_rate", {}, "0.01", 1.0 }
+            }
+        };
+        assert(!CommandAssistant::Propose(understanding, proposal));
+        assert(proposal.Command.empty());
+        assert(proposal.Error.find("confidence") != std::string::npos);
+
+        understanding = {
+            "Create an unsafe model name",
+            "miaia_model_create",
+            0.99,
+            {
+                { "model_name", {}, "bad\"\nproject new", 1.0 }
+            }
+        };
+        assert(!CommandAssistant::Propose(understanding, proposal));
+        assert(proposal.Command.empty());
+
+        understanding = {
+            "Do something unsupported",
+            "miaia_unknown",
+            0.99,
+            {}
+        };
+        assert(!CommandAssistant::Propose(understanding, proposal));
+        assert(proposal.Error.find("not supported") != std::string::npos);
+    });
 
     runner.Run("Studio topology scenes", [&]()
     {

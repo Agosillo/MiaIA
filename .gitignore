@@ -268,6 +268,7 @@ ClientBin/
 *.jfm
 *.pfx
 *.publishsettings
+MiaIAAssistant.ini
 orleans.codegen.cs
 
 # Including strong name files can present a security risk

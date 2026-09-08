@@ -264,6 +264,8 @@ For a command that is already receiving values, the suggestion becomes a syntax 
 
 The editor calls the same reusable command processor as `Console.exe`; it does not start an external executable. This is important because the current SDK state is process-local. A network created with `create` in the panel is immediately visible in the topology, while a separate `Console.exe` process would own a different network.
 
+Normal Studio builds include the English/Italian Wit.ai text command assistant above this same execution path. Its controls live above the Console output, where a language selector chooses the corresponding private application and Client Access Token. Development settings can replace either token without recompiling; Shipping hides those settings and uses packaged defaults. It sends only the text entered while the online checkbox is enabled, presents the exact proposed command, and normally requires explicit confirmation. A second session-local checkbox may auto-confirm only locally valid results whose intent and every returned entity have exact `100%` confidence. It does not add AI behavior to Engine, SDK, or `.mai` persistence, and this first slice does not yet capture microphone audio. See the [online assistant guide](../Studio/OnlineAssistant.md) for its private-app setup, Visual Studio workflow, supported intents, credential configuration, and release packaging.
+
 A minimal editor-driven workflow is:
 
 ```text
@@ -384,6 +386,29 @@ Public downloads should use a Shipping archive rather than the Development archi
 ```powershell
 & .\Build\Package-Windows.ps1 -Configuration Shipping
 ```
+
+The online Wit.ai text assistant is included by default. To package shared
+English and Italian applications, provide both Client Access Tokens only to the
+packaging process:
+
+```powershell
+$env:MIAIA_WIT_TOKEN_EN = "YOUR_ENGLISH_CLIENT_ACCESS_TOKEN"
+$env:MIAIA_WIT_TOKEN_IT = "YOUR_ITALIAN_CLIENT_ACCESS_TOKEN"
+
+& .\Build\Package-Windows.ps1 `
+    -Configuration Shipping `
+    -OutputDirectory "D:\MiaIA-Releases\Windows-Shipping"
+```
+
+Use Client Access Tokens only; never package the Wit.ai Server Access Tokens.
+The packaging script writes the values only into an ignored deployment file
+beside the staged runtime executable. Development builds allow per-user token
+overrides for testing. Shipping and Store builds hide credential settings and use
+the packaged defaults; changing an app or token requires rebuilding the package,
+but not modifying source code.
+Pass `-DisableWitAI` only when an intentionally offline distribution is needed.
+See the [online assistant guide](../Studio/OnlineAssistant.md) for token precedence,
+security limits, and the Visual Studio workflow.
 
 If Unreal Engine is installed elsewhere, pass the installation root explicitly:
 

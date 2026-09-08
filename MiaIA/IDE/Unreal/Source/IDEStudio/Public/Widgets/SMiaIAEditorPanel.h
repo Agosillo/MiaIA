@@ -1,11 +1,18 @@
 #pragma once
 
 #include "Containers/Set.h"
+#include "CommandAssistant.h"
 #include "MiaIABlueprintTypes.h"
 #include "MiaIAInstanceService.h"
 #include "Styling/MiaIAEditorTheme.h"
 #include "Widgets/SCompoundWidget.h"
 #include "Widgets/MiaIAVisualizationSettings.h"
+
+#include <memory>
+
+#ifndef MIAIA_WITH_WIT_AI
+#define MIAIA_WITH_WIT_AI 0
+#endif
 
 class SMiaIANetworkView;
 class SMiaIA3DNetworkView;
@@ -14,6 +21,8 @@ class SMultiLineEditableText;
 class SScrollBar;
 class SVerticalBox;
 class SWidgetSwitcher;
+struct FSlateBrush;
+enum class ECheckBoxState : uint8;
 enum class EMiaIANeuronNavigationDirection : uint8;
 
 enum class EMiaIAStudioViewMode : uint8
@@ -39,6 +48,14 @@ enum class EMiaIAProjectPathAction : uint8
     ImportOnnx,
     ExportOnnx
 };
+
+#if MIAIA_WITH_WIT_AI
+enum class EMiaIAAssistantLanguage : uint8
+{
+    English,
+    Italian
+};
+#endif
 
 class IDESTUDIO_API SMiaIAEditorPanel final : public SCompoundWidget
 {
@@ -247,6 +264,33 @@ private:
         const FKeyEvent& KeyEvent);
     FReply HandleConsoleSend();
     FReply HandleClearConsoleOutput();
+    void ExecuteConsoleCommand(const FString& Command);
+#if MIAIA_WITH_WIT_AI
+    TSharedRef<SWidget> BuildOnlineAssistantPanel(
+        const FSlateBrush* PanelBorder);
+    void RebuildOnlineAssistantProvider();
+    TSharedRef<SWidget> BuildAssistantLanguageMenu();
+    FReply SelectAssistantLanguage(EMiaIAAssistantLanguage InLanguage);
+    FText AssistantLanguageText() const;
+    FReply HandleToggleAssistantSettings();
+    FReply HandleSaveAssistantSettings();
+    FReply HandleCancelAssistantSettings();
+    void HandleOnlineAssistantCheckChanged(ECheckBoxState NewState);
+    void HandleAssistantAutoConfirmCheckChanged(ECheckBoxState NewState);
+    void RequestOnlineAssistant(const FString& Text);
+    void HandleOnlineAssistantResult(
+        uint64 RequestSerial,
+        MiaIA::Studio::CommandAssistantUnderstanding Understanding);
+    FReply HandleConfirmAssistantProposal();
+    FReply HandleDiscardAssistantProposal();
+    FText OnlineAssistantStatusText() const;
+    FText AssistantProposalText() const;
+    FText ConsoleInputHintText() const;
+    FText ConsoleSendText() const;
+    FText AssistantCredentialSummaryText() const;
+    EVisibility AssistantSettingsVisibility() const;
+    EVisibility AssistantProposalVisibility() const;
+#endif
     FReply ApplyConsoleSuggestion(FString Completion);
     void RebuildConsoleSuggestions(const FString& Input);
     void SetConsoleInputText(const FString& Text);
@@ -348,6 +392,22 @@ private:
     TArray<FString> ConsoleCommandHistory;
     FString ConsoleHistoryDraft;
     FString FirstConsoleSuggestion;
+#if MIAIA_WITH_WIT_AI
+    std::unique_ptr<MiaIA::Studio::ICommandAssistantProvider>
+        OnlineAssistant;
+    EMiaIAAssistantLanguage AssistantLanguage{
+        EMiaIAAssistantLanguage::English};
+    MiaIA::Studio::CommandProposal AssistantProposal;
+    TSharedPtr<SEditableTextBox> AssistantEnglishTokenInput;
+    TSharedPtr<SEditableTextBox> AssistantItalianTokenInput;
+    FString OnlineAssistantStatus;
+    uint64 OnlineAssistantRequestSerial{};
+    bool bOnlineAssistantEnabled{};
+    bool bAssistantAutoConfirmFullyConfident{};
+    bool bOnlineAssistantRequestPending{};
+    bool bHasAssistantProposal{};
+    bool bAssistantSettingsExpanded{};
+#endif
     FText DialogTitle;
     FText DialogContent;
     int32 ConsoleHistoryIndex{};

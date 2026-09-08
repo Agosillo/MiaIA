@@ -5,7 +5,9 @@ param(
 
     [string] $EngineRoot = "D:\Epic Games\UE_5.8",
 
-    [string] $OutputDirectory
+    [string] $OutputDirectory,
+
+    [switch] $DisableWitAI
 )
 
 $ErrorActionPreference = "Stop"
@@ -22,6 +24,16 @@ if (-not (Test-Path -LiteralPath $projectFile -PathType Leaf))
 if (-not (Test-Path -LiteralPath $runUat -PathType Leaf))
 {
     throw "RunUAT.bat not found below EngineRoot: $runUat"
+}
+
+$englishClientToken = $env:MIAIA_WIT_TOKEN_EN
+$italianClientToken = $env:MIAIA_WIT_TOKEN_IT
+
+if (-not $DisableWitAI.IsPresent -and
+    ([string]::IsNullOrWhiteSpace($englishClientToken) -ne
+     [string]::IsNullOrWhiteSpace($italianClientToken)))
+{
+    throw "Set both MIAIA_WIT_TOKEN_EN and MIAIA_WIT_TOKEN_IT when packaging default Wit.ai credentials."
 }
 
 if ([string]::IsNullOrWhiteSpace($OutputDirectory))
@@ -57,8 +69,27 @@ Write-Host "Packaging MiaIA Studio ($Configuration)..."
 Write-Host "Engine:  $EngineRoot"
 Write-Host "Project: $projectFile"
 Write-Host "Output:  $archiveDirectory"
+Write-Host "Wit.ai:  $(-not $DisableWitAI.IsPresent)"
 
-& $runUat @arguments
+$previousWitBuildFlag = $env:MIAIA_WITH_WIT_AI
+
+try
+{
+    if ($DisableWitAI.IsPresent)
+    {
+        $env:MIAIA_WITH_WIT_AI = "0"
+    }
+    else
+    {
+        $env:MIAIA_WITH_WIT_AI = "1"
+    }
+
+    & $runUat @arguments
+}
+finally
+{
+    $env:MIAIA_WITH_WIT_AI = $previousWitBuildFlag
+}
 
 if ($LASTEXITCODE -ne 0)
 {
@@ -80,6 +111,29 @@ if ($null -eq $executable)
 }
 
 $packageDirectory = Split-Path -Parent $executable.FullName
+$runtimeExecutable = Get-ChildItem `
+    -LiteralPath $archiveDirectory `
+    -Filter "MiaIAStudio*.exe" `
+    -File `
+    -Recurse `
+    -ErrorAction SilentlyContinue |
+    Where-Object {
+        $_.FullName -match "[\\/]IDE[\\/]Binaries[\\/]Win64[\\/]"
+    } |
+    Select-Object -First 1
+$assistantConfigurationPaths = @(
+    (Join-Path $packageDirectory "MiaIAAssistant.ini")
+)
+
+if ($null -ne $runtimeExecutable)
+{
+    $assistantConfigurationPaths += Join-Path `
+        (Split-Path -Parent $runtimeExecutable.FullName) `
+        "MiaIAAssistant.ini"
+}
+
+$assistantConfigurationPaths = $assistantConfigurationPaths |
+    Select-Object -Unique
 $repositoryDirectory = [System.IO.Path]::GetFullPath(
     (Join-Path $projectDirectory "..\..\.."))
 $licenseOutputDirectory = Join-Path $packageDirectory "Licenses"
@@ -124,6 +178,34 @@ Copy-Item `
     -Destination $licenseOutputDirectory `
     -Recurse `
     -Force
+
+if (-not $DisableWitAI.IsPresent -and
+    (-not [string]::IsNullOrWhiteSpace($englishClientToken) -or
+     -not [string]::IsNullOrWhiteSpace($italianClientToken)))
+{
+    foreach ($assistantConfiguration in $assistantConfigurationPaths)
+    {
+        [System.IO.File]::WriteAllLines(
+            $assistantConfiguration,
+            @(
+                "[WitAI]",
+                "EnglishClientAccessToken=$englishClientToken",
+                "ItalianClientAccessToken=$italianClientToken"
+            ),
+            [System.Text.UTF8Encoding]::new($false))
+    }
+    Write-Host "Assistant: packaged English and Italian client credentials"
+}
+else
+{
+    foreach ($assistantConfiguration in $assistantConfigurationPaths)
+    {
+        if (Test-Path -LiteralPath $assistantConfiguration -PathType Leaf)
+        {
+            Remove-Item -LiteralPath $assistantConfiguration -Force
+        }
+    }
+}
 
 Write-Host "MiaIA Studio package completed successfully."
 Write-Host "Executable: $($executable.FullName)"
