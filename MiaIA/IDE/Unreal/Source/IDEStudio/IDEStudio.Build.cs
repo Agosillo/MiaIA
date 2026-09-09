@@ -24,9 +24,9 @@ public class IDEStudio : ModuleRules
             "UMG"
         });
 
-        // The online assistant is a normal Studio feature. Keep an explicit
-        // opt-out for restricted/offline builds, but do not make Visual Studio
-        // inherit a special environment variable just to compile the UI.
+        // Keep the experimental Wit.ai adapter available for comparison. The
+        // default provider is MiaIA Local; this flag controls only the current
+        // Unreal integration panel and its optional HTTP dependencies.
         bool WithWitAI = !string.Equals(
             Environment.GetEnvironmentVariable("MIAIA_WITH_WIT_AI"),
             "0",

@@ -3,6 +3,7 @@
 #if MIAIA_WITH_WIT_AI
 #include "Assistant/MiaIAWitCommandAssistant.h"
 #include "Async/Async.h"
+#include "LocalCommandAssistant.h"
 #endif
 #include "MiaIACommandProcessor.h"
 #include "MiaIABlueprintLibrary.h"
@@ -9821,12 +9822,12 @@ TSharedRef<SWidget> SMiaIAEditorPanel::BuildOnlineAssistantPanel(
                             HandleOnlineAssistantCheckChanged)
                     .ToolTipText(LOCTEXT(
                         "OnlineAssistantToggleTooltip",
-                        "When enabled, Console text is sent to Wit.ai/Meta for interpretation."))
+                        "Interpret natural-language Console text with the selected provider."))
                     [
                         SNew(STextBlock)
                         .Text(LOCTEXT(
                             "OnlineAssistantToggle",
-                            "Online"))
+                            "Enabled"))
                     ]
                 ]
                 + SHorizontalBox::Slot()
@@ -9870,6 +9871,32 @@ TSharedRef<SWidget> SMiaIAEditorPanel::BuildOnlineAssistantPanel(
                 .VAlign(VAlign_Center)
                 [
                     SNew(STextBlock)
+                    .Text(LOCTEXT("AssistantProviderLabel", "Provider"))
+                ]
+                + SHorizontalBox::Slot()
+                .AutoWidth()
+                .VAlign(VAlign_Center)
+                .Padding(6.0f, 0.0f, 14.0f, 0.0f)
+                [
+                    SNew(SComboButton)
+                    .ComboButtonStyle(&ComboButtonStyle)
+                    .ToolTipText(LOCTEXT(
+                        "AssistantProviderTooltip",
+                        "MiaIA Local runs offline. Wit.ai is an experimental online option."))
+                    .ButtonContent()
+                    [
+                        SNew(STextBlock)
+                        .Text(this, &SMiaIAEditorPanel::AssistantProviderText)
+                    ]
+                    .OnGetMenuContent(
+                        this,
+                        &SMiaIAEditorPanel::BuildAssistantProviderMenu)
+                ]
+                + SHorizontalBox::Slot()
+                .AutoWidth()
+                .VAlign(VAlign_Center)
+                [
+                    SNew(STextBlock)
                     .Text(LOCTEXT("AssistantLanguageLabel", "Language"))
                 ]
                 + SHorizontalBox::Slot()
@@ -9881,7 +9908,7 @@ TSharedRef<SWidget> SMiaIAEditorPanel::BuildOnlineAssistantPanel(
                     .ComboButtonStyle(&ComboButtonStyle)
                     .ToolTipText(LOCTEXT(
                         "AssistantLanguageTooltip",
-                        "Choose the language-specific private Wit.ai application."))
+                        "Choose the language used to interpret requests."))
                     .ButtonContent()
                     [
                         SNew(STextBlock)
@@ -9907,6 +9934,13 @@ TSharedRef<SWidget> SMiaIAEditorPanel::BuildOnlineAssistantPanel(
                     .ToolTipText(LOCTEXT(
                         "AssistantSettingsButtonTooltip",
                         "Configure Development client tokens. Each token selects its private Wit.ai app."))
+                    .Visibility_Lambda([this]()
+                    {
+                        return AssistantProvider ==
+                            EMiaIAAssistantProvider::WitAI
+                            ? EVisibility::Visible
+                            : EVisibility::Collapsed;
+                    })
                     .OnClicked(
                         this,
                         &SMiaIAEditorPanel::HandleToggleAssistantSettings)
@@ -10103,6 +10137,18 @@ TSharedRef<SWidget> SMiaIAEditorPanel::BuildOnlineAssistantPanel(
 
 void SMiaIAEditorPanel::RebuildOnlineAssistantProvider()
 {
+    if (AssistantProvider == EMiaIAAssistantProvider::Local)
+    {
+        OnlineAssistant =
+            std::make_unique<MiaIA::Studio::LocalCommandAssistant>(
+                AssistantLanguage == EMiaIAAssistantLanguage::Italian
+                    ? MiaIA::Studio::CommandAssistantLanguage::Italian
+                    : MiaIA::Studio::CommandAssistantLanguage::English);
+        OnlineAssistantStatus = FromUtf8(
+            OnlineAssistant->AvailabilityMessage());
+        return;
+    }
+
     const FAssistantTokenResolution token = AssistantLanguage ==
         EMiaIAAssistantLanguage::Italian
         ? ResolveAssistantToken(
@@ -10121,6 +10167,79 @@ void SMiaIAEditorPanel::RebuildOnlineAssistantProvider()
         missingMessage);
     OnlineAssistantStatus = FromUtf8(
         OnlineAssistant->AvailabilityMessage());
+}
+
+TSharedRef<SWidget> SMiaIAEditorPanel::BuildAssistantProviderMenu()
+{
+    return SNew(SBox)
+        .WidthOverride(210.0f)
+        .Padding(4.0f)
+        [
+            SNew(SVerticalBox)
+            + SVerticalBox::Slot()
+            .AutoHeight()
+            [
+                SNew(SButton)
+                .ButtonStyle(&ButtonStyle)
+                .Text(LOCTEXT("AssistantProviderLocal", "MiaIA Local"))
+                .ToolTipText(LOCTEXT(
+                    "AssistantProviderLocalTooltip",
+                    "Offline, deterministic and token-free."))
+                .OnClicked(
+                    this,
+                    &SMiaIAEditorPanel::SelectAssistantProvider,
+                    EMiaIAAssistantProvider::Local)
+            ]
+            + SVerticalBox::Slot()
+            .AutoHeight()
+            .Padding(0.0f, 3.0f, 0.0f, 0.0f)
+            [
+                SNew(SButton)
+                .ButtonStyle(&ButtonStyle)
+                .Text(LOCTEXT(
+                    "AssistantProviderWitAI",
+                    "Wit.ai (experimental)"))
+                .ToolTipText(LOCTEXT(
+                    "AssistantProviderWitAITooltip",
+                    "Online provider requiring a language-specific client token."))
+                .OnClicked(
+                    this,
+                    &SMiaIAEditorPanel::SelectAssistantProvider,
+                    EMiaIAAssistantProvider::WitAI)
+            ]
+        ];
+}
+
+FReply SMiaIAEditorPanel::SelectAssistantProvider(
+    EMiaIAAssistantProvider InProvider)
+{
+    FSlateApplication::Get().DismissAllMenus();
+
+    if (AssistantProvider == InProvider)
+    {
+        return FReply::Handled();
+    }
+
+    AssistantProvider = InProvider;
+    ++OnlineAssistantRequestSerial;
+    bOnlineAssistantEnabled = false;
+    bOnlineAssistantRequestPending = false;
+    bHasAssistantProposal = false;
+    bAssistantSettingsExpanded = false;
+    AssistantProposal = {};
+    RebuildOnlineAssistantProvider();
+    RebuildConsoleSuggestions(
+        ConsoleInput.IsValid()
+            ? ConsoleInput->GetText().ToString()
+            : FString());
+    return FReply::Handled();
+}
+
+FText SMiaIAEditorPanel::AssistantProviderText() const
+{
+    return AssistantProvider == EMiaIAAssistantProvider::WitAI
+        ? LOCTEXT("AssistantProviderWitAI", "Wit.ai (experimental)")
+        : LOCTEXT("AssistantProviderLocal", "MiaIA Local");
 }
 
 TSharedRef<SWidget> SMiaIAEditorPanel::BuildAssistantLanguageMenu()
@@ -10252,7 +10371,7 @@ void SMiaIAEditorPanel::HandleOnlineAssistantCheckChanged(
         bOnlineAssistantEnabled = false;
         OnlineAssistantStatus = OnlineAssistant
             ? FromUtf8(OnlineAssistant->AvailabilityMessage())
-            : TEXT("The Wit.ai provider is unavailable.");
+            : TEXT("The selected assistant provider is unavailable.");
         return;
     }
 
@@ -10299,7 +10418,7 @@ void SMiaIAEditorPanel::RequestOnlineAssistant(const FString& Text)
     {
         OnlineAssistantStatus = OnlineAssistant
             ? FromUtf8(OnlineAssistant->AvailabilityMessage())
-            : TEXT("The Wit.ai provider is unavailable.");
+            : TEXT("The selected assistant provider is unavailable.");
         return;
     }
 
@@ -10320,7 +10439,10 @@ void SMiaIAEditorPanel::RequestOnlineAssistant(const FString& Text)
     bHasAssistantProposal = false;
     AssistantProposal = {};
     bOnlineAssistantRequestPending = true;
-    OnlineAssistantStatus = TEXT("Interpreting with Wit.ai...");
+    OnlineAssistantStatus = AssistantProvider ==
+        EMiaIAAssistantProvider::Local
+        ? TEXT("Interpreting locally...")
+        : TEXT("Interpreting with Wit.ai...");
     const uint64 requestSerial = ++OnlineAssistantRequestSerial;
     ConsoleHistory += FString::Printf(
         TEXT("\n? %s\nAssistant: interpreting...\n"),
@@ -10354,7 +10476,7 @@ void SMiaIAEditorPanel::RequestOnlineAssistant(const FString& Text)
     {
         bOnlineAssistantRequestPending = false;
         OnlineAssistantStatus =
-            TEXT("The Wit.ai request could not be started.");
+            TEXT("The assistant request could not be started.");
         ConsoleHistory +=
             TEXT("Assistant: request could not be started.\n");
         UpdateConsoleOutput();
@@ -10380,7 +10502,7 @@ void SMiaIAEditorPanel::HandleOnlineAssistantResult(
         if (OnlineAssistantStatus.IsEmpty())
         {
             OnlineAssistantStatus =
-                TEXT("Wit.ai returned an unreadable diagnostic message.");
+                TEXT("The provider returned an unreadable diagnostic message.");
         }
 
         bHasAssistantProposal = false;
@@ -10403,7 +10525,7 @@ void SMiaIAEditorPanel::HandleOnlineAssistantResult(
 
         if (error.empty())
         {
-            error = "Wit.ai returned no usable intent or diagnostic message.";
+            error = "The provider returned no usable intent or diagnostic message.";
         }
 
         AssistantProposal = std::move(proposal);
@@ -10566,7 +10688,8 @@ FText SMiaIAEditorPanel::AssistantCredentialSummaryText() const
 
 EVisibility SMiaIAEditorPanel::AssistantSettingsVisibility() const
 {
-    return bAssistantSettingsExpanded
+    return bAssistantSettingsExpanded &&
+        AssistantProvider == EMiaIAAssistantProvider::WitAI
         ? EVisibility::Visible
         : EVisibility::Collapsed;
 }

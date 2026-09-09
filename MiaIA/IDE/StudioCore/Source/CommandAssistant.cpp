@@ -96,7 +96,10 @@ namespace
     {
         std::ostringstream stream;
         stream.imbue(std::locale::classic());
-        stream << std::setprecision(17) << value;
+        // Command text should stay human-readable. Fifteen significant digits
+        // preserve practical learning rates without exposing binary rounding
+        // artifacts such as 0.0050000000000000001.
+        stream << std::setprecision(15) << value;
         return stream.str();
     }
 
@@ -186,6 +189,30 @@ namespace
 
         if (intent == "miaia_network_create")
         {
+            const auto inputsEntity = FindValue(
+                understanding,
+                { "inputs", "input_count", "miaia_inputs" });
+            const auto hiddenWidthEntity = FindValue(
+                understanding,
+                { "hidden_width", "miaia_hidden_width" });
+            const auto hiddenLayersEntity = FindValue(
+                understanding,
+                { "hidden_layers", "miaia_hidden_layers" });
+            const auto outputsEntity = FindValue(
+                understanding,
+                { "outputs", "output_count", "miaia_outputs" });
+
+            // The console intentionally supports bare `create`, which uses
+            // its documented 10/32/2/3 defaults.  Once any topology value is
+            // supplied, however, require the complete shape so the assistant
+            // never guesses the remaining dimensions.
+            if (!inputsEntity && !hiddenWidthEntity &&
+                !hiddenLayersEntity && !outputsEntity)
+            {
+                command = "create";
+                return true;
+            }
+
             std::uint64_t inputs{};
             std::uint64_t hiddenWidth{};
             std::uint64_t hiddenLayers{};

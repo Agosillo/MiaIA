@@ -164,10 +164,10 @@ The precise version 3 contract and version 1/2 migration boundary are documented
 - added a lightweight network overview and automatic compact layer rendering for large topologies;
 - added reflected project/model-context snapshots and Blueprint context lifecycle operations;
 - added one graphical model-context selector shared by the editor and standalone Studio hosts;
-- added a normally compiled, runtime opt-in Wit.ai text assistant that maps provider-neutral intents to validated Console command proposals, requires explicit confirmation, and supports replaceable per-user or release-packaged Client Access Tokens for English and Italian private apps;
+- added a portable, offline `MiaIA Local` provider as the default English/Italian command assistant, with common native tests and the existing validated Console proposal path; retained Wit.ai as an experimental option with replaceable per-user or release-packaged Client Access Tokens;
 - broaden Blueprint coverage to the remaining appropriate SDK operations;
-- add microphone capture and Wit.ai speech interpretation above the existing proposal contract;
-- add a local command-assistant provider when MiaIA's own language capabilities are mature enough;
+- extend the local bilingual corpus across the full shared Console and then Studio-only interface actions;
+- add microphone capture and local speech transcription above the existing proposal contract;
 - refine the IDE command console with persistent history and asynchronous long-running execution;
 - render paged cross-layer relationship results directly on compact topology scenes;
 - expand neuron coloring beyond activation and current debug state;

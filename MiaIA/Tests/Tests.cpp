@@ -11,6 +11,7 @@
 #include "TestHarness.h"
 #include "../CLI/Include/MiaIACommandProcessor.h"
 #include "../IDE/StudioCore/Include/CommandAssistant.h"
+#include "../IDE/StudioCore/Include/LocalCommandAssistant.h"
 #include "../IDE/StudioCore/Include/StudioController.h"
 #include "../SDK/Include/MiaIAClient.h"
 #include "../Core/Execution/Activation.h"
@@ -202,6 +203,132 @@ int main()
         };
         assert(!CommandAssistant::Propose(understanding, proposal));
         assert(proposal.Error.find("not supported") != std::string::npos);
+    });
+
+    runner.Run("Local command assistant English and Italian", [&]()
+    {
+        using namespace MiaIA::Studio;
+
+        const auto expect = [](LocalCommandAssistant& assistant,
+            const std::string& text,
+            const std::string& intent,
+            const std::string& command)
+        {
+            CommandAssistantUnderstanding understanding;
+            bool completed{};
+            assert(assistant.Interpret(text,
+                [&](CommandAssistantUnderstanding value)
+                {
+                    understanding = std::move(value);
+                    completed = true;
+                }));
+            assert(completed);
+            assert(understanding.Error.empty());
+            if (understanding.Intent != intent)
+            {
+                throw std::runtime_error(
+                    "For '" + text + "' expected intent '" + intent +
+                    "' but received '" + understanding.Intent + "'.");
+            }
+            CommandProposal proposal;
+            assert(CommandAssistant::Propose(understanding, proposal));
+            if (proposal.Command != command)
+            {
+                throw std::runtime_error(
+                    "For '" + text + "' expected '" + command +
+                    "' but received '" + proposal.Command + "'.");
+            }
+        };
+
+        LocalCommandAssistant english(CommandAssistantLanguage::English);
+        assert(english.IsAvailable());
+        expect(english, "Show all models",
+            "miaia_model_list", "model list");
+        expect(english, "Create a model named Vision Model",
+            "miaia_model_create", "model create \"Vision Model\"");
+        expect(english, "Switch to model 3",
+            "miaia_model_select", "model select 3");
+        expect(english,
+            "Create a network with 2 inputs, 4 neurons per hidden layer, "
+            "1 hidden layer and 1 output",
+            "miaia_network_create", "create 2 4 1 1");
+        expect(english, "Create a network",
+            "miaia_network_create", "create");
+        expect(english,
+            "Start training for 200 epochs with learning rate 0.005 "
+            "using shuffle order and seed 7",
+            "miaia_training_start",
+            "train session start 200 0.005 mse shuffle 7");
+        expect(english, "Run 25 training steps",
+            "miaia_training_run", "train session run 25");
+        expect(english, "Pause model training",
+            "miaia_training_pause", "train session pause");
+        expect(english, "Interrupt the current training session",
+            "miaia_training_pause", "train session pause");
+        expect(english, "Resume the training session",
+            "miaia_training_resume", "train session resume");
+        expect(english, "Continue training until completion",
+            "miaia_training_run", "train session run all");
+        expect(english, "How is the training going?",
+            "miaia_training_status", "train session status");
+        expect(english, "Create a new project",
+            "miaia_project_new", "project new");
+        expect(english, "Open a fresh project",
+            "miaia_project_new", "project new");
+        expect(english, "Open project C:\\Projects\\iris.mai",
+            "miaia_project_open", "project open \"C:\\Projects\\iris.mai\"");
+        expect(english, "Save the current project",
+            "miaia_project_save", "project save");
+
+        CommandAssistantUnderstanding unknown;
+        assert(english.Interpret("Tell me a joke",
+            [&](CommandAssistantUnderstanding value)
+            {
+                unknown = std::move(value);
+            }));
+        assert(unknown.Intent.empty());
+        assert(!unknown.Error.empty());
+
+        LocalCommandAssistant italian(CommandAssistantLanguage::Italian);
+        expect(italian, "Mostra tutti i modelli",
+            "miaia_model_list", "model list");
+        expect(italian, "Mostrami i modelli",
+            "miaia_model_list", "model list");
+        expect(italian, "Elencami i modelli disponibili",
+            "miaia_model_list", "model list");
+        expect(italian, "Crea un modello chiamato Modello Ricerca",
+            "miaia_model_create", "model create \"Modello Ricerca\"");
+        expect(italian, "Seleziona il modello 4",
+            "miaia_model_select", "model select 4");
+        expect(italian,
+            "Crea una rete con 8 ingressi, 16 neuroni per livello nascosto, "
+            "3 livelli nascosti e 4 uscite",
+            "miaia_network_create", "create 8 16 3 4");
+        expect(italian, "Crea una rete",
+            "miaia_network_create", "create");
+        expect(italian,
+            "Avvia il training per 120 epoche con learning rate 0.015 "
+            "in ordine casuale con seed 0",
+            "miaia_training_start",
+            "train session start 120 0.015 mse shuffle 0");
+        expect(italian, "Esegui tutti i passi del training",
+            "miaia_training_run", "train session run all");
+        expect(italian, "Metti in pausa il training",
+            "miaia_training_pause", "train session pause");
+        expect(italian, "Interrompi la sessione corrente di training",
+            "miaia_training_pause", "train session pause");
+        expect(italian, "Riprendi il training",
+            "miaia_training_resume", "train session resume");
+        expect(italian, "Mostra lo stato del training",
+            "miaia_training_status", "train session status");
+        expect(italian, "Qual è lo stato del training?",
+            "miaia_training_status", "train session status");
+        expect(italian, "Crea un nuovo progetto",
+            "miaia_project_new", "project new");
+        expect(italian, "Apri il progetto D:\\Modelli\\atlante.mai",
+            "miaia_project_open", "project open \"D:\\Modelli\\atlante.mai\"");
+        expect(italian, "Salva il progetto corrente",
+            "miaia_project_save", "project save");
     });
 
     runner.Run("Studio topology scenes", [&]()

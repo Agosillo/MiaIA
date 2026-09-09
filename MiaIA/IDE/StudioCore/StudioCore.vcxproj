@@ -46,11 +46,13 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="Source\CommandAssistant.cpp" />
+    <ClCompile Include="Source\LocalCommandAssistant.cpp" />
     <ClCompile Include="Source\StudioController.cpp" />
     <ClCompile Include="Source\StudioTopology.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Include\CommandAssistant.h" />
+    <ClInclude Include="Include\LocalCommandAssistant.h" />
     <ClInclude Include="Include\StudioController.h" />
     <ClInclude Include="Include\StudioTopology.h" />
   </ItemGroup>

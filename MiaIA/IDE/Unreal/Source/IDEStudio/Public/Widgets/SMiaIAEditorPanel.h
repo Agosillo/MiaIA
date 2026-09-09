@@ -55,6 +55,12 @@ enum class EMiaIAAssistantLanguage : uint8
     English,
     Italian
 };
+
+enum class EMiaIAAssistantProvider : uint8
+{
+    Local,
+    WitAI
+};
 #endif
 
 class IDESTUDIO_API SMiaIAEditorPanel final : public SCompoundWidget
@@ -272,6 +278,9 @@ private:
     TSharedRef<SWidget> BuildAssistantLanguageMenu();
     FReply SelectAssistantLanguage(EMiaIAAssistantLanguage InLanguage);
     FText AssistantLanguageText() const;
+    TSharedRef<SWidget> BuildAssistantProviderMenu();
+    FReply SelectAssistantProvider(EMiaIAAssistantProvider InProvider);
+    FText AssistantProviderText() const;
     FReply HandleToggleAssistantSettings();
     FReply HandleSaveAssistantSettings();
     FReply HandleCancelAssistantSettings();
@@ -397,6 +406,8 @@ private:
         OnlineAssistant;
     EMiaIAAssistantLanguage AssistantLanguage{
         EMiaIAAssistantLanguage::English};
+    EMiaIAAssistantProvider AssistantProvider{
+        EMiaIAAssistantProvider::Local};
     MiaIA::Studio::CommandProposal AssistantProposal;
     TSharedPtr<SEditableTextBox> AssistantEnglishTokenInput;
     TSharedPtr<SEditableTextBox> AssistantItalianTokenInput;
