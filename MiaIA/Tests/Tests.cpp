@@ -306,6 +306,19 @@ int main()
             "miaia_network_create", "create 8 16 3 4");
         expect(italian, "Crea una rete",
             "miaia_network_create", "create");
+        CommandAssistantUnderstanding incompleteNetwork;
+        assert(italian.Interpret(
+            "Crea una rete 2 input 4 layer hidden 1 output",
+            [&](CommandAssistantUnderstanding value)
+            {
+                incompleteNetwork = std::move(value);
+            }));
+        assert(incompleteNetwork.Intent == "miaia_network_create");
+        CommandProposal incompleteProposal;
+        assert(!CommandAssistant::Propose(
+            incompleteNetwork,
+            incompleteProposal));
+        assert(!incompleteProposal.Error.empty());
         expect(italian,
             "Avvia il training per 120 epoche con learning rate 0.015 "
             "in ordine casuale con seed 0",
@@ -329,6 +342,102 @@ int main()
             "miaia_project_open", "project open \"D:\\Modelli\\atlante.mai\"");
         expect(italian, "Salva il progetto corrente",
             "miaia_project_save", "project save");
+    });
+
+    runner.Run("Local command assistant automatic language and learning", [&]()
+    {
+        using namespace MiaIA::Studio;
+
+        const auto interpret = [](LocalCommandAssistant& assistant,
+            const std::string& text)
+        {
+            CommandAssistantUnderstanding result;
+            bool completed{};
+            assert(assistant.Interpret(text,
+                [&](CommandAssistantUnderstanding value)
+                {
+                    result = std::move(value);
+                    completed = true;
+                }));
+            assert(completed);
+            return result;
+        };
+
+        LocalCommandAssistant automatic(CommandAssistantLanguage::Automatic);
+        auto english = interpret(automatic, "Show all models");
+        assert(english.Intent == "miaia_model_list");
+        auto italian = interpret(automatic, "Mostrami i modelli");
+        assert(italian.Intent == "miaia_model_list");
+        auto mixed = interpret(automatic, "Show lo stato del training");
+        assert(mixed.Intent == "miaia_training_status");
+
+        auto proposal = interpret(automatic, "Visualizza i modelli");
+        assert(proposal.Intent == "miaia_model_list");
+        assert(proposal.Confidence >= 0.70 && proposal.Confidence < 1.0);
+        assert(automatic.LearnValidated(
+            proposal.Text,
+            proposal.Intent));
+        const auto learned = interpret(automatic, "Visualizza i modelli");
+        assert(learned.Intent == "miaia_model_list");
+        assert(learned.Confidence == 1.0);
+        assert(automatic.LearnedExamples().size() == 1);
+
+        const std::string unknownText =
+            "Presentami l'architettura quantistica";
+        const auto unknown = interpret(automatic, unknownText);
+        assert(unknown.Intent.empty());
+        assert(!unknown.Error.empty());
+        assert(automatic.RecordUnknown(unknownText));
+        assert(automatic.PendingPhrases().size() == 1);
+        assert(automatic.RecordUnknown(unknownText));
+        assert(automatic.PendingPhrases().size() == 1);
+
+        const std::string corpus = automatic.ExportCorpus();
+        LocalCommandAssistant restored(CommandAssistantLanguage::Automatic);
+        std::string error;
+        assert(restored.ImportCorpus(corpus, error));
+        assert(error.empty());
+        assert(restored.LearnedExamples().size() == 1);
+        assert(restored.PendingPhrases().size() == 1);
+        assert(interpret(restored, "Visualizza i modelli").Confidence == 1.0);
+
+        assert(!restored.ImportCorpus("not a corpus", error));
+        assert(!error.empty());
+        assert(restored.LearnedExamples().size() == 1);
+        assert(restored.PendingPhrases().size() == 1);
+
+        assert(restored.ClassifyPending(
+            unknownText,
+            "miaia_help"));
+        assert(restored.PendingPhrases().empty());
+        const auto classified = interpret(restored, unknownText);
+        assert(classified.Intent == "miaia_help");
+        assert(classified.Confidence == 1.0);
+
+        assert(restored.MarkIncorrect(unknownText));
+        assert(restored.PendingPhrases().size() == 1);
+        assert(interpret(restored, unknownText).Intent.empty());
+        assert(restored.RemovePending(unknownText));
+        assert(restored.PendingPhrases().empty());
+
+        assert(restored.RecordUnknown("Elimina rete"));
+        assert(restored.MarkIncorrect(
+            "Mi crei una rete 2 input 4 layer hidden 1 output"));
+        assert(restored.PendingPhrases().size() == 2);
+        assert(restored.PendingPhrases().back().Text ==
+            "Mi crei una rete 2 input 4 layer hidden 1 output");
+
+        LocalCommandAssistant italianOnly(CommandAssistantLanguage::Italian);
+        assert(italianOnly.LearnValidated(
+            "Comando personale zeta",
+            "miaia_help"));
+        const std::string italianCorpus = italianOnly.ExportCorpus();
+        LocalCommandAssistant englishOnly(CommandAssistantLanguage::English);
+        assert(englishOnly.ImportCorpus(italianCorpus, error));
+        assert(interpret(englishOnly, "Comando personale zeta").Intent.empty());
+        englishOnly.SetLanguage(CommandAssistantLanguage::Automatic);
+        assert(interpret(englishOnly, "Comando personale zeta").Intent ==
+            "miaia_help");
     });
 
     runner.Run("Studio topology scenes", [&]()

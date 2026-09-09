@@ -9,11 +9,13 @@
 #include "MiaIABlueprintLibrary.h"
 #include "StudioTopology.h"
 #include "Framework/Application/SlateApplication.h"
+#include "HAL/FileManager.h"
 #include "HAL/PlatformMisc.h"
 #include "HAL/PlatformProcess.h"
 #include "InputCoreTypes.h"
 #include "Containers/UnrealString.h"
 #include "Misc/ConfigCacheIni.h"
+#include "Misc/FileHelper.h"
 #include "Misc/MessageDialog.h"
 #include "Misc/Paths.h"
 #include "Styling/AppStyle.h"
@@ -83,6 +85,8 @@ namespace
     constexpr TCHAR AssistantItalianTokenSettingsKey[] =
         TEXT("ItalianClientAccessToken");
     constexpr TCHAR AssistantPackagedSettingsSection[] = TEXT("WitAI");
+    constexpr TCHAR AssistantLocalCorpusRelativePath[] =
+        TEXT("MiaIA/CommandAssistant/local-corpus.miaia");
 #endif
     constexpr int32 MinimumTopologyLimit = 1;
     constexpr int32 MaximumDetailedNeuronLimit = 100000000;
@@ -180,6 +184,13 @@ namespace
         }
 
         GConfig->Flush(false, GGameUserSettingsIni);
+    }
+
+    FString LocalAssistantCorpusPath()
+    {
+        return FPaths::Combine(
+            FPaths::ProjectSavedDir(),
+            AssistantLocalCorpusRelativePath);
     }
 
     FString LoadAssistantPackagedToken(const TCHAR* Key)
@@ -10085,6 +10096,144 @@ TSharedRef<SWidget> SMiaIAEditorPanel::BuildOnlineAssistantPanel(
                 .Padding(6.0f)
                 .Visibility(
                     this,
+                    &SMiaIAEditorPanel::AssistantLearningVisibility)
+                [
+                    SNew(SVerticalBox)
+                    + SVerticalBox::Slot()
+                    .AutoHeight()
+                    [
+                        SNew(SHorizontalBox)
+                        + SHorizontalBox::Slot()
+                        .FillWidth(1.0f)
+                        .VAlign(VAlign_Center)
+                        [
+                            SNew(STextBlock)
+                            .Text(
+                                this,
+                                &SMiaIAEditorPanel::
+                                    AssistantLearningSummaryText)
+                            .AutoWrapText(true)
+                        ]
+                        + SHorizontalBox::Slot()
+                        .AutoWidth()
+                        .Padding(6.0f, 0.0f, 0.0f, 0.0f)
+                        [
+                            SNew(SButton)
+                            .ButtonStyle(&ButtonStyle)
+                            .Text(LOCTEXT(
+                                "AssistantReviewLearning",
+                                "Review"))
+                            .OnClicked(
+                                this,
+                                &SMiaIAEditorPanel::
+                                    HandleToggleAssistantLearning)
+                        ]
+                    ]
+                    + SVerticalBox::Slot()
+                    .AutoHeight()
+                    .Padding(0.0f, 7.0f, 0.0f, 0.0f)
+                    [
+                        SNew(SVerticalBox)
+                        .Visibility(
+                            this,
+                            &SMiaIAEditorPanel::
+                                AssistantLearningPanelVisibility)
+                        + SVerticalBox::Slot()
+                        .AutoHeight()
+                        [
+                            SNew(STextBlock)
+                            .Text(
+                                this,
+                                &SMiaIAEditorPanel::
+                                    AssistantPendingPhraseText)
+                            .AutoWrapText(true)
+                        ]
+                        + SVerticalBox::Slot()
+                        .AutoHeight()
+                        .Padding(0.0f, 6.0f, 0.0f, 0.0f)
+                        [
+                            SNew(SHorizontalBox)
+                            + SHorizontalBox::Slot()
+                            .FillWidth(1.0f)
+                            [
+                                SNew(SComboButton)
+                                .ComboButtonStyle(&ComboButtonStyle)
+                                .IsEnabled_Lambda([this]()
+                                {
+                                    const auto* assistant = LocalAssistant();
+                                    return assistant &&
+                                        !assistant->PendingPhrases().empty();
+                                })
+                                .ButtonContent()
+                                [
+                                    SNew(STextBlock)
+                                    .Text(
+                                        this,
+                                        &SMiaIAEditorPanel::
+                                            AssistantPendingIntentText)
+                                ]
+                                .OnGetMenuContent(
+                                    this,
+                                    &SMiaIAEditorPanel::
+                                        BuildPendingAssistantIntentMenu)
+                            ]
+                            + SHorizontalBox::Slot()
+                            .AutoWidth()
+                            .Padding(6.0f, 0.0f, 0.0f, 0.0f)
+                            [
+                                SNew(SButton)
+                                .ButtonStyle(&ButtonStyle)
+                                .Text(LOCTEXT(
+                                    "AssistantValidatePending",
+                                    "Validate"))
+                                .IsEnabled_Lambda([this]()
+                                {
+                                    const auto* assistant = LocalAssistant();
+                                    return assistant &&
+                                        !assistant->PendingPhrases().empty() &&
+                                        !AssistantPendingIntentSelection.IsEmpty();
+                                })
+                                .OnClicked(
+                                    this,
+                                    &SMiaIAEditorPanel::
+                                        HandleValidatePendingAssistantPhrase)
+                            ]
+                            + SHorizontalBox::Slot()
+                            .AutoWidth()
+                            .Padding(6.0f, 0.0f, 0.0f, 0.0f)
+                            [
+                                SNew(SButton)
+                                .ButtonStyle(&ButtonStyle)
+                                .Text(LOCTEXT(
+                                    "AssistantDeletePending",
+                                    "Delete"))
+                                .IsEnabled_Lambda([this]()
+                                {
+                                    const auto* assistant = LocalAssistant();
+                                    return assistant &&
+                                        !assistant->PendingPhrases().empty();
+                                })
+                                .OnClicked(
+                                    this,
+                                    &SMiaIAEditorPanel::
+                                        HandleDeletePendingAssistantPhrase)
+                            ]
+                        ]
+                    ]
+                ]
+            ]
+            + SVerticalBox::Slot()
+            .AutoHeight()
+            .Padding(0.0f, 7.0f, 0.0f, 0.0f)
+            [
+                SNew(SBorder)
+                .BorderImage(PanelBorder)
+                .BorderBackgroundColor(
+                    this,
+                    &SMiaIAEditorPanel::PanelColor)
+                .Padding(6.0f)
+                .Visibility(
+                    this,
                     &SMiaIAEditorPanel::AssistantProposalVisibility)
                 [
                     SNew(SVerticalBox)
@@ -10129,6 +10278,27 @@ TSharedRef<SWidget> SMiaIAEditorPanel::BuildOnlineAssistantPanel(
                                 &SMiaIAEditorPanel::
                                     HandleDiscardAssistantProposal)
                         ]
+                        + SHorizontalBox::Slot()
+                        .AutoWidth()
+                        .Padding(6.0f, 0.0f, 0.0f, 0.0f)
+                        [
+                            SNew(SButton)
+                            .ButtonStyle(&ButtonStyle)
+                            .Text(LOCTEXT(
+                                "IncorrectAssistantProposal",
+                                "Wrong interpretation"))
+                            .Visibility_Lambda([this]()
+                            {
+                                return AssistantProvider ==
+                                    EMiaIAAssistantProvider::Local
+                                    ? EVisibility::Visible
+                                    : EVisibility::Collapsed;
+                            })
+                            .OnClicked(
+                                this,
+                                &SMiaIAEditorPanel::
+                                    HandleIncorrectAssistantProposal)
+                        ]
                     ]
                 ]
             ]
@@ -10139,13 +10309,20 @@ void SMiaIAEditorPanel::RebuildOnlineAssistantProvider()
 {
     if (AssistantProvider == EMiaIAAssistantProvider::Local)
     {
-        OnlineAssistant =
-            std::make_unique<MiaIA::Studio::LocalCommandAssistant>(
-                AssistantLanguage == EMiaIAAssistantLanguage::Italian
-                    ? MiaIA::Studio::CommandAssistantLanguage::Italian
-                    : MiaIA::Studio::CommandAssistantLanguage::English);
-        OnlineAssistantStatus = FromUtf8(
-            OnlineAssistant->AvailabilityMessage());
+        const auto language = AssistantLanguage ==
+            EMiaIAAssistantLanguage::Italian
+            ? MiaIA::Studio::CommandAssistantLanguage::Italian
+            : AssistantLanguage == EMiaIAAssistantLanguage::English
+                ? MiaIA::Studio::CommandAssistantLanguage::English
+                : MiaIA::Studio::CommandAssistantLanguage::Automatic;
+        auto assistant =
+            std::make_unique<MiaIA::Studio::LocalCommandAssistant>(language);
+        FString loadError;
+        LoadLocalAssistantCorpus(*assistant, loadError);
+        OnlineAssistant = std::move(assistant);
+        OnlineAssistantStatus = loadError.IsEmpty()
+            ? FromUtf8(OnlineAssistant->AvailabilityMessage())
+            : loadError;
         return;
     }
 
@@ -10221,6 +10398,13 @@ FReply SMiaIAEditorPanel::SelectAssistantProvider(
     }
 
     AssistantProvider = InProvider;
+    if (AssistantProvider == EMiaIAAssistantProvider::WitAI &&
+        AssistantLanguage == EMiaIAAssistantLanguage::Automatic)
+    {
+        // Wit.ai uses separate language-specific applications and cannot
+        // evaluate both corpora in one request.
+        AssistantLanguage = EMiaIAAssistantLanguage::English;
+    }
     ++OnlineAssistantRequestSerial;
     bOnlineAssistantEnabled = false;
     bOnlineAssistantRequestPending = false;
@@ -10245,12 +10429,34 @@ FText SMiaIAEditorPanel::AssistantProviderText() const
 TSharedRef<SWidget> SMiaIAEditorPanel::BuildAssistantLanguageMenu()
 {
     return SNew(SBox)
-        .WidthOverride(160.0f)
+        .WidthOverride(210.0f)
         .Padding(4.0f)
         [
             SNew(SVerticalBox)
             + SVerticalBox::Slot()
             .AutoHeight()
+            [
+                SNew(SButton)
+                .ButtonStyle(&ButtonStyle)
+                .Text(LOCTEXT(
+                    "AssistantLanguageAutomatic",
+                    "Auto (English + Italiano)"))
+                .ToolTipText(LOCTEXT(
+                    "AssistantLanguageAutomaticTooltip",
+                    "MiaIA Local evaluates English, Italian and mixed phrases together."))
+                .IsEnabled_Lambda([this]()
+                {
+                    return AssistantProvider ==
+                        EMiaIAAssistantProvider::Local;
+                })
+                .OnClicked(
+                    this,
+                    &SMiaIAEditorPanel::SelectAssistantLanguage,
+                    EMiaIAAssistantLanguage::Automatic)
+            ]
+            + SVerticalBox::Slot()
+            .AutoHeight()
+            .Padding(0.0f, 3.0f, 0.0f, 0.0f)
             [
                 SNew(SButton)
                 .ButtonStyle(&ButtonStyle)
@@ -10301,7 +10507,11 @@ FReply SMiaIAEditorPanel::SelectAssistantLanguage(
 
 FText SMiaIAEditorPanel::AssistantLanguageText() const
 {
-    return AssistantLanguage == EMiaIAAssistantLanguage::Italian
+    return AssistantLanguage == EMiaIAAssistantLanguage::Automatic
+        ? LOCTEXT(
+            "AssistantLanguageAutomatic",
+            "Auto (English + Italiano)")
+        : AssistantLanguage == EMiaIAAssistantLanguage::Italian
         ? LOCTEXT("AssistantLanguageItalian", "Italiano")
         : LOCTEXT("AssistantLanguageEnglish", "English");
 }
@@ -10389,6 +10599,11 @@ void SMiaIAEditorPanel::HandleOnlineAssistantCheckChanged(
     {
         OnlineAssistantStatus =
             TEXT("Attivo. Inserisci una richiesta in italiano.");
+    }
+    else if (AssistantLanguage == EMiaIAAssistantLanguage::Automatic)
+    {
+        OnlineAssistantStatus =
+            TEXT("Active. English, Italian and mixed requests are accepted.");
     }
     else
     {
@@ -10498,6 +10713,17 @@ void SMiaIAEditorPanel::HandleOnlineAssistantResult(
     if (!Understanding.Error.empty())
     {
         OnlineAssistantStatus = FromUtf8(Understanding.Error);
+        bool queuedForReview{};
+        if (auto* assistant = LocalAssistant())
+        {
+            queuedForReview = assistant->RecordUnknown(Understanding.Text);
+            if (queuedForReview)
+            {
+                SaveLocalAssistantCorpus();
+                OnlineAssistantStatus += TEXT(
+                    " Saved locally for classification.");
+            }
+        }
 
         if (OnlineAssistantStatus.IsEmpty())
         {
@@ -10575,12 +10801,42 @@ FReply SMiaIAEditorPanel::HandleConfirmAssistantProposal()
     }
 
     const FString command = FromUtf8(AssistantProposal.Command);
+    bool learned{};
+    if (AssistantProposal.Confidence < 1.0)
+    {
+        if (auto* assistant = LocalAssistant())
+        {
+            learned = assistant->LearnValidated(
+                AssistantProposal.SourceText,
+                AssistantProposal.Intent);
+            if (learned)
+            {
+                SaveLocalAssistantCorpus();
+            }
+        }
+    }
     bHasAssistantProposal = false;
     AssistantProposal = {};
-    OnlineAssistantStatus =
-        AssistantLanguage == EMiaIAAssistantLanguage::Italian
-        ? TEXT("Comando confermato. Inserisci un'altra richiesta in italiano.")
-        : TEXT("Command confirmed. Enter another English request.");
+    if (learned)
+    {
+        OnlineAssistantStatus =
+            TEXT("Command confirmed and learned locally at 100% confidence.");
+    }
+    else if (AssistantLanguage == EMiaIAAssistantLanguage::Automatic)
+    {
+        OnlineAssistantStatus =
+            TEXT("Command confirmed. English, Italian and mixed requests are accepted.");
+    }
+    else if (AssistantLanguage == EMiaIAAssistantLanguage::Italian)
+    {
+        OnlineAssistantStatus =
+            TEXT("Comando confermato. Inserisci un'altra richiesta in italiano.");
+    }
+    else
+    {
+        OnlineAssistantStatus =
+            TEXT("Command confirmed. Enter another English request.");
+    }
     ExecuteConsoleCommand(command);
     return FReply::Handled();
 }
@@ -10596,10 +10852,242 @@ FReply SMiaIAEditorPanel::HandleDiscardAssistantProposal()
     bHasAssistantProposal = false;
     AssistantProposal = {};
     OnlineAssistantStatus =
-        AssistantLanguage == EMiaIAAssistantLanguage::Italian
+        AssistantLanguage == EMiaIAAssistantLanguage::Automatic
+        ? TEXT("Proposal discarded. English, Italian and mixed requests are accepted.")
+        : AssistantLanguage == EMiaIAAssistantLanguage::Italian
         ? TEXT("Proposta scartata. Inserisci un'altra richiesta in italiano.")
         : TEXT("Proposal discarded. Enter another English request.");
     return FReply::Handled();
+}
+
+FReply SMiaIAEditorPanel::HandleIncorrectAssistantProposal()
+{
+    if (!bHasAssistantProposal)
+        return FReply::Handled();
+
+    if (auto* assistant = LocalAssistant())
+    {
+        assistant->MarkIncorrect(AssistantProposal.SourceText);
+        SaveLocalAssistantCorpus();
+        bAssistantLearningExpanded = true;
+        ConsoleHistory += TEXT(
+            "Assistant interpretation marked as wrong and queued for classification.\n");
+        UpdateConsoleOutput();
+    }
+
+    bHasAssistantProposal = false;
+    AssistantProposal = {};
+    AssistantPendingIntentSelection.Empty();
+    OnlineAssistantStatus =
+        TEXT("The rejected phrase is ready for supervised classification.");
+    return FReply::Handled();
+}
+
+MiaIA::Studio::LocalCommandAssistant*
+SMiaIAEditorPanel::LocalAssistant()
+{
+    return AssistantProvider == EMiaIAAssistantProvider::Local &&
+        OnlineAssistant
+        ? static_cast<MiaIA::Studio::LocalCommandAssistant*>(
+            OnlineAssistant.get())
+        : nullptr;
+}
+
+const MiaIA::Studio::LocalCommandAssistant*
+SMiaIAEditorPanel::LocalAssistant() const
+{
+    return AssistantProvider == EMiaIAAssistantProvider::Local &&
+        OnlineAssistant
+        ? static_cast<const MiaIA::Studio::LocalCommandAssistant*>(
+            OnlineAssistant.get())
+        : nullptr;
+}
+
+void SMiaIAEditorPanel::LoadLocalAssistantCorpus(
+    MiaIA::Studio::LocalCommandAssistant& Assistant,
+    FString& Error) const
+{
+    Error.Empty();
+    const FString path = LocalAssistantCorpusPath();
+    if (!FPaths::FileExists(path))
+        return;
+
+    FString serialized;
+    if (!FFileHelper::LoadFileToString(serialized, *path))
+    {
+        Error = TEXT("MiaIA Local is ready, but its corpus could not be read.");
+        return;
+    }
+
+    const FTCHARToUTF8 utf8(*serialized);
+    std::string importError;
+    if (!Assistant.ImportCorpus(
+        std::string_view(utf8.Get(), utf8.Length()),
+        importError))
+    {
+        Error = FString::Printf(
+            TEXT("MiaIA Local is ready, but its corpus was ignored: %s"),
+            *FromUtf8(importError));
+    }
+}
+
+bool SMiaIAEditorPanel::SaveLocalAssistantCorpus()
+{
+    const auto* assistant = LocalAssistant();
+    if (!assistant)
+        return false;
+
+    const FString path = LocalAssistantCorpusPath();
+    if (!IFileManager::Get().MakeDirectory(
+        *FPaths::GetPath(path),
+        true))
+    {
+        return false;
+    }
+
+    return FFileHelper::SaveStringToFile(
+        FromUtf8(assistant->ExportCorpus()),
+        *path,
+        FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM);
+}
+
+FReply SMiaIAEditorPanel::HandleToggleAssistantLearning()
+{
+    bAssistantLearningExpanded = !bAssistantLearningExpanded;
+    return FReply::Handled();
+}
+
+TSharedRef<SWidget> SMiaIAEditorPanel::BuildPendingAssistantIntentMenu()
+{
+    TSharedRef<SVerticalBox> menu = SNew(SVerticalBox);
+    for (const std::string_view intent :
+        MiaIA::Studio::LocalCommandAssistant::SupportedIntents())
+    {
+        const FString value = FromUtf8(std::string(intent));
+        menu->AddSlot()
+        .AutoHeight()
+        .Padding(0.0f, 0.0f, 0.0f, 2.0f)
+        [
+            SNew(SButton)
+            .ButtonStyle(&ButtonStyle)
+            .Text(FText::FromString(value))
+            .OnClicked(
+                this,
+                &SMiaIAEditorPanel::HandleSelectPendingAssistantIntent,
+                value)
+        ];
+    }
+
+    return SNew(SBox)
+        .WidthOverride(260.0f)
+        .MaxDesiredHeight(420.0f)
+        [
+            SNew(SScrollBox)
+            + SScrollBox::Slot()
+            [
+                menu
+            ]
+        ];
+}
+
+FReply SMiaIAEditorPanel::HandleSelectPendingAssistantIntent(FString Intent)
+{
+    FSlateApplication::Get().DismissAllMenus();
+    AssistantPendingIntentSelection = std::move(Intent);
+    return FReply::Handled();
+}
+
+FReply SMiaIAEditorPanel::HandleValidatePendingAssistantPhrase()
+{
+    auto* assistant = LocalAssistant();
+    if (!assistant || assistant->PendingPhrases().empty() ||
+        AssistantPendingIntentSelection.IsEmpty())
+    {
+        return FReply::Handled();
+    }
+
+    const std::string phrase = assistant->PendingPhrases().back().Text;
+    const std::string intent(
+        TCHAR_TO_UTF8(*AssistantPendingIntentSelection));
+    if (assistant->ClassifyPending(phrase, intent) &&
+        SaveLocalAssistantCorpus())
+    {
+        OnlineAssistantStatus =
+            TEXT("Phrase validated. It will now match at 100% confidence.");
+    }
+    else
+    {
+        OnlineAssistantStatus =
+            TEXT("The pending phrase could not be validated or saved.");
+    }
+    AssistantPendingIntentSelection.Empty();
+    return FReply::Handled();
+}
+
+FReply SMiaIAEditorPanel::HandleDeletePendingAssistantPhrase()
+{
+    auto* assistant = LocalAssistant();
+    if (!assistant || assistant->PendingPhrases().empty())
+        return FReply::Handled();
+
+    const std::string phrase = assistant->PendingPhrases().back().Text;
+    if (assistant->RemovePending(phrase) && SaveLocalAssistantCorpus())
+        OnlineAssistantStatus = TEXT("Pending phrase deleted.");
+    else
+        OnlineAssistantStatus = TEXT("The pending phrase could not be deleted.");
+    AssistantPendingIntentSelection.Empty();
+    return FReply::Handled();
+}
+
+FText SMiaIAEditorPanel::AssistantLearningSummaryText() const
+{
+    const auto* assistant = LocalAssistant();
+    if (!assistant)
+        return FText::GetEmpty();
+
+    return FText::FromString(FString::Printf(
+        TEXT("Local learning: %llu validated | %llu to classify"),
+        static_cast<unsigned long long>(assistant->LearnedExamples().size()),
+        static_cast<unsigned long long>(assistant->PendingPhrases().size())));
+}
+
+FText SMiaIAEditorPanel::AssistantPendingPhraseText() const
+{
+    const auto* assistant = LocalAssistant();
+    if (!assistant || assistant->PendingPhrases().empty())
+    {
+        return LOCTEXT(
+            "AssistantNoPendingPhrases",
+            "No phrases are waiting for classification.");
+    }
+
+    return FText::FromString(FString::Printf(
+        TEXT("Most recent phrase to classify (%llu queued):\n%s"),
+        static_cast<unsigned long long>(
+            assistant->PendingPhrases().size()),
+        *FromUtf8(assistant->PendingPhrases().back().Text)));
+}
+
+FText SMiaIAEditorPanel::AssistantPendingIntentText() const
+{
+    return AssistantPendingIntentSelection.IsEmpty()
+        ? LOCTEXT("AssistantChoosePendingIntent", "Choose an intent")
+        : FText::FromString(AssistantPendingIntentSelection);
+}
+
+EVisibility SMiaIAEditorPanel::AssistantLearningVisibility() const
+{
+    return AssistantProvider == EMiaIAAssistantProvider::Local
+        ? EVisibility::Visible
+        : EVisibility::Collapsed;
+}
+
+EVisibility SMiaIAEditorPanel::AssistantLearningPanelVisibility() const
+{
+    return AssistantProvider == EMiaIAAssistantProvider::Local &&
+        bAssistantLearningExpanded
+        ? EVisibility::Visible
+        : EVisibility::Collapsed;
 }
 
 FText SMiaIAEditorPanel::OnlineAssistantStatusText() const
@@ -10626,7 +11114,11 @@ FText SMiaIAEditorPanel::ConsoleInputHintText() const
 {
     if (bOnlineAssistantEnabled && bHasAssistantProposal)
     {
-        return AssistantLanguage == EMiaIAAssistantLanguage::Italian
+        return AssistantLanguage == EMiaIAAssistantLanguage::Automatic
+            ? LOCTEXT(
+                "OnlineAssistantConfirmationHintAutomatic",
+                "Type confirm/yes/ok/conferma/si or cancel/no/discard/scarta")
+            : AssistantLanguage == EMiaIAAssistantLanguage::Italian
             ? LOCTEXT(
                 "OnlineAssistantConfirmationHintItalian",
                 "Scrivi conferma/si/ok oppure annulla/no/scarta")
@@ -10641,6 +11133,14 @@ FText SMiaIAEditorPanel::ConsoleInputHintText() const
         return LOCTEXT(
             "OnlineAssistantInputHintItalian",
             "Descrivi un'azione MiaIA in italiano");
+    }
+
+    if (bOnlineAssistantEnabled &&
+        AssistantLanguage == EMiaIAAssistantLanguage::Automatic)
+    {
+        return LOCTEXT(
+            "OnlineAssistantInputHintAutomatic",
+            "Describe a MiaIA action in English, Italian, or both");
     }
 
     return bOnlineAssistantEnabled

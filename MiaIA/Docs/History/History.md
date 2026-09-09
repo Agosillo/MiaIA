@@ -260,6 +260,8 @@ The text assistant is included in normal Studio builds but remains separately di
 
 The provider-neutral assistant gained a default offline provider in `StudioCore`. `LocalCommandAssistant` uses only the C++20 standard library, recognizes the existing 13 command intents in English and Italian, and extracts the same validated model-name, project-path, topology, training, and step entities without accounts, tokens, HTTP, Unreal, or Windows APIs. Unknown requests remain outside the command path. The Studio selector now presents **MiaIA Local** by default and retains **Wit.ai (experimental)** as an optional provider whose token settings appear only when selected.
 
+MiaIA Local then gained an automatic bilingual mode and supervised user corpus. Confirmed non-exact proposals become exact validated examples without storing executable command text; unknown and explicitly incorrect phrases remain inert in a review queue until the user assigns an allowlisted intent. The portable core owns versioned corpus import/export while the Unreal host stores the data outside `.mai` under its Saved directory. Native coverage verifies mixed-language recognition, confirmation learning, duplicate suppression, safe malformed-data rejection, manual classification, incorrect-proposal suppression, and language filtering.
+
 Native tests exercise both languages through the complete provider-to-proposal path, including out-of-scope text and the current entity shapes. The architecture intentionally keeps future Unreal/Quest hosts and speech-to-text adapters above the same portable provider and confirmation boundary.
 
 ## Current position

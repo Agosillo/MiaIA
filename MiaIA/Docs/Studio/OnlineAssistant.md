@@ -3,11 +3,12 @@
 ## Scope
 
 The command assistant belongs to MiaIA Studio, not to the mathematical Engine or
-public SDK. It accepts natural English or Italian text, asks the selected provider to
+public SDK. It accepts natural English, Italian, or mixed text, asks the selected provider to
 identify one intent and its entities, converts that structured result into an existing
 MiaIA Console command, and displays the exact proposal for confirmation.
 
-**MiaIA Local is the default provider.** It runs offline, needs no account or token,
+**MiaIA Local is the default provider.** Its default `Auto (English + Italiano)`
+language mode evaluates both corpora in the same session. It runs offline, needs no account or token,
 and sends no text outside the process. **Wit.ai is retained as an experimental online
 provider** for comparison and optional use.
 
@@ -25,7 +26,7 @@ persisted. Provider confidence is statistical rather than proof, which is why th
 behavior requires a separate explicit choice.
 
 ```text
-English or Italian text
+English, Italian, or mixed text
     -> MiaIA Local (default) or Wit.ai (experimental)
     -> provider-neutral intent and entities
     -> local validated command proposal
@@ -53,6 +54,42 @@ returns no intent and can never bypass `CommandAssistant::Propose` or the shared
 The automated native tests exercise the same English and Italian commands, including
 out-of-scope text and all current entity shapes. Add a paired English/Italian test
 whenever the local corpus or a supported command is extended.
+
+## Supervised local learning
+
+MiaIA Local can extend its corpus without changing the compiled command allowlist.
+When a proposal below exact `100%` confidence is accepted with **Confirm command**,
+the source phrase and provider-neutral intent are stored as a validated example. The
+same normalized phrase then matches at `100%`; the raw proposed command is never
+stored or replayed directly, and every future execution still passes through
+`CommandAssistant::Propose` and `MiaIACommandProcessor`.
+
+An unrecognized phrase is saved in the local **to classify** queue but does not affect
+recognition. Expanding **Review** shows the next phrase, lets the user choose one of
+the supported intents, then **Validate** or **Delete** it. **Wrong interpretation**
+removes any matching learned example, opens **Review**, and puts the rejected phrase
+in the current review position so it can be corrected immediately; older unknown
+phrases remain in the queue and are presented afterwards. The label beside the phrase
+shows the total number queued, which decreases after each **Validate** or **Delete**.
+Choose the correct intent and press **Validate** to replace the old association.
+**Discard** only cancels the current proposal and deliberately teaches nothing.
+
+Classification associates the phrase with an intent, not with a stored executable
+command. Entities are extracted again from the phrase whenever it is interpreted. A
+custom network topology therefore needs all four positive values, in Console `create`
+order: **inputs, neurons per hidden layer, hidden layers, outputs**. For example:
+`crea una rete con 2 input, 4 neuroni per hidden layer, 1 hidden layer e 1 output`
+becomes `create 2 4 1 1`. `crea una rete` contains no topology values and intentionally
+uses the Console defaults; a phrase containing only part of the four-value topology is
+rejected rather than silently using those defaults.
+
+The versioned corpus is stored outside `.mai` project archives under the Unreal
+Saved directory at `Saved/MiaIA/CommandAssistant/local-corpus.miaia`. `StudioCore`
+only imports and exports portable in-memory corpus text; the Unreal host owns file
+access, preserving the provider's independence from Windows and Unreal APIs. English,
+Italian, and automatically detected mixed examples retain their language metadata.
+Malformed, oversized, unsupported, or newer-format corpus data is ignored without
+replacing the active in-memory corpus.
 
 ## Build and Visual Studio
 

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Containers/Set.h"
+#include "Containers/Map.h"
 #include "CommandAssistant.h"
 #include "MiaIABlueprintTypes.h"
 #include "MiaIAInstanceService.h"
@@ -24,6 +25,11 @@ class SWidgetSwitcher;
 struct FSlateBrush;
 enum class ECheckBoxState : uint8;
 enum class EMiaIANeuronNavigationDirection : uint8;
+
+namespace MiaIA::Studio
+{
+    class LocalCommandAssistant;
+}
 
 enum class EMiaIAStudioViewMode : uint8
 {
@@ -52,6 +58,7 @@ enum class EMiaIAProjectPathAction : uint8
 #if MIAIA_WITH_WIT_AI
 enum class EMiaIAAssistantLanguage : uint8
 {
+    Automatic,
     English,
     Italian
 };
@@ -292,13 +299,30 @@ private:
         MiaIA::Studio::CommandAssistantUnderstanding Understanding);
     FReply HandleConfirmAssistantProposal();
     FReply HandleDiscardAssistantProposal();
+    FReply HandleIncorrectAssistantProposal();
+    FReply HandleToggleAssistantLearning();
+    FReply HandleSelectPendingAssistantIntent(FString Intent);
+    FReply HandleValidatePendingAssistantPhrase();
+    FReply HandleDeletePendingAssistantPhrase();
+    TSharedRef<SWidget> BuildPendingAssistantIntentMenu();
+    MiaIA::Studio::LocalCommandAssistant* LocalAssistant();
+    const MiaIA::Studio::LocalCommandAssistant* LocalAssistant() const;
+    bool SaveLocalAssistantCorpus();
+    void LoadLocalAssistantCorpus(
+        MiaIA::Studio::LocalCommandAssistant& Assistant,
+        FString& Error) const;
     FText OnlineAssistantStatusText() const;
     FText AssistantProposalText() const;
+    FText AssistantLearningSummaryText() const;
+    FText AssistantPendingPhraseText() const;
+    FText AssistantPendingIntentText() const;
     FText ConsoleInputHintText() const;
     FText ConsoleSendText() const;
     FText AssistantCredentialSummaryText() const;
     EVisibility AssistantSettingsVisibility() const;
     EVisibility AssistantProposalVisibility() const;
+    EVisibility AssistantLearningVisibility() const;
+    EVisibility AssistantLearningPanelVisibility() const;
 #endif
     FReply ApplyConsoleSuggestion(FString Completion);
     void RebuildConsoleSuggestions(const FString& Input);
@@ -405,19 +429,21 @@ private:
     std::unique_ptr<MiaIA::Studio::ICommandAssistantProvider>
         OnlineAssistant;
     EMiaIAAssistantLanguage AssistantLanguage{
-        EMiaIAAssistantLanguage::English};
+        EMiaIAAssistantLanguage::Automatic};
     EMiaIAAssistantProvider AssistantProvider{
         EMiaIAAssistantProvider::Local};
     MiaIA::Studio::CommandProposal AssistantProposal;
     TSharedPtr<SEditableTextBox> AssistantEnglishTokenInput;
     TSharedPtr<SEditableTextBox> AssistantItalianTokenInput;
     FString OnlineAssistantStatus;
+    FString AssistantPendingIntentSelection;
     uint64 OnlineAssistantRequestSerial{};
     bool bOnlineAssistantEnabled{};
     bool bAssistantAutoConfirmFullyConfident{};
     bool bOnlineAssistantRequestPending{};
     bool bHasAssistantProposal{};
     bool bAssistantSettingsExpanded{};
+    bool bAssistantLearningExpanded{};
 #endif
     FText DialogTitle;
     FText DialogContent;
