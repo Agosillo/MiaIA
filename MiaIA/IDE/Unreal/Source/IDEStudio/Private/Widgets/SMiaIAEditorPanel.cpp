@@ -193,6 +193,13 @@ namespace
             AssistantLocalCorpusRelativePath);
     }
 
+    FString LocalAssistantCorpusBackupPath()
+    {
+        return FPaths::Combine(
+            FPaths::ProjectSavedDir(),
+            TEXT("MiaIA/CommandAssistant/local-corpus.backup.miaia"));
+    }
+
     FString LoadAssistantPackagedToken(const TCHAR* Key)
     {
         const FString path = FPaths::Combine(
@@ -2586,9 +2593,10 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
                                     .Padding(2.0f, 1.0f, 2.0f, 3.0f)
                                     [
                                         SNew(STextBlock)
-                                        .Text(LOCTEXT(
-                                            "ConsoleCommands",
-                                            "Commands"))
+                                        .Text(
+                                            this,
+                                            &SMiaIAEditorPanel::
+                                                ConsoleSidebarTitleText)
                                         .Font(FAppStyle::GetFontStyle(
                                             TEXT("SmallFontBold")))
                                     ]
@@ -10120,9 +10128,16 @@ TSharedRef<SWidget> SMiaIAEditorPanel::BuildOnlineAssistantPanel(
                         [
                             SNew(SButton)
                             .ButtonStyle(&ButtonStyle)
-                            .Text(LOCTEXT(
-                                "AssistantReviewLearning",
-                                "Review"))
+                            .Text_Lambda([this]()
+                            {
+                                return bAssistantLearningExpanded
+                                    ? LOCTEXT(
+                                        "AssistantCloseLearning",
+                                        "Close review")
+                                    : LOCTEXT(
+                                        "AssistantReviewLearning",
+                                        "Review");
+                            })
                             .OnClicked(
                                 this,
                                 &SMiaIAEditorPanel::
@@ -10160,9 +10175,8 @@ TSharedRef<SWidget> SMiaIAEditorPanel::BuildOnlineAssistantPanel(
                                 .ComboButtonStyle(&ComboButtonStyle)
                                 .IsEnabled_Lambda([this]()
                                 {
-                                    const auto* assistant = LocalAssistant();
-                                    return assistant &&
-                                        !assistant->PendingPhrases().empty();
+                                    return LocalAssistant() &&
+                                        !AssistantLearningPhraseSelection.IsEmpty();
                                 })
                                 .ButtonContent()
                                 [
@@ -10183,14 +10197,15 @@ TSharedRef<SWidget> SMiaIAEditorPanel::BuildOnlineAssistantPanel(
                             [
                                 SNew(SButton)
                                 .ButtonStyle(&ButtonStyle)
-                                .Text(LOCTEXT(
-                                    "AssistantValidatePending",
-                                    "Validate"))
+                                .Text(
+                                    this,
+                                    &SMiaIAEditorPanel::
+                                        AssistantLearningActionText)
                                 .IsEnabled_Lambda([this]()
                                 {
                                     const auto* assistant = LocalAssistant();
                                     return assistant &&
-                                        !assistant->PendingPhrases().empty() &&
+                                        !AssistantLearningPhraseSelection.IsEmpty() &&
                                         !AssistantPendingIntentSelection.IsEmpty();
                                 })
                                 .OnClicked(
@@ -10209,14 +10224,68 @@ TSharedRef<SWidget> SMiaIAEditorPanel::BuildOnlineAssistantPanel(
                                     "Delete"))
                                 .IsEnabled_Lambda([this]()
                                 {
-                                    const auto* assistant = LocalAssistant();
-                                    return assistant &&
-                                        !assistant->PendingPhrases().empty();
+                                    return LocalAssistant() &&
+                                        !AssistantLearningPhraseSelection.IsEmpty();
                                 })
                                 .OnClicked(
                                     this,
                                     &SMiaIAEditorPanel::
                                         HandleDeletePendingAssistantPhrase)
+                            ]
+                        ]
+                        + SVerticalBox::Slot()
+                        .AutoHeight()
+                        .Padding(0.0f, 6.0f, 0.0f, 0.0f)
+                        [
+                            SNew(SHorizontalBox)
+                            + SHorizontalBox::Slot()
+                            .AutoWidth()
+                            [
+                                SNew(SButton)
+                                .ButtonStyle(&ButtonStyle)
+                                .Text(LOCTEXT(
+                                    "AssistantExportCorpus",
+                                    "Export backup"))
+                                .ToolTipText(LOCTEXT(
+                                    "AssistantExportCorpusTip",
+                                    "Write a portable backup beside the active local corpus."))
+                                .OnClicked(
+                                    this,
+                                    &SMiaIAEditorPanel::
+                                        HandleExportAssistantCorpus)
+                            ]
+                            + SHorizontalBox::Slot()
+                            .AutoWidth()
+                            .Padding(6.0f, 0.0f, 0.0f, 0.0f)
+                            [
+                                SNew(SButton)
+                                .ButtonStyle(&ButtonStyle)
+                                .Text(LOCTEXT(
+                                    "AssistantImportCorpus",
+                                    "Import backup"))
+                                .IsEnabled_Lambda([]()
+                                {
+                                    return FPaths::FileExists(
+                                        LocalAssistantCorpusBackupPath());
+                                })
+                                .OnClicked(
+                                    this,
+                                    &SMiaIAEditorPanel::
+                                        HandleImportAssistantCorpus)
+                            ]
+                            + SHorizontalBox::Slot()
+                            .AutoWidth()
+                            .Padding(6.0f, 0.0f, 0.0f, 0.0f)
+                            [
+                                SNew(SButton)
+                                .ButtonStyle(&ButtonStyle)
+                                .Text(LOCTEXT(
+                                    "AssistantResetCorpus",
+                                    "Reset learned data"))
+                                .OnClicked(
+                                    this,
+                                    &SMiaIAEditorPanel::
+                                        HandleResetAssistantCorpus)
                             ]
                         ]
                     ]
@@ -10722,6 +10791,14 @@ void SMiaIAEditorPanel::HandleOnlineAssistantResult(
                 SaveLocalAssistantCorpus();
                 OnlineAssistantStatus += TEXT(
                     " Saved locally for classification.");
+                if (bAssistantLearningExpanded)
+                {
+                    AssistantLearningPhraseSelection =
+                        FromUtf8(Understanding.Text);
+                    AssistantPendingIntentSelection.Empty();
+                    bAssistantLearningSelectionValidated = false;
+                    RebuildAssistantLearningSidebar();
+                }
             }
         }
 
@@ -10870,6 +10947,9 @@ FReply SMiaIAEditorPanel::HandleIncorrectAssistantProposal()
         assistant->MarkIncorrect(AssistantProposal.SourceText);
         SaveLocalAssistantCorpus();
         bAssistantLearningExpanded = true;
+        AssistantLearningPhraseSelection =
+            FromUtf8(AssistantProposal.SourceText);
+        bAssistantLearningSelectionValidated = false;
         ConsoleHistory += TEXT(
             "Assistant interpretation marked as wrong and queued for classification.\n");
         UpdateConsoleOutput();
@@ -10880,6 +10960,7 @@ FReply SMiaIAEditorPanel::HandleIncorrectAssistantProposal()
     AssistantPendingIntentSelection.Empty();
     OnlineAssistantStatus =
         TEXT("The rejected phrase is ready for supervised classification.");
+    RebuildConsoleSuggestions(FString());
     return FReply::Handled();
 }
 
@@ -10954,6 +11035,92 @@ bool SMiaIAEditorPanel::SaveLocalAssistantCorpus()
 FReply SMiaIAEditorPanel::HandleToggleAssistantLearning()
 {
     bAssistantLearningExpanded = !bAssistantLearningExpanded;
+    if (bAssistantLearningExpanded)
+    {
+        EnsureAssistantLearningSelection();
+    }
+    RebuildConsoleSuggestions(
+        ConsoleInput.IsValid()
+            ? ConsoleInput->GetText().ToString()
+            : FString());
+    return FReply::Handled();
+}
+
+void SMiaIAEditorPanel::EnsureAssistantLearningSelection()
+{
+    const auto* assistant = LocalAssistant();
+    if (!assistant)
+    {
+        AssistantLearningPhraseSelection.Empty();
+        AssistantPendingIntentSelection.Empty();
+        return;
+    }
+
+    const std::string selected(
+        TCHAR_TO_UTF8(*AssistantLearningPhraseSelection));
+    if (!selected.empty())
+    {
+        if (bAssistantLearningSelectionValidated)
+        {
+            const auto found = std::find_if(
+                assistant->LearnedExamples().begin(),
+                assistant->LearnedExamples().end(),
+                [&selected](const auto& example)
+                {
+                    return example.Text == selected;
+                });
+            if (found != assistant->LearnedExamples().end())
+            {
+                AssistantPendingIntentSelection =
+                    FromUtf8(found->Intent);
+                return;
+            }
+        }
+        else
+        {
+            const auto found = std::find_if(
+                assistant->PendingPhrases().begin(),
+                assistant->PendingPhrases().end(),
+                [&selected](const auto& phrase)
+                {
+                    return phrase.Text == selected;
+                });
+            if (found != assistant->PendingPhrases().end())
+                return;
+        }
+    }
+
+    if (!assistant->PendingPhrases().empty())
+    {
+        AssistantLearningPhraseSelection =
+            FromUtf8(assistant->PendingPhrases().back().Text);
+        AssistantPendingIntentSelection.Empty();
+        bAssistantLearningSelectionValidated = false;
+    }
+    else if (!assistant->LearnedExamples().empty())
+    {
+        const auto& example = assistant->LearnedExamples().back();
+        AssistantLearningPhraseSelection = FromUtf8(example.Text);
+        AssistantPendingIntentSelection = FromUtf8(example.Intent);
+        bAssistantLearningSelectionValidated = true;
+    }
+    else
+    {
+        AssistantLearningPhraseSelection.Empty();
+        AssistantPendingIntentSelection.Empty();
+        bAssistantLearningSelectionValidated = false;
+    }
+}
+
+FReply SMiaIAEditorPanel::SelectAssistantLearningPhrase(
+    FString Phrase,
+    const bool bValidated)
+{
+    AssistantLearningPhraseSelection = std::move(Phrase);
+    bAssistantLearningSelectionValidated = bValidated;
+    AssistantPendingIntentSelection.Empty();
+    EnsureAssistantLearningSelection();
+    RebuildAssistantLearningSidebar();
     return FReply::Handled();
 }
 
@@ -11000,42 +11167,147 @@ FReply SMiaIAEditorPanel::HandleSelectPendingAssistantIntent(FString Intent)
 FReply SMiaIAEditorPanel::HandleValidatePendingAssistantPhrase()
 {
     auto* assistant = LocalAssistant();
-    if (!assistant || assistant->PendingPhrases().empty() ||
+    if (!assistant || AssistantLearningPhraseSelection.IsEmpty() ||
         AssistantPendingIntentSelection.IsEmpty())
     {
         return FReply::Handled();
     }
 
-    const std::string phrase = assistant->PendingPhrases().back().Text;
+    const std::string phrase(
+        TCHAR_TO_UTF8(*AssistantLearningPhraseSelection));
     const std::string intent(
         TCHAR_TO_UTF8(*AssistantPendingIntentSelection));
-    if (assistant->ClassifyPending(phrase, intent) &&
-        SaveLocalAssistantCorpus())
+    const bool changed = bAssistantLearningSelectionValidated
+        ? assistant->ReassignValidated(phrase, intent)
+        : assistant->ClassifyPending(phrase, intent);
+    if (changed && SaveLocalAssistantCorpus())
     {
+        bAssistantLearningSelectionValidated = true;
         OnlineAssistantStatus =
-            TEXT("Phrase validated. It will now match at 100% confidence.");
+            TEXT("Phrase association saved at 100% confidence.");
     }
     else
     {
         OnlineAssistantStatus =
             TEXT("The pending phrase could not be validated or saved.");
     }
-    AssistantPendingIntentSelection.Empty();
+    EnsureAssistantLearningSelection();
+    RebuildAssistantLearningSidebar();
     return FReply::Handled();
 }
 
 FReply SMiaIAEditorPanel::HandleDeletePendingAssistantPhrase()
 {
     auto* assistant = LocalAssistant();
-    if (!assistant || assistant->PendingPhrases().empty())
+    if (!assistant || AssistantLearningPhraseSelection.IsEmpty())
         return FReply::Handled();
 
-    const std::string phrase = assistant->PendingPhrases().back().Text;
-    if (assistant->RemovePending(phrase) && SaveLocalAssistantCorpus())
-        OnlineAssistantStatus = TEXT("Pending phrase deleted.");
+    const std::string phrase(
+        TCHAR_TO_UTF8(*AssistantLearningPhraseSelection));
+    const bool removed = bAssistantLearningSelectionValidated
+        ? assistant->RemoveValidated(phrase)
+        : assistant->RemovePending(phrase);
+    if (removed && SaveLocalAssistantCorpus())
+        OnlineAssistantStatus = TEXT("Local learning phrase deleted.");
     else
-        OnlineAssistantStatus = TEXT("The pending phrase could not be deleted.");
+        OnlineAssistantStatus = TEXT("The local learning phrase could not be deleted.");
+    AssistantLearningPhraseSelection.Empty();
     AssistantPendingIntentSelection.Empty();
+    EnsureAssistantLearningSelection();
+    RebuildAssistantLearningSidebar();
+    return FReply::Handled();
+}
+
+FReply SMiaIAEditorPanel::HandleExportAssistantCorpus()
+{
+    const auto* assistant = LocalAssistant();
+    if (!assistant)
+        return FReply::Handled();
+
+    const FString path = LocalAssistantCorpusBackupPath();
+    const bool saved = IFileManager::Get().MakeDirectory(
+        *FPaths::GetPath(path),
+        true) && FFileHelper::SaveStringToFile(
+            FromUtf8(assistant->ExportCorpus()),
+            *path,
+            FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM);
+    OnlineAssistantStatus = saved
+        ? FString::Printf(TEXT("Local corpus backup exported to %s"), *path)
+        : TEXT("The local corpus backup could not be exported.");
+    return FReply::Handled();
+}
+
+FReply SMiaIAEditorPanel::HandleImportAssistantCorpus()
+{
+    auto* assistant = LocalAssistant();
+    const FString path = LocalAssistantCorpusBackupPath();
+    if (!assistant || !FPaths::FileExists(path))
+        return FReply::Handled();
+
+    if (FMessageDialog::Open(
+        EAppMsgType::YesNo,
+        LOCTEXT(
+            "AssistantImportCorpusConfirmation",
+            "Replace the current local learning data with the exported backup?")) !=
+        EAppReturnType::Yes)
+    {
+        return FReply::Handled();
+    }
+
+    FString serialized;
+    std::string error;
+    if (!FFileHelper::LoadFileToString(serialized, *path))
+    {
+        OnlineAssistantStatus =
+            TEXT("The local corpus backup could not be read.");
+        return FReply::Handled();
+    }
+
+    const FTCHARToUTF8 utf8(*serialized);
+    if (!assistant->ImportCorpus(
+            std::string_view(utf8.Get(), utf8.Length()),
+            error) ||
+        !SaveLocalAssistantCorpus())
+    {
+        OnlineAssistantStatus = error.empty()
+            ? TEXT("The imported corpus could not be saved.")
+            : FString::Printf(
+                TEXT("The local corpus backup is invalid: %s"),
+                *FromUtf8(error));
+        return FReply::Handled();
+    }
+
+    AssistantLearningPhraseSelection.Empty();
+    AssistantPendingIntentSelection.Empty();
+    EnsureAssistantLearningSelection();
+    RebuildAssistantLearningSidebar();
+    OnlineAssistantStatus = TEXT("Local corpus backup imported.");
+    return FReply::Handled();
+}
+
+FReply SMiaIAEditorPanel::HandleResetAssistantCorpus()
+{
+    auto* assistant = LocalAssistant();
+    if (!assistant)
+        return FReply::Handled();
+
+    if (FMessageDialog::Open(
+        EAppMsgType::YesNo,
+        LOCTEXT(
+            "AssistantResetCorpusConfirmation",
+            "Delete all validated and pending local learning data? "
+            "Built-in MiaIA commands and examples will remain available.")) !=
+        EAppReturnType::Yes)
+    {
+        return FReply::Handled();
+    }
+
+    assistant->ClearCorpus();
+    AssistantLearningPhraseSelection.Empty();
+    AssistantPendingIntentSelection.Empty();
+    SaveLocalAssistantCorpus();
+    RebuildAssistantLearningSidebar();
+    OnlineAssistantStatus = TEXT("Local learning data reset.");
     return FReply::Handled();
 }
 
@@ -11054,18 +11326,24 @@ FText SMiaIAEditorPanel::AssistantLearningSummaryText() const
 FText SMiaIAEditorPanel::AssistantPendingPhraseText() const
 {
     const auto* assistant = LocalAssistant();
-    if (!assistant || assistant->PendingPhrases().empty())
+    if (!assistant || AssistantLearningPhraseSelection.IsEmpty())
     {
         return LOCTEXT(
             "AssistantNoPendingPhrases",
-            "No phrases are waiting for classification.");
+            "No local learning phrases are available.");
+    }
+
+    if (bAssistantLearningSelectionValidated)
+    {
+        return FText::FromString(FString::Printf(
+            TEXT("Validated phrase:\n%s"),
+            *AssistantLearningPhraseSelection));
     }
 
     return FText::FromString(FString::Printf(
-        TEXT("Most recent phrase to classify (%llu queued):\n%s"),
-        static_cast<unsigned long long>(
-            assistant->PendingPhrases().size()),
-        *FromUtf8(assistant->PendingPhrases().back().Text)));
+        TEXT("Phrase to classify (%llu queued):\n%s"),
+        static_cast<unsigned long long>(assistant->PendingPhrases().size()),
+        *AssistantLearningPhraseSelection));
 }
 
 FText SMiaIAEditorPanel::AssistantPendingIntentText() const
@@ -11073,6 +11351,13 @@ FText SMiaIAEditorPanel::AssistantPendingIntentText() const
     return AssistantPendingIntentSelection.IsEmpty()
         ? LOCTEXT("AssistantChoosePendingIntent", "Choose an intent")
         : FText::FromString(AssistantPendingIntentSelection);
+}
+
+FText SMiaIAEditorPanel::AssistantLearningActionText() const
+{
+    return bAssistantLearningSelectionValidated
+        ? LOCTEXT("AssistantChangeLearnedIntent", "Change intent")
+        : LOCTEXT("AssistantValidatePending", "Validate");
 }
 
 EVisibility SMiaIAEditorPanel::AssistantLearningVisibility() const
@@ -11337,8 +11622,15 @@ void SMiaIAEditorPanel::RebuildConsoleSuggestions(
 
     ConsoleSuggestionsContent->ClearChildren();
 #if MIAIA_WITH_WIT_AI
+    if (AssistantProvider == EMiaIAAssistantProvider::Local &&
+        bAssistantLearningExpanded)
+    {
+        RebuildAssistantLearningSidebar();
+        return;
+    }
     if (bOnlineAssistantEnabled)
     {
+        RebuildAssistantExamples();
         return;
     }
 #endif
@@ -11387,6 +11679,194 @@ void SMiaIAEditorPanel::RebuildConsoleSuggestions(
         ];
     }
 }
+
+FText SMiaIAEditorPanel::ConsoleSidebarTitleText() const
+{
+#if MIAIA_WITH_WIT_AI
+    if (AssistantProvider == EMiaIAAssistantProvider::Local &&
+        bAssistantLearningExpanded)
+    {
+        return LOCTEXT("AssistantLearningSidebarTitle", "Local learning");
+    }
+    if (bOnlineAssistantEnabled)
+    {
+        return LOCTEXT("AssistantExamplesSidebarTitle", "Assistant examples");
+    }
+#endif
+    return LOCTEXT("ConsoleCommands", "Commands");
+}
+
+#if MIAIA_WITH_WIT_AI
+FReply SMiaIAEditorPanel::ApplyAssistantExample(FString Example)
+{
+    SetConsoleInputText(Example);
+    if (ConsoleInput.IsValid())
+    {
+        FSlateApplication::Get().SetKeyboardFocus(
+            ConsoleInput,
+            EFocusCause::SetDirectly);
+    }
+    return FReply::Handled();
+}
+
+void SMiaIAEditorPanel::RebuildAssistantExamples()
+{
+    if (!ConsoleSuggestionsContent.IsValid())
+        return;
+
+    struct FAssistantExample
+    {
+        EMiaIAAssistantLanguage Language;
+        const TCHAR* Text;
+    };
+    static constexpr FAssistantExample examples[] =
+    {
+        {EMiaIAAssistantLanguage::English, TEXT("Show all models")},
+        {EMiaIAAssistantLanguage::English, TEXT("Create a model named Iris")},
+        {EMiaIAAssistantLanguage::English, TEXT("Select model 2")},
+        {EMiaIAAssistantLanguage::English, TEXT("Create a network")},
+        {EMiaIAAssistantLanguage::English, TEXT("Create a network with 2 inputs, 4 neurons per hidden layer, 1 hidden layer and 1 output")},
+        {EMiaIAAssistantLanguage::English, TEXT("Show training status")},
+        {EMiaIAAssistantLanguage::English, TEXT("Start training for 100 epochs with learning rate 0.01")},
+        {EMiaIAAssistantLanguage::English, TEXT("Save the current project")},
+        {EMiaIAAssistantLanguage::Italian, TEXT("Mostra tutti i modelli")},
+        {EMiaIAAssistantLanguage::Italian, TEXT("Crea un modello chiamato Iris")},
+        {EMiaIAAssistantLanguage::Italian, TEXT("Seleziona il modello 2")},
+        {EMiaIAAssistantLanguage::Italian, TEXT("Crea una rete")},
+        {EMiaIAAssistantLanguage::Italian, TEXT("Crea una rete con 2 input, 4 neuroni per hidden layer, 1 hidden layer e 1 output")},
+        {EMiaIAAssistantLanguage::Italian, TEXT("Mostra lo stato del training")},
+        {EMiaIAAssistantLanguage::Italian, TEXT("Avvia il training per 100 epoche con learning rate 0.01")},
+        {EMiaIAAssistantLanguage::Italian, TEXT("Salva il progetto corrente")}
+    };
+
+    EMiaIAAssistantLanguage lastLanguage =
+        EMiaIAAssistantLanguage::Automatic;
+    for (const FAssistantExample& example : examples)
+    {
+        if (AssistantLanguage != EMiaIAAssistantLanguage::Automatic &&
+            AssistantLanguage != example.Language)
+        {
+            continue;
+        }
+
+        if (lastLanguage != example.Language)
+        {
+            lastLanguage = example.Language;
+            ConsoleSuggestionsContent->AddSlot()
+            .AutoHeight()
+            .Padding(2.0f, 5.0f, 2.0f, 2.0f)
+            [
+                SNew(STextBlock)
+                .Text(example.Language == EMiaIAAssistantLanguage::Italian
+                    ? LOCTEXT("AssistantExamplesItalian", "Italiano")
+                    : LOCTEXT("AssistantExamplesEnglish", "English"))
+                .Font(FAppStyle::GetFontStyle(TEXT("SmallFontBold")))
+            ];
+        }
+
+        const FString phrase(example.Text);
+        ConsoleSuggestionsContent->AddSlot()
+        .AutoHeight()
+        .Padding(0.0f, 1.0f)
+        [
+            SNew(SButton)
+            .ButtonStyle(&ButtonStyle)
+            .ContentPadding(FMargin(6.0f, 3.0f))
+            .ToolTipText(LOCTEXT(
+                "AssistantExampleTip",
+                "Copy this example into the assistant input without executing it."))
+            .OnClicked(
+                this,
+                &SMiaIAEditorPanel::ApplyAssistantExample,
+                phrase)
+            [
+                SNew(STextBlock)
+                .Text(FText::FromString(phrase))
+                .AutoWrapText(true)
+            ]
+        ];
+    }
+}
+
+void SMiaIAEditorPanel::RebuildAssistantLearningSidebar()
+{
+    if (!ConsoleSuggestionsContent.IsValid())
+        return;
+
+    ConsoleSuggestionsContent->ClearChildren();
+    EnsureAssistantLearningSelection();
+    const auto* assistant = LocalAssistant();
+    if (!assistant)
+        return;
+
+    const auto addHeading = [this](const FString& label)
+    {
+        ConsoleSuggestionsContent->AddSlot()
+        .AutoHeight()
+        .Padding(2.0f, 5.0f, 2.0f, 2.0f)
+        [
+            SNew(STextBlock)
+            .Text(FText::FromString(label))
+            .Font(FAppStyle::GetFontStyle(TEXT("SmallFontBold")))
+        ];
+    };
+    const auto addPhrase = [this](
+        const std::string& text,
+        const FString& detail,
+        const bool validated)
+    {
+        const FString phrase = FromUtf8(text);
+        const bool selected =
+            bAssistantLearningSelectionValidated == validated &&
+            AssistantLearningPhraseSelection == phrase;
+        const FString label = FString::Printf(
+            TEXT("%s%s\n%s"),
+            selected ? TEXT("> ") : TEXT(""),
+            *phrase,
+            *detail);
+        ConsoleSuggestionsContent->AddSlot()
+        .AutoHeight()
+        .Padding(0.0f, 1.0f)
+        [
+            SNew(SButton)
+            .ButtonStyle(&ButtonStyle)
+            .ContentPadding(FMargin(6.0f, 3.0f))
+            .OnClicked(
+                this,
+                &SMiaIAEditorPanel::SelectAssistantLearningPhrase,
+                phrase,
+                validated)
+            [
+                SNew(STextBlock)
+                .Text(FText::FromString(label))
+                .AutoWrapText(true)
+            ]
+        ];
+    };
+
+    addHeading(FString::Printf(
+        TEXT("To classify (%llu)"),
+        static_cast<unsigned long long>(
+            assistant->PendingPhrases().size())));
+    for (auto phrase = assistant->PendingPhrases().rbegin();
+        phrase != assistant->PendingPhrases().rend();
+        ++phrase)
+    {
+        addPhrase(phrase->Text, TEXT("Choose an intent"), false);
+    }
+
+    addHeading(FString::Printf(
+        TEXT("Validated (%llu)"),
+        static_cast<unsigned long long>(
+            assistant->LearnedExamples().size())));
+    for (auto example = assistant->LearnedExamples().rbegin();
+        example != assistant->LearnedExamples().rend();
+        ++example)
+    {
+        addPhrase(example->Text, FromUtf8(example->Intent), true);
+    }
+}
+#endif
 
 void SMiaIAEditorPanel::SetConsoleInputText(const FString& Text)
 {

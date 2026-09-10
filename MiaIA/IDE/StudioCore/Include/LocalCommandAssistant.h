@@ -54,6 +54,11 @@ namespace MiaIA::Studio
             std::string_view text,
             std::string intent);
         bool RemovePending(std::string_view text);
+        bool ReassignValidated(
+            std::string_view text,
+            std::string intent);
+        bool RemoveValidated(std::string_view text);
+        void ClearCorpus();
 
         const std::vector<LocalCommandAssistantExample>&
             LearnedExamples() const;

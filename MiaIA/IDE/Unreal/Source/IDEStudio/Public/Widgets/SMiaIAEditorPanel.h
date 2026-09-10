@@ -301,10 +301,18 @@ private:
     FReply HandleDiscardAssistantProposal();
     FReply HandleIncorrectAssistantProposal();
     FReply HandleToggleAssistantLearning();
+    FReply ApplyAssistantExample(FString Example);
+    FReply SelectAssistantLearningPhrase(FString Phrase, bool bValidated);
     FReply HandleSelectPendingAssistantIntent(FString Intent);
     FReply HandleValidatePendingAssistantPhrase();
     FReply HandleDeletePendingAssistantPhrase();
+    FReply HandleExportAssistantCorpus();
+    FReply HandleImportAssistantCorpus();
+    FReply HandleResetAssistantCorpus();
     TSharedRef<SWidget> BuildPendingAssistantIntentMenu();
+    void EnsureAssistantLearningSelection();
+    void RebuildAssistantExamples();
+    void RebuildAssistantLearningSidebar();
     MiaIA::Studio::LocalCommandAssistant* LocalAssistant();
     const MiaIA::Studio::LocalCommandAssistant* LocalAssistant() const;
     bool SaveLocalAssistantCorpus();
@@ -316,6 +324,7 @@ private:
     FText AssistantLearningSummaryText() const;
     FText AssistantPendingPhraseText() const;
     FText AssistantPendingIntentText() const;
+    FText AssistantLearningActionText() const;
     FText ConsoleInputHintText() const;
     FText ConsoleSendText() const;
     FText AssistantCredentialSummaryText() const;
@@ -324,6 +333,7 @@ private:
     EVisibility AssistantLearningVisibility() const;
     EVisibility AssistantLearningPanelVisibility() const;
 #endif
+    FText ConsoleSidebarTitleText() const;
     FReply ApplyConsoleSuggestion(FString Completion);
     void RebuildConsoleSuggestions(const FString& Input);
     void SetConsoleInputText(const FString& Text);
@@ -437,6 +447,7 @@ private:
     TSharedPtr<SEditableTextBox> AssistantItalianTokenInput;
     FString OnlineAssistantStatus;
     FString AssistantPendingIntentSelection;
+    FString AssistantLearningPhraseSelection;
     uint64 OnlineAssistantRequestSerial{};
     bool bOnlineAssistantEnabled{};
     bool bAssistantAutoConfirmFullyConfident{};
@@ -444,6 +455,7 @@ private:
     bool bHasAssistantProposal{};
     bool bAssistantSettingsExpanded{};
     bool bAssistantLearningExpanded{};
+    bool bAssistantLearningSelectionValidated{};
 #endif
     FText DialogTitle;
     FText DialogContent;

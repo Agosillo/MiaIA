@@ -427,6 +427,27 @@ int main()
         assert(restored.PendingPhrases().back().Text ==
             "Mi crei una rete 2 input 4 layer hidden 1 output");
 
+        LocalCommandAssistant editable(CommandAssistantLanguage::Automatic);
+        assert(editable.LearnValidated(
+            "Comando personale alpha",
+            "miaia_help"));
+        assert(editable.LearnValidated(
+            "Comando personale alpha",
+            "miaia_model_list"));
+        assert(editable.LearnedExamples().size() == 2);
+        assert(editable.ReassignValidated(
+            "Comando personale alpha",
+            "miaia_training_status"));
+        assert(editable.LearnedExamples().size() == 1);
+        assert(interpret(editable, "Comando personale alpha").Intent ==
+            "miaia_training_status");
+        assert(editable.RemoveValidated("Comando personale alpha"));
+        assert(editable.LearnedExamples().empty());
+        assert(editable.RecordUnknown("Comando personale beta"));
+        editable.ClearCorpus();
+        assert(editable.LearnedExamples().empty());
+        assert(editable.PendingPhrases().empty());
+
         LocalCommandAssistant italianOnly(CommandAssistantLanguage::Italian);
         assert(italianOnly.LearnValidated(
             "Comando personale zeta",

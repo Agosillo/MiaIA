@@ -859,6 +859,61 @@ bool MiaIA::Studio::LocalCommandAssistant::RemovePending(
     return pendingPhrases_.size() != previousSize;
 }
 
+bool MiaIA::Studio::LocalCommandAssistant::ReassignValidated(
+    const std::string_view text,
+    std::string intent)
+{
+    if (!IsSupportedIntent(intent))
+        return false;
+
+    const std::string normalized = Normalize(std::string(text));
+    const auto first = std::find_if(
+        learnedExamples_.begin(),
+        learnedExamples_.end(),
+        [&normalized](const LocalCommandAssistantExample& example)
+        {
+            return Normalize(example.Text) == normalized;
+        });
+    if (first == learnedExamples_.end())
+        return false;
+
+    const std::size_t originalIndex = static_cast<std::size_t>(
+        std::distance(learnedExamples_.begin(), first));
+    LocalCommandAssistantExample reassigned = *first;
+    reassigned.Intent = std::move(intent);
+    std::erase_if(learnedExamples_,
+        [&normalized](const LocalCommandAssistantExample& example)
+        {
+            return Normalize(example.Text) == normalized;
+        });
+    learnedExamples_.insert(
+        learnedExamples_.begin() + std::min(
+            originalIndex,
+            learnedExamples_.size()),
+        std::move(reassigned));
+    RemovePending(text);
+    return true;
+}
+
+bool MiaIA::Studio::LocalCommandAssistant::RemoveValidated(
+    const std::string_view text)
+{
+    const std::string normalized = Normalize(std::string(text));
+    const std::size_t previousSize = learnedExamples_.size();
+    std::erase_if(learnedExamples_,
+        [&normalized](const LocalCommandAssistantExample& example)
+        {
+            return Normalize(example.Text) == normalized;
+        });
+    return learnedExamples_.size() != previousSize;
+}
+
+void MiaIA::Studio::LocalCommandAssistant::ClearCorpus()
+{
+    learnedExamples_.clear();
+    pendingPhrases_.clear();
+}
+
 const std::vector<MiaIA::Studio::LocalCommandAssistantExample>&
 MiaIA::Studio::LocalCommandAssistant::LearnedExamples() const
 {

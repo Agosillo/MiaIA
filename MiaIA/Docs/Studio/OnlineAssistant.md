@@ -65,14 +65,28 @@ stored or replayed directly, and every future execution still passes through
 `CommandAssistant::Propose` and `MiaIACommandProcessor`.
 
 An unrecognized phrase is saved in the local **to classify** queue but does not affect
-recognition. Expanding **Review** shows the next phrase, lets the user choose one of
-the supported intents, then **Validate** or **Delete** it. **Wrong interpretation**
-removes any matching learned example, opens **Review**, and puts the rejected phrase
-in the current review position so it can be corrected immediately; older unknown
-phrases remain in the queue and are presented afterwards. The label beside the phrase
-shows the total number queued, which decreases after each **Validate** or **Delete**.
-Choose the correct intent and press **Validate** to replace the old association.
-**Discard** only cancels the current proposal and deliberately teaches nothing.
+recognition. Expanding **Review** changes the left Console sidebar into **Local
+learning**: its **To classify** and **Validated** sections list every user phrase and
+show their counts. Selecting an item edits it on the right. A pending phrase can be
+assigned one of the supported intents with **Validate**; a validated phrase exposes
+its current intent and can be corrected with **Change intent**. **Delete** removes the
+selected item. **Wrong interpretation** removes any matching learned example, opens
+**Review**, and selects the rejected phrase immediately; older unknown phrases remain
+in the queue. **Discard** only cancels the current proposal and deliberately teaches
+nothing.
+
+The same left sidebar follows the current input mode. With the assistant disabled it
+shows exact Console **Commands**. With the assistant enabled it shows clickable
+**Assistant examples** for the selected language; clicking copies a natural-language
+example into the input without executing it. `Auto` shows both English and Italian.
+Opening **Review** temporarily replaces those examples with the local corpus manager;
+closing it restores the appropriate command or assistant-example view.
+
+**Export backup** writes a portable snapshot named
+`local-corpus.backup.miaia` beside the active corpus. **Import backup** asks for
+confirmation before replacing the active learning data, while **Reset learned data**
+asks for confirmation before deleting all validated and pending user phrases. Reset
+does not remove built-in intents, rules, or assistant examples.
 
 Classification associates the phrase with an intent, not with a stored executable
 command. Entities are extracted again from the phrase whenever it is interpreted. A
