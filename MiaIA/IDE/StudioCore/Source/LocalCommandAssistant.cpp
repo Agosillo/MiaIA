@@ -1,4 +1,5 @@
 #include "../Include/LocalCommandAssistant.h"
+#include "../Include/AssistantInspectionCatalog.h"
 
 #include <algorithm>
 #include <array>
@@ -111,8 +112,8 @@ namespace
 
     bool IsSupportedIntent(const std::string_view intent)
     {
-        return std::find(IntentNames.begin(), IntentNames.end(), intent) !=
-            IntentNames.end();
+        const auto& intents = MiaIA::Studio::LocalCommandAssistant::SupportedIntents();
+        return std::find(intents.begin(), intents.end(), intent) != intents.end();
     }
 
     bool AcceptsLanguage(
@@ -370,6 +371,44 @@ namespace
 
     std::string RuleIntent(const std::string& text)
     {
+        const bool inspect = ContainsAny(text, {"inspect", "ispeziona", "show", "mostra", "vedi"});
+        const bool compare = ContainsAny(text, {"compare", "confronta"});
+        const bool list = ContainsAny(text, {"list", "elenca", "show", "mostra"});
+        const bool step = ContainsAny(text, {"step", "steps", "passo", "passi"});
+        if (ContainsAny(text, {"checkpoint", "checkpoints"}))
+        {
+            if (compare) return "miaia_checkpoint_compare";
+            if (ContainsAny(text, {"inspect", "ispeziona"})) return "miaia_checkpoint_inspect";
+            if (list) return "miaia_checkpoint_list";
+        }
+        if (list && ContainsAny(text, {"breakpoint", "breakpoints"}))
+            return "miaia_breakpoint_list";
+        if (inspect && ContainsAny(text, {"debug"}) &&
+            ContainsAny(text, {"status", "stato"})) return "miaia_debug_status";
+        if (ContainsAny(text, {"training", "addestramento"}))
+        {
+            if (compare && step) return "miaia_training_compare";
+            if (inspect && step) return "miaia_training_inspect";
+            if (list && ContainsAny(text, {"history", "cronologia"}))
+                return "miaia_training_history";
+        }
+        if (compare && ContainsAny(text, {"models", "modelli", "model", "modello"}))
+            return "miaia_model_compare";
+        if (inspect && ContainsAny(text, {"neuron", "neurone"})) return "miaia_neuron_inspect";
+        if (inspect && ContainsAny(text, {"connection", "connessione"})) return "miaia_connection_inspect";
+        if (inspect && ContainsAny(text, {"sample", "campione"})) return "miaia_dataset_inspect";
+        if (ContainsAny(text, {"dataset"}))
+        {
+            if (ContainsAny(text, {"diagnose", "diagnostica"})) return "miaia_dataset_diagnose";
+            if (list && ContainsAny(text, {"summary", "riepilogo"})) return "miaia_dataset_summary";
+        }
+        if (inspect && ContainsAny(text, {"project", "progetto"}) &&
+            ContainsAny(text, {"info", "information", "informazioni"})) return "miaia_project_info";
+        if (ContainsAny(text, {"network", "rete"}))
+        {
+            if (inspect && ContainsAny(text, {"summary", "riepilogo"})) return "miaia_network_summary";
+            if (ContainsAny(text, {"inspect", "ispeziona"})) return "miaia_network_inspect";
+        }
         const bool model = ContainsAny(text,
             {"model", "models", "modello", "modelli"});
         const bool project = ContainsAny(text, {"project", "progetto"});
@@ -486,6 +525,27 @@ namespace
 
     void ExtractEntities(CommandAssistantUnderstanding& result)
     {
+        for (const auto& entry : MiaIA::Studio::AssistantInspectionCatalog)
+        {
+            if (entry.Intent != result.Intent) continue;
+            // Retain signs and decimal points so validation rejects invalid
+            // integer IDs instead of silently changing their meaning.
+            static const std::regex numeric(R"([+-]?[0-9]+(?:\.[0-9]+)?)");
+            std::size_t index{};
+            for (std::sregex_iterator it(result.Text.begin(), result.Text.end(), numeric), end;
+                it != end; ++it, ++index)
+            {
+                if (index >= entry.Roles.size() || entry.Roles[index].empty())
+                {
+                    result.Error = "Too many numeric arguments for this inspection command.";
+                    return;
+                }
+                auto role = entry.Roles[index];
+                if (role.front() == '?') role.remove_prefix(1);
+                AddEntity(result, std::string(role), it->str());
+            }
+            return;
+        }
         const auto numbers = Numbers(result.Text);
         if (result.Intent == "miaia_model_create")
         {
@@ -647,6 +707,22 @@ bool MiaIA::Studio::LocalCommandAssistant::Interpret(
     }
 
     const std::string ruleIntent = RuleIntent(normalized);
+    for (const auto& entry : AssistantInspectionCatalog)
+    {
+        for (const auto language : {CommandAssistantLanguage::English, CommandAssistantLanguage::Italian})
+        {
+            if (!AcceptsLanguage(language_, language)) continue;
+            const std::string candidate = Normalize(std::string(
+                language == CommandAssistantLanguage::Italian ? entry.Italian : entry.English));
+            const double score = normalized == candidate
+                ? 1.0 : Similarity(inputTokens, Tokens(candidate));
+            if (score > bestScore)
+            {
+                bestScore = score;
+                bestIntent = entry.Intent;
+            }
+        }
+    }
     if (!ruleIntent.empty())
     {
         result.Intent = ruleIntent;
@@ -1040,7 +1116,12 @@ bool MiaIA::Studio::LocalCommandAssistant::ImportCorpus(
 const std::vector<std::string_view>&
 MiaIA::Studio::LocalCommandAssistant::SupportedIntents()
 {
-    static const std::vector<std::string_view> intents(
-        IntentNames.begin(), IntentNames.end());
+    static const std::vector<std::string_view> intents = []
+    {
+        std::vector<std::string_view> result(IntentNames.begin(), IntentNames.end());
+        for (const auto& entry : AssistantInspectionCatalog)
+            result.push_back(entry.Intent);
+        return result;
+    }();
     return intents;
 }

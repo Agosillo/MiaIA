@@ -238,7 +238,40 @@ Use the following exact intent names:
 | `miaia_project_open` | `project open "<project_path>"` |
 | `miaia_project_save` | `project save ["<project_path>"]` |
 
-Configure number entities with the following roles:
+MiaIA Local additionally supports these inspection intents. They appear in the
+learning manager and in the bilingual sidebar examples; the Wit.ai archive generator
+still supplies the original 13 intents.
+
+| Local inspection intent | Proposed command |
+| --- | --- |
+| `miaia_project_info` | `project info` |
+| `miaia_network_summary` | `summary` |
+| `miaia_network_inspect` | `inspect` |
+| `miaia_neuron_inspect` | `inspect neuron <neuron_id> [maximum_connections]` |
+| `miaia_connection_inspect` | `inspect connection <connection_id>` |
+| `miaia_model_compare` | `model compare <reference_id> <current_id> [maximum_items]` |
+| `miaia_checkpoint_list` | `checkpoint list` |
+| `miaia_checkpoint_inspect` | `checkpoint inspect <checkpoint_id>` |
+| `miaia_checkpoint_compare` | `checkpoint compare <first_id> <second_id> [maximum_items]` |
+| `miaia_dataset_summary` | `dataset summary` |
+| `miaia_dataset_inspect` | `dataset inspect <sample_index>` |
+| `miaia_dataset_diagnose` | `dataset diagnose [sample_limit]` |
+| `miaia_training_history` | `train session history` |
+| `miaia_training_inspect` | `train session inspect <step_index>` |
+| `miaia_training_compare` | `train session compare <first_step_index> <second_step_index> [maximum_items]` |
+| `miaia_debug_status` | `train debug status` |
+| `miaia_breakpoint_list` | `train breakpoint list` |
+
+For example, `Ispeziona neurone 2` proposes `inspect neuron 2`, and
+`Compare models 1 and 2 limit 5` proposes `model compare 1 2 5`.
+Numbers follow the argument order shown above. Sample and training-step indices
+start at zero; IDs and optional limits must be positive integers. Missing,
+negative, fractional, overflowing, or extra numeric arguments are rejected.
+Existence of an ID and availability of a dataset/session are checked by the Console
+when the proposal is executed. Diagnosis currently exposes the default settings
+and optional sample limit; its advanced thresholds remain Console options.
+
+Configure the original Wit.ai number entities with the following roles:
 
 - `model_id`;
 - `inputs`;
@@ -294,7 +327,7 @@ missing values, unsafe quoted text, and intent confidence below `0.70`.
 ## Reproducible Wit.ai imports
 
 `Tools/WitAI/Build-WitImports.ps1` generates complete, token-free Wit.ai backup
-archives for both supported languages. Each archive contains all 13 intents listed
+archives for both supported languages. Each archive contains the original 13 intents listed
 above, 10 utterances per intent, 12 Out of Scope examples, the required entity roles,
 and the `Europe/Rome` timezone inherited from the reference applications.
 
@@ -338,7 +371,7 @@ Token into Studio.
 ## Planned expansion path
 
 The next command-assistant tranche extends the bilingual local corpus from the current
-13 intents to the rest of the shared Console and then to Studio-only interface actions.
+30 intents to the rest of the shared Console and then to Studio-only interface actions.
 Those actions must retain the same proposal, validation, confirmation, and automated
 test boundary. A later microphone path (`whisper.cpp`, `sherpa-onnx`, or another
 speech-to-text adapter) will feed its transcription into the same local provider; it

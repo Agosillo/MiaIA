@@ -1,4 +1,5 @@
 #include "../Include/CommandAssistant.h"
+#include "../Include/AssistantInspectionCatalog.h"
 
 #include <algorithm>
 #include <charconv>
@@ -139,6 +140,30 @@ namespace
         std::string& error)
     {
         const std::string intent = Lower(understanding.Intent);
+
+        for (const auto& entry : MiaIA::Studio::AssistantInspectionCatalog)
+        {
+            if (entry.Intent != intent) continue;
+            command = entry.Command;
+            for (auto role : entry.Roles)
+            {
+                if (role.empty()) break;
+                const bool optional = role.front() == '?';
+                if (optional) role.remove_prefix(1);
+                const auto text = FindValue(understanding, {role});
+                if (!text && optional) continue;
+                std::uint64_t value{};
+                const bool zeroAllowed = role.find("index") != std::string_view::npos;
+                if (!text || !TryUnsigned(*text, value) || (!zeroAllowed && value == 0))
+                {
+                    error = "Missing or invalid " + std::string(role) + ".";
+                    command.clear();
+                    return false;
+                }
+                command += " " + std::to_string(value);
+            }
+            return true;
+        }
 
         if (intent == "miaia_help")
         {

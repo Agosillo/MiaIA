@@ -4,6 +4,7 @@
 #include "Assistant/MiaIAWitCommandAssistant.h"
 #include "Async/Async.h"
 #include "LocalCommandAssistant.h"
+#include "AssistantInspectionCatalog.h"
 #endif
 #include "MiaIACommandProcessor.h"
 #include "MiaIABlueprintLibrary.h"
@@ -11631,6 +11632,7 @@ void SMiaIAEditorPanel::RebuildConsoleSuggestions(
     if (bOnlineAssistantEnabled)
     {
         RebuildAssistantExamples();
+        AddInspectionAssistantExamples();
         return;
     }
 #endif
@@ -11785,6 +11787,30 @@ void SMiaIAEditorPanel::RebuildAssistantExamples()
                 .AutoWrapText(true)
             ]
         ];
+    }
+}
+
+void SMiaIAEditorPanel::AddInspectionAssistantExamples()
+{
+    if (AssistantProvider != EMiaIAAssistantProvider::Local) return;
+    for (const auto& entry : MiaIA::Studio::AssistantInspectionCatalog)
+    {
+        for (const auto language : {EMiaIAAssistantLanguage::English, EMiaIAAssistantLanguage::Italian})
+        {
+            if (AssistantLanguage != EMiaIAAssistantLanguage::Automatic &&
+                AssistantLanguage != language) continue;
+            const FString phrase = FromUtf8(std::string(
+                language == EMiaIAAssistantLanguage::Italian ? entry.Italian : entry.English));
+            ConsoleSuggestionsContent->AddSlot().AutoHeight().Padding(0.0f, 1.0f)
+            [
+                SNew(SButton)
+                .ButtonStyle(&ButtonStyle)
+                .OnClicked(this, &SMiaIAEditorPanel::ApplyAssistantExample, phrase)
+                [
+                    SNew(STextBlock).Text(FText::FromString(phrase)).AutoWrapText(true)
+                ]
+            ];
+        }
     }
 }
 

@@ -266,6 +266,13 @@ Native tests exercise both languages through the complete provider-to-proposal p
 
 ## Current position
 
+MiaIA Local now exposes 17 additional bilingual inspection intents (30 total):
+project and network summaries, neuron/connection inspection, model and checkpoint
+comparison, dataset inspection/diagnosis, training history and step comparison,
+debug status, and breakpoint listing. A shared portable catalog supplies command
+roles and examples; native tests cover English, Italian, mixed requests, invalid
+numeric arguments, and learned-corpus round trips for the new intents.
+
 MiaIA can now host multiple isolated model contexts in one process-local project, fork a populated context into an independently mutable experiment with compatible stable network identities, switch them through SDK, CLI, Blueprint, or the shared graphical Studio selector, compare two non-empty contexts immutably through topology summaries, ranked parameter deltas, and detailed 2D/3D overlays, persist the complete multi-context state, checkpoints, and deterministic sample-order configuration in `.mai` v3 while reading v1/v2, create dense networks with explicit initialization choices, reconfigure existing parameters transactionally, represent, execute, interchange, inspect individual network relationships, evaluate, differentiate, debug one training step phase by phase, train through controlled foreground or background sessions, and navigate or compare the complete history of successful steps. It cannot yet persist visualization layouts or training history, retain complete hidden-neuron activations for every step, or execute independent contexts concurrently.
 
 Those next steps are tracked in the [Roadmap](../Roadmap/Roadmap.md).

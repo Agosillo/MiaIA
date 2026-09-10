@@ -52,6 +52,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Include\CommandAssistant.h" />
+    <ClInclude Include="Include\AssistantInspectionCatalog.h" />
     <ClInclude Include="Include\LocalCommandAssistant.h" />
     <ClInclude Include="Include\StudioController.h" />
     <ClInclude Include="Include\StudioTopology.h" />

@@ -167,6 +167,7 @@ The precise version 3 contract and version 1/2 migration boundary are documented
 - added a portable, offline `MiaIA Local` provider with automatic English/Italian/mixed interpretation, supervised confirmation learning, a complete pending/validated corpus manager, language-aware assistant examples, versioned backup/restore, common native tests, and the existing validated Console proposal path; retained Wit.ai as an experimental option with replaceable per-user or release-packaged Client Access Tokens;
 - broaden Blueprint coverage to the remaining appropriate SDK operations;
 - extend the local bilingual corpus across the full shared Console and then Studio-only interface actions;
+- completed the first inspection expansion: 17 additional bilingual intents with validated IDs, indices and optional limits, shared sidebar examples, and native regression tests;
 - add microphone capture and local speech transcription above the existing proposal contract;
 - refine the IDE command console with persistent history and asynchronous long-running execution;
 - render paged cross-layer relationship results directly on compact topology scenes;

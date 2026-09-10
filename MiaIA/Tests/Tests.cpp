@@ -461,6 +461,74 @@ int main()
             "miaia_help");
     });
 
+    runner.Run("Assistant bilingual inspection commands", [&]()
+    {
+        using namespace MiaIA::Studio;
+        const auto interpret = [](LocalCommandAssistant& local, const std::string& text)
+        {
+            CommandAssistantUnderstanding result;
+            local.Interpret(text, [&](auto value) { result = std::move(value); });
+            return result;
+        };
+        struct Case { const char* En; const char* It; const char* Intent; const char* Command; };
+        const Case cases[] = {
+            {"Show project information", "Mostra informazioni sul progetto", "miaia_project_info", "project info"},
+            {"Show network summary", "Mostra riepilogo della rete", "miaia_network_summary", "summary"},
+            {"Inspect network values", "Ispeziona valori della rete", "miaia_network_inspect", "inspect"},
+            {"Inspect neuron 2", "Ispeziona neurone 2", "miaia_neuron_inspect", "inspect neuron 2"},
+            {"Inspect connection 2", "Ispeziona connessione 2", "miaia_connection_inspect", "inspect connection 2"},
+            {"Compare models 1 and 2", "Confronta modelli 1 e 2", "miaia_model_compare", "model compare 1 2"},
+            {"List checkpoints", "Elenca checkpoint", "miaia_checkpoint_list", "checkpoint list"},
+            {"Inspect checkpoint 1", "Ispeziona checkpoint 1", "miaia_checkpoint_inspect", "checkpoint inspect 1"},
+            {"Compare checkpoints 1 and 2", "Confronta checkpoint 1 e 2", "miaia_checkpoint_compare", "checkpoint compare 1 2"},
+            {"Show dataset summary", "Mostra riepilogo del dataset", "miaia_dataset_summary", "dataset summary"},
+            {"Inspect sample 0", "Ispeziona campione 0", "miaia_dataset_inspect", "dataset inspect 0"},
+            {"Diagnose dataset", "Diagnostica dataset", "miaia_dataset_diagnose", "dataset diagnose"},
+            {"Show training history", "Mostra cronologia del training", "miaia_training_history", "train session history"},
+            {"Inspect training step 0", "Ispeziona passo training 0", "miaia_training_inspect", "train session inspect 0"},
+            {"Compare training steps 0 and 1", "Confronta passi training 0 e 1", "miaia_training_compare", "train session compare 0 1"},
+            {"Show debug status", "Mostra stato del debug", "miaia_debug_status", "train debug status"},
+            {"List breakpoints", "Elenca breakpoint", "miaia_breakpoint_list", "train breakpoint list"}
+        };
+        for (const auto& sample : cases)
+        {
+            for (const auto language : {CommandAssistantLanguage::English,
+                CommandAssistantLanguage::Italian, CommandAssistantLanguage::Automatic})
+            {
+                LocalCommandAssistant local(language);
+                const auto result = interpret(local,
+                    language == CommandAssistantLanguage::Italian ? sample.It : sample.En);
+                assert(result.Intent == sample.Intent);
+                CommandProposal proposal;
+                assert(CommandAssistant::Propose(result, proposal));
+                assert(proposal.Command == sample.Command);
+                assert(local.LearnValidated(result.Text, result.Intent));
+                LocalCommandAssistant restored(language);
+                std::string error;
+                assert(restored.ImportCorpus(local.ExportCorpus(), error));
+                assert(interpret(restored, result.Text).Intent == sample.Intent);
+            }
+        }
+        LocalCommandAssistant local;
+        for (const auto text : {"Inspect neuron", "Inspect neuron -2", "Inspect neuron 1.5",
+            "Inspect neuron 0", "Inspect connection 2 3", "Compare models 1",
+            "Inspect sample -1", "Compare training steps 0", "Diagnose dataset 0",
+            "Inspect neuron 999999999999999999999999999999"})
+        {
+            CommandProposal proposal;
+            assert(!CommandAssistant::Propose(interpret(local, text), proposal));
+        }
+        CommandProposal limited;
+        assert(CommandAssistant::Propose(interpret(local, "Compare models 1 and 2 limit 5"), limited));
+        assert(limited.Command == "model compare 1 2 5");
+        assert(CommandAssistant::Propose(interpret(local, "Mostrami riepilogo della rete"), limited));
+        assert(limited.Command == "summary");
+        assert(CommandAssistant::Propose(interpret(local, "Inspect neurone 2"), limited));
+        assert(limited.Command == "inspect neuron 2");
+        assert(CommandAssistant::Propose(interpret(local, "Diagnostica dataset 10"), limited));
+        assert(limited.Command == "dataset diagnose 10");
+    });
+
     runner.Run("Studio topology scenes", [&]()
     {
         using namespace MiaIA::Studio;

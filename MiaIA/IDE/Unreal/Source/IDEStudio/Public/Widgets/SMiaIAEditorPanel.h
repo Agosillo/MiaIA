@@ -312,6 +312,7 @@ private:
     TSharedRef<SWidget> BuildPendingAssistantIntentMenu();
     void EnsureAssistantLearningSelection();
     void RebuildAssistantExamples();
+    void AddInspectionAssistantExamples();
     void RebuildAssistantLearningSidebar();
     MiaIA::Studio::LocalCommandAssistant* LocalAssistant();
     const MiaIA::Studio::LocalCommandAssistant* LocalAssistant() const;

@@ -6,6 +6,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Include\CommandAssistant.h"><Filter>Header Files</Filter></ClInclude>
+    <ClInclude Include="Include\AssistantInspectionCatalog.h"><Filter>Header Files</Filter></ClInclude>
     <ClInclude Include="Include\LocalCommandAssistant.h"><Filter>Header Files</Filter></ClInclude>
     <ClInclude Include="Include\StudioController.h"><Filter>Header Files</Filter></ClInclude>
     <ClInclude Include="Include\StudioTopology.h"><Filter>Header Files</Filter></ClInclude>
