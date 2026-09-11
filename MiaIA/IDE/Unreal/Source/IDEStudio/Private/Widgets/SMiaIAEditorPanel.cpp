@@ -10984,7 +10984,10 @@ void SMiaIAEditorPanel::HandleOnlineAssistantResult(
         bool queuedForReview{};
         if (auto* assistant = LocalAssistant())
         {
-            queuedForReview = assistant->RecordUnknown(Understanding.Text);
+            // A recognized intent with invalid parameters needs clarification,
+            // not another intent association in the learning queue.
+            queuedForReview = Understanding.Intent.empty() &&
+                assistant->RecordUnknown(Understanding.Text);
             if (queuedForReview)
             {
                 SaveLocalAssistantCorpus();
@@ -11012,8 +11015,9 @@ void SMiaIAEditorPanel::HandleOnlineAssistantResult(
         bHasAssistantProposal = false;
         AssistantProposal = {};
         ConsoleHistory += FString::Printf(
-            TEXT("Assistant: %s (intent: none, confidence: %.2f%%)\n"),
+            TEXT("Assistant: %s (intent: %s, confidence: %.2f%%)\n"),
             *OnlineAssistantStatus,
+            Understanding.Intent.empty() ? TEXT("none") : *FromUtf8(Understanding.Intent),
             Understanding.Confidence * 100.0);
         UpdateConsoleOutput();
         return;

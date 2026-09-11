@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <filesystem>
 #include <fstream>
@@ -459,6 +460,63 @@ int main()
         englishOnly.SetLanguage(CommandAssistantLanguage::Automatic);
         assert(interpret(englishOnly, "Comando personale zeta").Intent ==
             "miaia_help");
+    });
+
+    runner.Run("Local network labelled parameters", [&]()
+    {
+        using namespace MiaIA::Studio;
+        LocalCommandAssistant assistant(CommandAssistantLanguage::English);
+        const auto interpret = [&](const std::string& text)
+        {
+            CommandAssistantUnderstanding result;
+            assert(assistant.Interpret(text, [&](auto value) { result = std::move(value); }));
+            return result;
+        };
+        const std::array<std::string, 4> parts{
+            "2 inputs", "4 neurons per hidden layer", "3 hidden layers", "1 output"};
+        std::array<int, 4> order{0, 1, 2, 3};
+        do
+        {
+            const auto result = interpret("Create a network with " + parts[order[0]] + ", " +
+                parts[order[1]] + ", " + parts[order[2]] + " and " + parts[order[3]]);
+            CommandProposal proposal;
+            assert(CommandAssistant::Propose(result, proposal));
+            assert(proposal.Command == "create 2 4 3 1");
+        } while (std::next_permutation(order.begin(), order.end()));
+        CommandProposal proposal;
+        assert(CommandAssistant::Propose(interpret(
+            "Create a network: outputs: 1, hidden layers: 3, inputs: 2, hidden_width: 4"), proposal));
+        assert(proposal.Command == "create 2 4 3 1");
+        assert(CommandAssistant::Propose(interpret("Create a network"), proposal));
+        assert(proposal.Command == "create");
+        for (const std::string text : {
+            "Create a network with 2 inputs and 1 output",
+            "Create a network with 2 4 3 1",
+            "Create a network with two inputs",
+            "Create a network with five layers",
+            "Create a network with v2 inputs, 4 neurons per layer, 3 hidden layers, 1 output",
+            "Create a network with inputs: 2foo, hidden_width: 4, hidden_layers: 3, outputs: 1",
+            "Create a network with -2 inputs, 4 neurons per layer, 3 hidden layers, 1 output",
+            "Create a network with 2.5 inputs, 4 neurons per layer, 3 hidden layers, 1 output",
+            "Create a network with 2,5 inputs, 4 neurons per layer, 3 hidden layers, 1 output",
+            "Create a network with 0 inputs, 4 neurons per layer, 3 hidden layers, 1 output",
+            "Create a network with 2 inputs, 4 neurons per layer, 3 hidden layers, 1 output, 5 inputs",
+            "Create a network with 2 inputs, 4 neurons per layer, 3 hidden layers, 1 output, seed 5"})
+        {
+            const auto result = interpret(text);
+            assert(result.Intent == "miaia_network_create");
+            assert(!result.Error.empty());
+            assert(!CommandAssistant::Propose(result, proposal));
+        }
+        const std::string custom = "Please assemble this: 1 output, 3 hidden layers, 4 neurons per layer, 2 inputs";
+        assert(assistant.RecordUnknown(custom));
+        assert(assistant.ClassifyPending(custom, "miaia_network_create"));
+        assert(CommandAssistant::Propose(interpret(custom), proposal));
+        assert(proposal.Command == "create 2 4 3 1");
+        const std::string incomplete = "Please assemble this: 2 inputs";
+        assert(assistant.LearnValidated(incomplete, "miaia_network_create"));
+        assert(!CommandAssistant::Propose(interpret(incomplete), proposal));
+        assert(proposal.Error.find("missing") != std::string::npos);
     });
 
     runner.Run("Local command assistant language packs", [&]()

@@ -532,7 +532,95 @@ namespace
         return {};
     }
 
-    void ExtractEntities(CommandAssistantUnderstanding& result)
+    void ExtractNetworkEntities(CommandAssistantUnderstanding& result,
+        const std::string& language)
+    {
+        // Parse labelled spans, never infer a topology from number position.
+        // Keep punctuation/signs intact: normalization would erase decimal commas.
+        std::string text = result.Text;
+        std::transform(text.begin(), text.end(), text.begin(),
+            [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+        static const std::string roles =
+            R"(neurons?\s+(?:per|in\s+each)\s+(?:hidden\s+)?layers?|neuroni?\s+per\s+(?:ogni\s+)?(?:livello|strato)(?:\s+nascosto)?|hidden_width|hidden\s+width|hidden_layers|hidden\s+layers?|layers?\s+hidden|(?:livelli|livello|strati|strato)\s+nascost[oi]|inputs?|ingress[oi]|outputs?|uscit[ae])";
+        static const std::string number = R"([+-]?[0-9]+(?:[.,][0-9]+)?(?:[eE][+-]?[0-9]+)?)";
+        static const std::regex labelled(
+            "(" + number + ")\\s+(" + roles + ")\\b|\\b(" + roles + ")\\s*[:=]?\\s*(" + number + ")");
+        static const std::regex numeric(number);
+        static const std::regex label("\\b(?:" + roles + ")\\b");
+        constexpr std::array<std::string_view, 4> names{
+            "inputs", "hidden_width", "hidden_layers", "outputs"};
+        const std::array<std::string, 4> descriptions = language == "it"
+            ? std::array<std::string, 4>{"input", "neuroni per livello nascosto", "livelli nascosti", "output"}
+            : std::array<std::string, 4>{"inputs", "neurons per hidden layer", "hidden layers", "outputs"};
+        const auto clarify = [&](const std::string& details)
+        {
+            result.Entities.clear();
+            result.Error = (language == "it" ? "Specifica la rete: "
+                : "Please clarify the network: ") + details;
+        };
+        std::array<std::string, 4> values;
+        std::string remainder = text;
+        for (std::sregex_iterator it(text.begin(), text.end(), labelled), end; it != end; ++it)
+        {
+            const std::string value = (*it)[1].matched ? (*it)[1].str() : (*it)[4].str();
+            const std::string role = (*it)[2].matched ? (*it)[2].str() : (*it)[3].str();
+            const auto numberGroup = (*it)[1].matched ? 1 : 4;
+            const auto begin = static_cast<std::size_t>(it->position(numberGroup));
+            const auto endNumber = begin + value.size();
+            const auto wordCharacter = [](unsigned char c) { return std::isalnum(c) || c == '_'; };
+            if ((begin > 0 && wordCharacter(text[begin - 1])) ||
+                (endNumber < text.size() && wordCharacter(text[endNumber])))
+            {
+                clarify("use a separate positive integer for each parameter.");
+                return;
+            }
+            const std::size_t index = role.starts_with("neuron") || role.find("width") != std::string::npos ? 1
+                : role.starts_with("input") || role.starts_with("ingress") ? 0
+                : role.starts_with("output") || role.starts_with("uscit") ? 3 : 2;
+            if (!values[index].empty())
+            {
+                clarify(descriptions[index] + (language == "it" ? " ripetuto; indica un solo valore."
+                    : " repeated; provide one value only."));
+                return;
+            }
+            if (value.find_first_not_of("0123456789") != std::string::npos ||
+                value.find_first_not_of('0') == std::string::npos)
+            {
+                clarify(descriptions[index] + (language == "it" ? ": serve un intero positivo."
+                    : ": a positive integer is required."));
+                return;
+            }
+            values[index] = value;
+            remainder.replace(static_cast<std::size_t>(it->position()),
+                static_cast<std::size_t>(it->length()), static_cast<std::size_t>(it->length()), ' ');
+        }
+        if (std::regex_search(remainder, numeric) || std::regex_search(remainder, label))
+        {
+            clarify(language == "it" ? "associa ogni numero a input, neuroni per livello nascosto, livelli nascosti oppure output; ripeti la frase completa."
+                : "label every number as inputs, neurons per hidden layer, hidden layers or outputs; repeat the complete request.");
+            return;
+        }
+        if (std::all_of(values.begin(), values.end(), [](const auto& value) { return value.empty(); }))
+        {
+            static const std::regex parameterHint(R"(\b(?:with|con|layers?|neurons?|livelli|strati|neuroni)\b)");
+            if (std::regex_search(text, parameterHint))
+                clarify("use labelled digits, for example: 2 inputs, 4 neurons per hidden layer, 3 hidden layers, 1 output.");
+            return; // Only an unparameterized request uses the console defaults.
+        }
+        std::string missing;
+        for (std::size_t i = 0; i < values.size(); ++i)
+            if (values[i].empty()) missing += (missing.empty() ? "" : ", ") + descriptions[i];
+        if (!missing.empty())
+        {
+            clarify((language == "it" ? "mancano " : "missing ") + missing +
+                (language == "it" ? ". Ripeti la frase completa." : ". Repeat the complete request."));
+            return;
+        }
+        for (std::size_t i = 0; i < values.size(); ++i)
+            AddEntity(result, std::string(names[i]), values[i]);
+    }
+
+    void ExtractEntities(CommandAssistantUnderstanding& result, const std::string& language)
     {
         for (const auto& entry : MiaIA::Studio::AssistantInspectionCatalog)
         {
@@ -568,17 +656,7 @@ namespace
         }
         else if (result.Intent == "miaia_network_create")
         {
-            // Topology values follow the Console create order. Keeping any
-            // values that were supplied is important: a partially specified
-            // topology must fail validation instead of silently falling back
-            // to the bare `create` defaults.
-            if (!numbers.empty()) AddEntity(result, "inputs", numbers[0]);
-            if (numbers.size() >= 2)
-                AddEntity(result, "hidden_width", numbers[1]);
-            if (numbers.size() >= 3)
-                AddEntity(result, "hidden_layers", numbers[2]);
-            if (numbers.size() >= 4)
-                AddEntity(result, "outputs", numbers[3]);
+            ExtractNetworkEntities(result, language);
         }
         else if (result.Intent == "miaia_training_start")
         {
@@ -663,7 +741,7 @@ bool MiaIA::Studio::LocalCommandAssistant::Interpret(
         {
             result.Intent = example.Intent;
             result.Confidence = 1.0;
-            ExtractEntities(result);
+            ExtractEntities(result, languageCode_);
             completion(std::move(result));
             return true;
         }
@@ -785,7 +863,7 @@ bool MiaIA::Studio::LocalCommandAssistant::Interpret(
         return true;
     }
 
-    ExtractEntities(result);
+    ExtractEntities(result, languageCode_);
     completion(std::move(result));
     return true;
 }

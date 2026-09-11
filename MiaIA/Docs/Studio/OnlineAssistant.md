@@ -113,9 +113,11 @@ Language codes contain 2-24 lowercase letters, digits, or hyphens and begin with
 letter; the `xx` placeholder and `auto`, `en`, and `it` are reserved. A pack must contain at least one translated
 phrase and can only reference the compiled allowlist of supported intents. Invalid,
 oversized, malformed, or unsupported entries are rejected atomically. Exact imported
-phrases are recognized at `100%`; similar phrases still require review. Numbers are
-extracted in the command-specific positional order after recognition, so translated
-inspection and topology examples retain the same validation boundary. Free-text model
+phrases are recognized at `100%`; similar phrases still require review. Inspection
+numbers retain their command-specific positional order. Network creation instead
+requires labelled topology values, as described below. Pack v1 translates intent
+examples, not parameter-label vocabulary; additional languages do not automatically
+gain translated parameter parsing. Free-text model
 names and project paths currently use the built-in English/Italian marker vocabulary;
 additional marker words require a later pack-format extension.
 
@@ -160,12 +162,21 @@ does not remove built-in intents, rules, or assistant examples.
 
 Classification associates the phrase with an intent, not with a stored executable
 command. Entities are extracted again from the phrase whenever it is interpreted. A
-custom network topology therefore needs all four positive values, in Console `create`
-order: **inputs, neurons per hidden layer, hidden layers, outputs**. For example:
-`crea una rete con 2 input, 4 neuroni per hidden layer, 1 hidden layer e 1 output`
-becomes `create 2 4 1 1`. `crea una rete` contains no topology values and intentionally
-uses the Console defaults; a phrase containing only part of the four-value topology is
-rejected rather than silently using those defaults.
+custom network topology needs all four positive integer values, labelled as
+**inputs, neurons per hidden layer, hidden layers, outputs**, in any order. For example:
+`Create a network with 1 output, 3 hidden layers, 2 inputs and 4 neurons per hidden layer`
+becomes `create 2 4 3 1`. Labels before numbers also work, such as `inputs: 2` or
+`hidden_width: 4`. The first semantic-parameter implementation focuses on English,
+retaining the existing Italian input/hidden-layer/output vocabulary; it does not add
+Spanish parameter labels. Numbers must be digits, not spelled-out words.
+
+`Create a network` intentionally uses Console defaults. Partial, unlabelled,
+duplicate, extra, negative or fractional parameters block the proposal and request
+clarification. The user must repeat the complete corrected phrase; no conversational
+parameter state or automatic completion is stored yet. A recognized intent with a
+parameter error is not added to the unknown-intent Review queue. Learning an intent
+at 100% does not bypass parameter validation. Exact CLI `create 2 4 3 1` remains
+available with the assistant disabled; positional natural-language guessing is removed.
 
 The versioned corpus is stored outside `.mai` project archives under the Unreal
 Saved directory at `Saved/MiaIA/CommandAssistant/local-corpus.miaia`. `StudioCore`
