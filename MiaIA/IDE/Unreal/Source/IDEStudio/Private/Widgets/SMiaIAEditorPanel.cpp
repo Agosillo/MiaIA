@@ -88,6 +88,10 @@ namespace
     constexpr TCHAR AssistantPackagedSettingsSection[] = TEXT("WitAI");
     constexpr TCHAR AssistantLocalCorpusRelativePath[] =
         TEXT("MiaIA/CommandAssistant/local-corpus.miaia");
+    constexpr TCHAR AssistantLanguageTemplateRelativePath[] =
+        TEXT("MiaIA/CommandAssistant/language-template.miaia-language");
+    constexpr TCHAR AssistantLanguagesRelativeDirectory[] =
+        TEXT("MiaIA/CommandAssistant/Languages");
 #endif
     constexpr int32 MinimumTopologyLimit = 1;
     constexpr int32 MaximumDetailedNeuronLimit = 100000000;
@@ -199,6 +203,27 @@ namespace
         return FPaths::Combine(
             FPaths::ProjectSavedDir(),
             TEXT("MiaIA/CommandAssistant/local-corpus.backup.miaia"));
+    }
+
+    FString LocalAssistantLanguageTemplatePath()
+    {
+        return FPaths::Combine(
+            FPaths::ProjectSavedDir(),
+            AssistantLanguageTemplateRelativePath);
+    }
+
+    FString LocalAssistantLanguagesDirectory()
+    {
+        return FPaths::Combine(
+            FPaths::ProjectSavedDir(),
+            AssistantLanguagesRelativeDirectory);
+    }
+
+    FString LocalAssistantLanguagePackPath(const FString& Code)
+    {
+        return FPaths::Combine(
+            LocalAssistantLanguagesDirectory(),
+            Code + TEXT(".miaia-language"));
     }
 
     FString LoadAssistantPackagedToken(const TCHAR* Key)
@@ -2608,9 +2633,21 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
                                         .ScrollBarStyle(&ScrollBarStyle)
                                         + SScrollBox::Slot()
                                         [
+                                            SNew(SVerticalBox)
+#if MIAIA_WITH_WIT_AI
+                                            + SVerticalBox::Slot()
+                                            .AutoHeight()
+                                            [
+                                                BuildOnlineAssistantPanel(panelBorder)
+                                            ]
+#endif
+                                            + SVerticalBox::Slot()
+                                            .AutoHeight()
+                                            [
                                             SAssignNew(
                                                 ConsoleSuggestionsContent,
                                                 SVerticalBox)
+                                            ]
                                         ]
                                     ]
                                 ]
@@ -2619,14 +2656,6 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
                             .Value(0.76f)
                             [
                                 SNew(SVerticalBox)
-#if MIAIA_WITH_WIT_AI
-                                + SVerticalBox::Slot()
-                                .AutoHeight()
-                                .Padding(4.0f, 2.0f, 0.0f, 6.0f)
-                                [
-                                    BuildOnlineAssistantPanel(panelBorder)
-                                ]
-#endif
                                 + SVerticalBox::Slot()
                                 .FillHeight(1.0f)
                                 [
@@ -2644,10 +2673,19 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
                                             ConsoleOutput,
                                             SMultiLineEditableText)
                                         .IsReadOnly(true)
+                                        .AutoWrapText(true)
+                                        .WrappingPolicy(ETextWrappingPolicy::AllowPerCharacterWrapping)
                                         .Text(FText::FromString(ConsoleHistory))
                                         .VScrollBar(ConsoleOutputScrollBar)
                                     ]
                                 ]
+#if MIAIA_WITH_WIT_AI
+                                + SVerticalBox::Slot()
+                                .AutoHeight()
+                                [
+                                    BuildAssistantProposalPanel(panelBorder)
+                                ]
+#endif
                                 + SVerticalBox::Slot()
                                 .AutoHeight()
                                 .Padding(4.0f, 6.0f, 0.0f, 0.0f)
@@ -9810,7 +9848,52 @@ TSharedRef<SWidget> SMiaIAEditorPanel::BuildOnlineAssistantPanel(
             [
                 SNew(SHorizontalBox)
                 + SHorizontalBox::Slot()
-                .AutoWidth()
+                .FillWidth(1.0f)
+                .Padding(0.0f, 0.0f, 3.0f, 0.0f)
+                [
+                    SNew(SButton)
+                    .ButtonStyle(&ButtonStyle)
+                    .Text(LOCTEXT("AssistantConfigurationToggle", "Settings"))
+                    .OnClicked_Lambda([this]()
+                    {
+                        bAssistantConfigurationExpanded = !bAssistantConfigurationExpanded;
+                        if (bAssistantConfigurationExpanded)
+                            bAssistantLearningExpanded = false;
+                        RebuildConsoleSuggestions(FString());
+                        return FReply::Handled();
+                    })
+                ]
+                + SHorizontalBox::Slot()
+                .FillWidth(1.0f)
+                .Padding(3.0f, 0.0f, 0.0f, 0.0f)
+                [
+                    SNew(SButton)
+                    .ButtonStyle(&ButtonStyle)
+                    .Text_Lambda([this]()
+                    {
+                        const auto* local = LocalAssistant();
+                        return FText::FromString(FString::Printf(TEXT("Review (%llu)"),
+                            local ? static_cast<unsigned long long>(local->PendingPhrases().size()) : 0ULL));
+                    })
+                    .IsEnabled_Lambda([this]() { return LocalAssistant() != nullptr; })
+                    .OnClicked(this, &SMiaIAEditorPanel::HandleToggleAssistantLearning)
+                ]
+            ]
+            + SVerticalBox::Slot()
+            .AutoHeight()
+            [
+                SNew(SVerticalBox)
+                .Visibility_Lambda([this]()
+                {
+                    return bAssistantConfigurationExpanded
+                        ? EVisibility::Visible : EVisibility::Collapsed;
+                })
+            + SVerticalBox::Slot()
+            .AutoHeight()
+            [
+                SNew(SVerticalBox)
+                + SVerticalBox::Slot()
+                .AutoHeight()
                 .VAlign(VAlign_Center)
                 .Padding(0.0f, 0.0f, 12.0f, 0.0f)
                 [
@@ -9820,8 +9903,8 @@ TSharedRef<SWidget> SMiaIAEditorPanel::BuildOnlineAssistantPanel(
                         "Command assistant"))
                     .Font(FAppStyle::GetFontStyle(TEXT("SmallFontBold")))
                 ]
-                + SHorizontalBox::Slot()
-                .AutoWidth()
+                + SVerticalBox::Slot()
+                .AutoHeight()
                 .VAlign(VAlign_Center)
                 [
                     SNew(SCheckBox)
@@ -9850,10 +9933,10 @@ TSharedRef<SWidget> SMiaIAEditorPanel::BuildOnlineAssistantPanel(
                             "Enabled"))
                     ]
                 ]
-                + SHorizontalBox::Slot()
-                .AutoWidth()
+                + SVerticalBox::Slot()
+                .AutoHeight()
                 .VAlign(VAlign_Center)
-                .Padding(12.0f, 0.0f, 0.0f, 0.0f)
+                .Padding(0.0f, 3.0f, 0.0f, 0.0f)
                 [
                     SNew(SCheckBox)
                     .IsEnabled_Lambda([this]()
@@ -9885,18 +9968,18 @@ TSharedRef<SWidget> SMiaIAEditorPanel::BuildOnlineAssistantPanel(
             .AutoHeight()
             .Padding(0.0f, 5.0f, 0.0f, 0.0f)
             [
-                SNew(SHorizontalBox)
-                + SHorizontalBox::Slot()
-                .AutoWidth()
+                SNew(SVerticalBox)
+                + SVerticalBox::Slot()
+                .AutoHeight()
                 .VAlign(VAlign_Center)
                 [
                     SNew(STextBlock)
                     .Text(LOCTEXT("AssistantProviderLabel", "Provider"))
                 ]
-                + SHorizontalBox::Slot()
-                .AutoWidth()
+                + SVerticalBox::Slot()
+                .AutoHeight()
                 .VAlign(VAlign_Center)
-                .Padding(6.0f, 0.0f, 14.0f, 0.0f)
+                .Padding(0.0f, 3.0f, 0.0f, 0.0f)
                 [
                     SNew(SComboButton)
                     .ComboButtonStyle(&ComboButtonStyle)
@@ -9912,17 +9995,17 @@ TSharedRef<SWidget> SMiaIAEditorPanel::BuildOnlineAssistantPanel(
                         this,
                         &SMiaIAEditorPanel::BuildAssistantProviderMenu)
                 ]
-                + SHorizontalBox::Slot()
-                .AutoWidth()
+                + SVerticalBox::Slot()
+                .AutoHeight()
                 .VAlign(VAlign_Center)
                 [
                     SNew(STextBlock)
                     .Text(LOCTEXT("AssistantLanguageLabel", "Language"))
                 ]
-                + SHorizontalBox::Slot()
-                .AutoWidth()
+                + SVerticalBox::Slot()
+                .AutoHeight()
                 .VAlign(VAlign_Center)
-                .Padding(6.0f, 0.0f, 0.0f, 0.0f)
+                .Padding(0.0f, 3.0f, 0.0f, 0.0f)
                 [
                     SNew(SComboButton)
                     .ComboButtonStyle(&ComboButtonStyle)
@@ -9941,10 +10024,10 @@ TSharedRef<SWidget> SMiaIAEditorPanel::BuildOnlineAssistantPanel(
                         &SMiaIAEditorPanel::BuildAssistantLanguageMenu)
                 ]
 #if !UE_BUILD_SHIPPING
-                + SHorizontalBox::Slot()
-                .AutoWidth()
+                + SVerticalBox::Slot()
+                .AutoHeight()
                 .VAlign(VAlign_Center)
-                .Padding(7.0f, 0.0f, 0.0f, 0.0f)
+                .Padding(0.0f, 3.0f, 0.0f, 0.0f)
                 [
                     SNew(SButton)
                     .ButtonStyle(&ButtonStyle)
@@ -9966,17 +10049,6 @@ TSharedRef<SWidget> SMiaIAEditorPanel::BuildOnlineAssistantPanel(
                         &SMiaIAEditorPanel::HandleToggleAssistantSettings)
                 ]
 #endif
-                + SHorizontalBox::Slot()
-                .FillWidth(1.0f)
-                .VAlign(VAlign_Center)
-                .Padding(12.0f, 0.0f, 0.0f, 0.0f)
-                [
-                    SNew(STextBlock)
-                    .Text(
-                        this,
-                        &SMiaIAEditorPanel::OnlineAssistantStatusText)
-                    .AutoWrapText(true)
-                ]
             ]
 #if !UE_BUILD_SHIPPING
             + SVerticalBox::Slot()
@@ -10061,9 +10133,9 @@ TSharedRef<SWidget> SMiaIAEditorPanel::BuildOnlineAssistantPanel(
                     .HAlign(HAlign_Right)
                     .Padding(0.0f, 8.0f, 0.0f, 0.0f)
                     [
-                        SNew(SHorizontalBox)
-                        + SHorizontalBox::Slot()
-                        .AutoWidth()
+                        SNew(SVerticalBox)
+                        + SVerticalBox::Slot()
+                        .AutoHeight()
                         [
                             SNew(SButton)
                             .ButtonStyle(&ButtonStyle)
@@ -10075,9 +10147,9 @@ TSharedRef<SWidget> SMiaIAEditorPanel::BuildOnlineAssistantPanel(
                                 &SMiaIAEditorPanel::
                                     HandleCancelAssistantSettings)
                         ]
-                        + SHorizontalBox::Slot()
-                        .AutoWidth()
-                        .Padding(6.0f, 0.0f, 0.0f, 0.0f)
+                        + SVerticalBox::Slot()
+                        .AutoHeight()
+                        .Padding(0.0f, 3.0f, 0.0f, 0.0f)
                         [
                             SNew(SButton)
                             .ButtonStyle(&ButtonStyle)
@@ -10093,6 +10165,120 @@ TSharedRef<SWidget> SMiaIAEditorPanel::BuildOnlineAssistantPanel(
                 ]
             ]
 #endif
+                        + SVerticalBox::Slot()
+                        .AutoHeight()
+                        .Padding(0.0f, 6.0f, 0.0f, 0.0f)
+                        [
+                            SNew(SVerticalBox)
+                            + SVerticalBox::Slot()
+                            .AutoHeight()
+                            [
+                                SNew(SButton)
+                                .ButtonStyle(&ButtonStyle)
+                                .Text(LOCTEXT(
+                                    "AssistantExportCorpus",
+                                    "Export backup"))
+                                .ToolTipText(LOCTEXT(
+                                    "AssistantExportCorpusTip",
+                                    "Write a portable backup beside the active local corpus."))
+                                .OnClicked(
+                                    this,
+                                    &SMiaIAEditorPanel::
+                                        HandleExportAssistantCorpus)
+                            ]
+                            + SVerticalBox::Slot()
+                            .AutoHeight()
+                            .Padding(0.0f, 3.0f, 0.0f, 0.0f)
+                            [
+                                SNew(SButton)
+                                .ButtonStyle(&ButtonStyle)
+                                .Text(LOCTEXT(
+                                    "AssistantImportCorpus",
+                                    "Import backup"))
+                                .IsEnabled_Lambda([]()
+                                {
+                                    return FPaths::FileExists(
+                                        LocalAssistantCorpusBackupPath());
+                                })
+                                .OnClicked(
+                                    this,
+                                    &SMiaIAEditorPanel::
+                                        HandleImportAssistantCorpus)
+                            ]
+                            + SVerticalBox::Slot()
+                            .AutoHeight()
+                            .Padding(0.0f, 3.0f, 0.0f, 0.0f)
+                            [
+                                SNew(SButton)
+                                .ButtonStyle(&ButtonStyle)
+                                .Text(LOCTEXT(
+                                    "AssistantResetCorpus",
+                                    "Reset learned data"))
+                                .OnClicked(
+                                    this,
+                                    &SMiaIAEditorPanel::
+                                        HandleResetAssistantCorpus)
+                            ]
+                        ]
+                        + SVerticalBox::Slot()
+                        .AutoHeight()
+                        .Padding(0.0f, 6.0f, 0.0f, 0.0f)
+                        [
+                            SNew(SVerticalBox)
+                            + SVerticalBox::Slot()
+                            .AutoHeight()
+                            [
+                                SNew(SButton)
+                                .ButtonStyle(&ButtonStyle)
+                                .Text(LOCTEXT(
+                                    "AssistantExportLanguageTemplate",
+                                    "Export language template"))
+                                .ToolTipText(LOCTEXT(
+                                    "AssistantExportLanguageTemplateTip",
+                                    "Create an editable translation template for every MiaIA Local intent."))
+                                .OnClicked(
+                                    this,
+                                    &SMiaIAEditorPanel::
+                                        HandleExportAssistantLanguageTemplate)
+                            ]
+                            + SVerticalBox::Slot()
+                            .AutoHeight()
+                            .Padding(0.0f, 5.0f)
+                            [
+                                SNew(SEditableTextBox)
+                                .HintText(LOCTEXT("AssistantLanguageFile", "Language pack file (full path)"))
+                                .Text_Lambda([this]()
+                                {
+                                    return FText::FromString(AssistantLanguageImportPath.IsEmpty()
+                                        ? LocalAssistantLanguageTemplatePath()
+                                        : AssistantLanguageImportPath);
+                                })
+                                .OnTextChanged_Lambda([this](const FText& Text)
+                                {
+                                    AssistantLanguageImportPath = Text.ToString();
+                                })
+                                .ToolTipText(LOCTEXT("AssistantLanguageFileTip",
+                                    "Enter the full path of the edited UTF-8 language pack. Translate the fourth column, keeping TAB separators."))
+                            ]
+                            + SVerticalBox::Slot()
+                            .AutoHeight()
+                            .Padding(0.0f, 3.0f, 0.0f, 0.0f)
+                            [
+                                SNew(SButton)
+                                .ButtonStyle(&ButtonStyle)
+                                .Text(LOCTEXT(
+                                    "AssistantImportLanguageTemplate",
+                                    "Install language pack"))
+                                .ToolTipText(LOCTEXT(
+                                    "AssistantImportLanguageTemplateTip",
+                                    "Validate and install the translated language template."))
+                                .OnClicked(
+                                    this,
+                                    &SMiaIAEditorPanel::
+                                        HandleImportAssistantLanguageTemplate)
+                            ]
+                        ]
+            ]
             + SVerticalBox::Slot()
             .AutoHeight()
             .Padding(0.0f, 7.0f, 0.0f, 0.0f)
@@ -10105,15 +10291,15 @@ TSharedRef<SWidget> SMiaIAEditorPanel::BuildOnlineAssistantPanel(
                 .Padding(6.0f)
                 .Visibility(
                     this,
-                    &SMiaIAEditorPanel::AssistantLearningVisibility)
+                    &SMiaIAEditorPanel::AssistantLearningPanelVisibility)
                 [
                     SNew(SVerticalBox)
                     + SVerticalBox::Slot()
                     .AutoHeight()
                     [
-                        SNew(SHorizontalBox)
-                        + SHorizontalBox::Slot()
-                        .FillWidth(1.0f)
+                        SNew(SVerticalBox)
+                        + SVerticalBox::Slot()
+                        .AutoHeight()
                         .VAlign(VAlign_Center)
                         [
                             SNew(STextBlock)
@@ -10123,27 +10309,7 @@ TSharedRef<SWidget> SMiaIAEditorPanel::BuildOnlineAssistantPanel(
                                     AssistantLearningSummaryText)
                             .AutoWrapText(true)
                         ]
-                        + SHorizontalBox::Slot()
-                        .AutoWidth()
-                        .Padding(6.0f, 0.0f, 0.0f, 0.0f)
-                        [
-                            SNew(SButton)
-                            .ButtonStyle(&ButtonStyle)
-                            .Text_Lambda([this]()
-                            {
-                                return bAssistantLearningExpanded
-                                    ? LOCTEXT(
-                                        "AssistantCloseLearning",
-                                        "Close review")
-                                    : LOCTEXT(
-                                        "AssistantReviewLearning",
-                                        "Review");
-                            })
-                            .OnClicked(
-                                this,
-                                &SMiaIAEditorPanel::
-                                    HandleToggleAssistantLearning)
-                        ]
+
                     ]
                     + SVerticalBox::Slot()
                     .AutoHeight()
@@ -10168,9 +10334,9 @@ TSharedRef<SWidget> SMiaIAEditorPanel::BuildOnlineAssistantPanel(
                         .AutoHeight()
                         .Padding(0.0f, 6.0f, 0.0f, 0.0f)
                         [
-                            SNew(SHorizontalBox)
-                            + SHorizontalBox::Slot()
-                            .FillWidth(1.0f)
+                            SNew(SVerticalBox)
+                            + SVerticalBox::Slot()
+                            .AutoHeight()
                             [
                                 SNew(SComboButton)
                                 .ComboButtonStyle(&ComboButtonStyle)
@@ -10192,9 +10358,9 @@ TSharedRef<SWidget> SMiaIAEditorPanel::BuildOnlineAssistantPanel(
                                     &SMiaIAEditorPanel::
                                         BuildPendingAssistantIntentMenu)
                             ]
-                            + SHorizontalBox::Slot()
-                            .AutoWidth()
-                            .Padding(6.0f, 0.0f, 0.0f, 0.0f)
+                            + SVerticalBox::Slot()
+                            .AutoHeight()
+                            .Padding(0.0f, 3.0f, 0.0f, 0.0f)
                             [
                                 SNew(SButton)
                                 .ButtonStyle(&ButtonStyle)
@@ -10214,9 +10380,9 @@ TSharedRef<SWidget> SMiaIAEditorPanel::BuildOnlineAssistantPanel(
                                     &SMiaIAEditorPanel::
                                         HandleValidatePendingAssistantPhrase)
                             ]
-                            + SHorizontalBox::Slot()
-                            .AutoWidth()
-                            .Padding(6.0f, 0.0f, 0.0f, 0.0f)
+                            + SVerticalBox::Slot()
+                            .AutoHeight()
+                            .Padding(0.0f, 3.0f, 0.0f, 0.0f)
                             [
                                 SNew(SButton)
                                 .ButtonStyle(&ButtonStyle)
@@ -10234,145 +10400,91 @@ TSharedRef<SWidget> SMiaIAEditorPanel::BuildOnlineAssistantPanel(
                                         HandleDeletePendingAssistantPhrase)
                             ]
                         ]
-                        + SVerticalBox::Slot()
-                        .AutoHeight()
-                        .Padding(0.0f, 6.0f, 0.0f, 0.0f)
-                        [
-                            SNew(SHorizontalBox)
-                            + SHorizontalBox::Slot()
-                            .AutoWidth()
-                            [
-                                SNew(SButton)
-                                .ButtonStyle(&ButtonStyle)
-                                .Text(LOCTEXT(
-                                    "AssistantExportCorpus",
-                                    "Export backup"))
-                                .ToolTipText(LOCTEXT(
-                                    "AssistantExportCorpusTip",
-                                    "Write a portable backup beside the active local corpus."))
-                                .OnClicked(
-                                    this,
-                                    &SMiaIAEditorPanel::
-                                        HandleExportAssistantCorpus)
-                            ]
-                            + SHorizontalBox::Slot()
-                            .AutoWidth()
-                            .Padding(6.0f, 0.0f, 0.0f, 0.0f)
-                            [
-                                SNew(SButton)
-                                .ButtonStyle(&ButtonStyle)
-                                .Text(LOCTEXT(
-                                    "AssistantImportCorpus",
-                                    "Import backup"))
-                                .IsEnabled_Lambda([]()
-                                {
-                                    return FPaths::FileExists(
-                                        LocalAssistantCorpusBackupPath());
-                                })
-                                .OnClicked(
-                                    this,
-                                    &SMiaIAEditorPanel::
-                                        HandleImportAssistantCorpus)
-                            ]
-                            + SHorizontalBox::Slot()
-                            .AutoWidth()
-                            .Padding(6.0f, 0.0f, 0.0f, 0.0f)
-                            [
-                                SNew(SButton)
-                                .ButtonStyle(&ButtonStyle)
-                                .Text(LOCTEXT(
-                                    "AssistantResetCorpus",
-                                    "Reset learned data"))
-                                .OnClicked(
-                                    this,
-                                    &SMiaIAEditorPanel::
-                                        HandleResetAssistantCorpus)
-                            ]
-                        ]
-                    ]
-                ]
-            ]
-            + SVerticalBox::Slot()
-            .AutoHeight()
-            .Padding(0.0f, 7.0f, 0.0f, 0.0f)
-            [
-                SNew(SBorder)
-                .BorderImage(PanelBorder)
-                .BorderBackgroundColor(
-                    this,
-                    &SMiaIAEditorPanel::PanelColor)
-                .Padding(6.0f)
-                .Visibility(
-                    this,
-                    &SMiaIAEditorPanel::AssistantProposalVisibility)
-                [
-                    SNew(SVerticalBox)
-                    + SVerticalBox::Slot()
-                    .AutoHeight()
-                    [
-                        SNew(STextBlock)
-                        .Text(
-                            this,
-                            &SMiaIAEditorPanel::AssistantProposalText)
-                        .AutoWrapText(true)
-                    ]
-                    + SVerticalBox::Slot()
-                    .AutoHeight()
-                    .Padding(0.0f, 6.0f, 0.0f, 0.0f)
-                    [
-                        SNew(SHorizontalBox)
-                        + SHorizontalBox::Slot()
-                        .AutoWidth()
-                        [
-                            SNew(SButton)
-                            .ButtonStyle(&ButtonStyle)
-                            .Text(LOCTEXT(
-                                "ConfirmAssistantProposal",
-                                "Confirm command"))
-                            .OnClicked(
-                                this,
-                                &SMiaIAEditorPanel::
-                                    HandleConfirmAssistantProposal)
-                        ]
-                        + SHorizontalBox::Slot()
-                        .AutoWidth()
-                        .Padding(6.0f, 0.0f, 0.0f, 0.0f)
-                        [
-                            SNew(SButton)
-                            .ButtonStyle(&ButtonStyle)
-                            .Text(LOCTEXT(
-                                "DiscardAssistantProposal",
-                                "Discard"))
-                            .OnClicked(
-                                this,
-                                &SMiaIAEditorPanel::
-                                    HandleDiscardAssistantProposal)
-                        ]
-                        + SHorizontalBox::Slot()
-                        .AutoWidth()
-                        .Padding(6.0f, 0.0f, 0.0f, 0.0f)
-                        [
-                            SNew(SButton)
-                            .ButtonStyle(&ButtonStyle)
-                            .Text(LOCTEXT(
-                                "IncorrectAssistantProposal",
-                                "Wrong interpretation"))
-                            .Visibility_Lambda([this]()
-                            {
-                                return AssistantProvider ==
-                                    EMiaIAAssistantProvider::Local
-                                    ? EVisibility::Visible
-                                    : EVisibility::Collapsed;
-                            })
-                            .OnClicked(
-                                this,
-                                &SMiaIAEditorPanel::
-                                    HandleIncorrectAssistantProposal)
-                        ]
+
                     ]
                 ]
             ]
         ];
+}
+
+TSharedRef<SWidget> SMiaIAEditorPanel::BuildAssistantProposalPanel(
+    const FSlateBrush* PanelBorder)
+{
+    return SNew(SBorder)
+.BorderImage(PanelBorder)
+.BorderBackgroundColor(
+    this,
+    &SMiaIAEditorPanel::PanelColor)
+.Padding(6.0f)
+.Visibility(
+    this,
+    &SMiaIAEditorPanel::AssistantProposalVisibility)
+[
+    SNew(SVerticalBox)
+    + SVerticalBox::Slot()
+    .AutoHeight()
+    [
+        SNew(STextBlock)
+        .Text(
+            this,
+            &SMiaIAEditorPanel::AssistantProposalText)
+        .AutoWrapText(true)
+    ]
+    + SVerticalBox::Slot()
+    .AutoHeight()
+    .Padding(0.0f, 6.0f, 0.0f, 0.0f)
+    [
+        SNew(SVerticalBox)
+        + SVerticalBox::Slot()
+        .AutoHeight()
+        [
+            SNew(SButton)
+            .ButtonStyle(&ButtonStyle)
+            .Text(LOCTEXT(
+                "ConfirmAssistantProposal",
+                "Confirm command"))
+            .OnClicked(
+                this,
+                &SMiaIAEditorPanel::
+                    HandleConfirmAssistantProposal)
+        ]
+        + SVerticalBox::Slot()
+        .AutoHeight()
+        .Padding(0.0f, 3.0f, 0.0f, 0.0f)
+        [
+            SNew(SButton)
+            .ButtonStyle(&ButtonStyle)
+            .Text(LOCTEXT(
+                "DiscardAssistantProposal",
+                "Discard"))
+            .OnClicked(
+                this,
+                &SMiaIAEditorPanel::
+                    HandleDiscardAssistantProposal)
+        ]
+        + SVerticalBox::Slot()
+        .AutoHeight()
+        .Padding(0.0f, 3.0f, 0.0f, 0.0f)
+        [
+            SNew(SButton)
+            .ButtonStyle(&ButtonStyle)
+            .Text(LOCTEXT(
+                "IncorrectAssistantProposal",
+                "Wrong interpretation"))
+            .Visibility_Lambda([this]()
+            {
+                return AssistantProvider ==
+                    EMiaIAAssistantProvider::Local
+                    ? EVisibility::Visible
+                    : EVisibility::Collapsed;
+            })
+            .OnClicked(
+                this,
+                &SMiaIAEditorPanel::
+                    HandleIncorrectAssistantProposal)
+        ]
+    ]
+];
 }
 
 void SMiaIAEditorPanel::RebuildOnlineAssistantProvider()
@@ -10387,12 +10499,27 @@ void SMiaIAEditorPanel::RebuildOnlineAssistantProvider()
                 : MiaIA::Studio::CommandAssistantLanguage::Automatic;
         auto assistant =
             std::make_unique<MiaIA::Studio::LocalCommandAssistant>(language);
-        FString loadError;
-        LoadLocalAssistantCorpus(*assistant, loadError);
+        FString corpusError;
+        FString languagePackError;
+        LoadLocalAssistantCorpus(*assistant, corpusError);
+        LoadLocalAssistantLanguagePacks(*assistant, languagePackError);
+        if (AssistantLanguage == EMiaIAAssistantLanguage::Custom &&
+            !assistant->SetLanguageCode(
+                TCHAR_TO_UTF8(*AssistantCustomLanguageCode)))
+        {
+            AssistantLanguage = EMiaIAAssistantLanguage::Automatic;
+            AssistantCustomLanguageCode.Empty();
+            assistant->SetLanguage(
+                MiaIA::Studio::CommandAssistantLanguage::Automatic);
+            languagePackError = TEXT(
+                "The selected language pack is unavailable; Auto was restored.");
+        }
         OnlineAssistant = std::move(assistant);
-        OnlineAssistantStatus = loadError.IsEmpty()
+        const FString loadError = !corpusError.IsEmpty()
+            ? corpusError : languagePackError;
+        SetAssistantConsoleStatus(loadError.IsEmpty()
             ? FromUtf8(OnlineAssistant->AvailabilityMessage())
-            : loadError;
+            : loadError);
         return;
     }
 
@@ -10412,8 +10539,8 @@ void SMiaIAEditorPanel::RebuildOnlineAssistantProvider()
     OnlineAssistant = std::make_unique<FMiaIAWitCommandAssistant>(
         token.Token,
         missingMessage);
-    OnlineAssistantStatus = FromUtf8(
-        OnlineAssistant->AvailabilityMessage());
+    SetAssistantConsoleStatus(FromUtf8(
+        OnlineAssistant->AvailabilityMessage()));
 }
 
 TSharedRef<SWidget> SMiaIAEditorPanel::BuildAssistantProviderMenu()
@@ -10469,7 +10596,8 @@ FReply SMiaIAEditorPanel::SelectAssistantProvider(
 
     AssistantProvider = InProvider;
     if (AssistantProvider == EMiaIAAssistantProvider::WitAI &&
-        AssistantLanguage == EMiaIAAssistantLanguage::Automatic)
+        (AssistantLanguage == EMiaIAAssistantLanguage::Automatic ||
+            AssistantLanguage == EMiaIAAssistantLanguage::Custom))
     {
         // Wit.ai uses separate language-specific applications and cannot
         // evaluate both corpora in one request.
@@ -10498,56 +10626,79 @@ FText SMiaIAEditorPanel::AssistantProviderText() const
 
 TSharedRef<SWidget> SMiaIAEditorPanel::BuildAssistantLanguageMenu()
 {
+    TSharedRef<SVerticalBox> menu = SNew(SVerticalBox);
+    menu->AddSlot().AutoHeight()
+    [
+        SNew(SButton)
+        .ButtonStyle(&ButtonStyle)
+        .Text(LOCTEXT(
+            "AssistantLanguageAutomatic",
+            "Auto (all installed languages)"))
+        .ToolTipText(LOCTEXT(
+            "AssistantLanguageAutomaticTooltip",
+            "MiaIA Local evaluates English, Italian, installed language packs and mixed phrases together."))
+        .IsEnabled_Lambda([this]()
+        {
+            return AssistantProvider == EMiaIAAssistantProvider::Local;
+        })
+        .OnClicked(
+            this,
+            &SMiaIAEditorPanel::SelectAssistantLanguage,
+            EMiaIAAssistantLanguage::Automatic)
+    ];
+    menu->AddSlot().AutoHeight().Padding(0.0f, 3.0f, 0.0f, 0.0f)
+    [
+        SNew(SButton)
+        .ButtonStyle(&ButtonStyle)
+        .Text(LOCTEXT("AssistantLanguageEnglish", "English"))
+        .OnClicked(
+            this,
+            &SMiaIAEditorPanel::SelectAssistantLanguage,
+            EMiaIAAssistantLanguage::English)
+    ];
+    menu->AddSlot().AutoHeight().Padding(0.0f, 3.0f, 0.0f, 0.0f)
+    [
+        SNew(SButton)
+        .ButtonStyle(&ButtonStyle)
+        .Text(LOCTEXT("AssistantLanguageItalian", "Italiano"))
+        .OnClicked(
+            this,
+            &SMiaIAEditorPanel::SelectAssistantLanguage,
+            EMiaIAAssistantLanguage::Italian)
+    ];
+
+    if (AssistantProvider == EMiaIAAssistantProvider::Local)
+    {
+        if (const auto* assistant = LocalAssistant())
+        {
+            for (const auto& pack : assistant->LanguagePacks())
+            {
+                const FString code = FromUtf8(pack.Code);
+                const FString label = FString::Printf(
+                    TEXT("%s (%s)"),
+                    *FromUtf8(pack.DisplayName),
+                    *code);
+                menu->AddSlot().AutoHeight().Padding(0.0f, 3.0f, 0.0f, 0.0f)
+                [
+                    SNew(SButton)
+                    .ButtonStyle(&ButtonStyle)
+                    .Text(FText::FromString(label))
+                    .OnClicked(
+                        this,
+                        &SMiaIAEditorPanel::SelectAssistantCustomLanguage,
+                        code)
+                ];
+            }
+        }
+    }
+
     return SNew(SBox)
-        .WidthOverride(210.0f)
+        .WidthOverride(250.0f)
+        .MaxDesiredHeight(420.0f)
         .Padding(4.0f)
         [
-            SNew(SVerticalBox)
-            + SVerticalBox::Slot()
-            .AutoHeight()
-            [
-                SNew(SButton)
-                .ButtonStyle(&ButtonStyle)
-                .Text(LOCTEXT(
-                    "AssistantLanguageAutomatic",
-                    "Auto (English + Italiano)"))
-                .ToolTipText(LOCTEXT(
-                    "AssistantLanguageAutomaticTooltip",
-                    "MiaIA Local evaluates English, Italian and mixed phrases together."))
-                .IsEnabled_Lambda([this]()
-                {
-                    return AssistantProvider ==
-                        EMiaIAAssistantProvider::Local;
-                })
-                .OnClicked(
-                    this,
-                    &SMiaIAEditorPanel::SelectAssistantLanguage,
-                    EMiaIAAssistantLanguage::Automatic)
-            ]
-            + SVerticalBox::Slot()
-            .AutoHeight()
-            .Padding(0.0f, 3.0f, 0.0f, 0.0f)
-            [
-                SNew(SButton)
-                .ButtonStyle(&ButtonStyle)
-                .Text(LOCTEXT("AssistantLanguageEnglish", "English"))
-                .OnClicked(
-                    this,
-                    &SMiaIAEditorPanel::SelectAssistantLanguage,
-                    EMiaIAAssistantLanguage::English)
-            ]
-            + SVerticalBox::Slot()
-            .AutoHeight()
-            .Padding(0.0f, 3.0f, 0.0f, 0.0f)
-            [
-                SNew(SButton)
-                .ButtonStyle(&ButtonStyle)
-                .Text(LOCTEXT("AssistantLanguageItalian", "Italiano"))
-                .OnClicked(
-                    this,
-                    &SMiaIAEditorPanel::SelectAssistantLanguage,
-                    EMiaIAAssistantLanguage::Italian)
-            ]
+            SNew(SScrollBox)
+            + SScrollBox::Slot()[menu]
         ];
 }
 
@@ -10562,6 +10713,33 @@ FReply SMiaIAEditorPanel::SelectAssistantLanguage(
     }
 
     AssistantLanguage = InLanguage;
+    if (InLanguage != EMiaIAAssistantLanguage::Custom)
+        AssistantCustomLanguageCode.Empty();
+    ++OnlineAssistantRequestSerial;
+    bOnlineAssistantEnabled = false;
+    bOnlineAssistantRequestPending = false;
+    bHasAssistantProposal = false;
+    AssistantProposal = {};
+    RebuildOnlineAssistantProvider();
+    RebuildConsoleSuggestions(
+        ConsoleInput.IsValid()
+            ? ConsoleInput->GetText().ToString()
+            : FString());
+    return FReply::Handled();
+}
+
+FReply SMiaIAEditorPanel::SelectAssistantCustomLanguage(
+    FString InLanguageCode)
+{
+    FSlateApplication::Get().DismissAllMenus();
+    if (AssistantLanguage == EMiaIAAssistantLanguage::Custom &&
+        AssistantCustomLanguageCode == InLanguageCode)
+    {
+        return FReply::Handled();
+    }
+
+    AssistantLanguage = EMiaIAAssistantLanguage::Custom;
+    AssistantCustomLanguageCode = std::move(InLanguageCode);
     ++OnlineAssistantRequestSerial;
     bOnlineAssistantEnabled = false;
     bOnlineAssistantRequestPending = false;
@@ -10577,10 +10755,28 @@ FReply SMiaIAEditorPanel::SelectAssistantLanguage(
 
 FText SMiaIAEditorPanel::AssistantLanguageText() const
 {
+    if (AssistantLanguage == EMiaIAAssistantLanguage::Custom)
+    {
+        if (const auto* assistant = LocalAssistant())
+        {
+            const std::string selected(
+                TCHAR_TO_UTF8(*AssistantCustomLanguageCode));
+            const auto found = std::find_if(
+                assistant->LanguagePacks().begin(),
+                assistant->LanguagePacks().end(),
+                [&selected](const auto& pack)
+                {
+                    return pack.Code == selected;
+                });
+            if (found != assistant->LanguagePacks().end())
+                return FText::FromString(FromUtf8(found->DisplayName));
+        }
+        return FText::FromString(AssistantCustomLanguageCode);
+    }
     return AssistantLanguage == EMiaIAAssistantLanguage::Automatic
         ? LOCTEXT(
             "AssistantLanguageAutomatic",
-            "Auto (English + Italiano)")
+            "Auto (all installed languages)")
         : AssistantLanguage == EMiaIAAssistantLanguage::Italian
         ? LOCTEXT("AssistantLanguageItalian", "Italiano")
         : LOCTEXT("AssistantLanguageEnglish", "English");
@@ -10649,9 +10845,9 @@ void SMiaIAEditorPanel::HandleOnlineAssistantCheckChanged(
         (!OnlineAssistant || !OnlineAssistant->IsAvailable()))
     {
         bOnlineAssistantEnabled = false;
-        OnlineAssistantStatus = OnlineAssistant
+        SetAssistantConsoleStatus(OnlineAssistant
             ? FromUtf8(OnlineAssistant->AvailabilityMessage())
-            : TEXT("The selected assistant provider is unavailable.");
+            : TEXT("The selected assistant provider is unavailable."));
         return;
     }
 
@@ -10662,23 +10858,25 @@ void SMiaIAEditorPanel::HandleOnlineAssistantCheckChanged(
     AssistantProposal = {};
     if (!enable)
     {
-        OnlineAssistantStatus =
-            TEXT("Disabled. Console input executes exact MiaIA commands.");
+        SetAssistantConsoleStatus(TEXT("Disabled. Console input executes exact MiaIA commands."));
     }
     else if (AssistantLanguage == EMiaIAAssistantLanguage::Italian)
     {
-        OnlineAssistantStatus =
-            TEXT("Attivo. Inserisci una richiesta in italiano.");
+        SetAssistantConsoleStatus(TEXT("Attivo. Inserisci una richiesta in italiano."));
     }
     else if (AssistantLanguage == EMiaIAAssistantLanguage::Automatic)
     {
-        OnlineAssistantStatus =
-            TEXT("Active. English, Italian and mixed requests are accepted.");
+        SetAssistantConsoleStatus(TEXT("Active. All installed languages and mixed requests are accepted."));
+    }
+    else if (AssistantLanguage == EMiaIAAssistantLanguage::Custom)
+    {
+        SetAssistantConsoleStatus(FString::Printf(
+            TEXT("Active. Enter a request in %s."),
+            *AssistantLanguageText().ToString()));
     }
     else
     {
-        OnlineAssistantStatus =
-            TEXT("Enabled. Enter an English request.");
+        SetAssistantConsoleStatus(TEXT("Enabled. Enter an English request."));
     }
     RebuildConsoleSuggestions(
         ConsoleInput.IsValid()
@@ -10691,9 +10889,9 @@ void SMiaIAEditorPanel::HandleAssistantAutoConfirmCheckChanged(
 {
     bAssistantAutoConfirmFullyConfident =
         NewState == ECheckBoxState::Checked;
-    OnlineAssistantStatus = bAssistantAutoConfirmFullyConfident
+    SetAssistantConsoleStatus(bAssistantAutoConfirmFullyConfident
         ? TEXT("Confident mode enabled. Only exact 100% proposals auto-execute.")
-        : TEXT("Confident mode disabled. Every proposal requires confirmation.");
+        : TEXT("Confident mode disabled. Every proposal requires confirmation."));
 }
 
 void SMiaIAEditorPanel::RequestOnlineAssistant(const FString& Text)
@@ -10792,6 +10990,8 @@ void SMiaIAEditorPanel::HandleOnlineAssistantResult(
                 SaveLocalAssistantCorpus();
                 OnlineAssistantStatus += TEXT(
                     " Saved locally for classification.");
+                bAssistantLearningExpanded = true;
+                bAssistantConfigurationExpanded = false;
                 if (bAssistantLearningExpanded)
                 {
                     AssistantLearningPhraseSelection =
@@ -10903,12 +11103,18 @@ FReply SMiaIAEditorPanel::HandleConfirmAssistantProposal()
     else if (AssistantLanguage == EMiaIAAssistantLanguage::Automatic)
     {
         OnlineAssistantStatus =
-            TEXT("Command confirmed. English, Italian and mixed requests are accepted.");
+            TEXT("Command confirmed. All installed languages and mixed requests are accepted.");
     }
     else if (AssistantLanguage == EMiaIAAssistantLanguage::Italian)
     {
         OnlineAssistantStatus =
             TEXT("Comando confermato. Inserisci un'altra richiesta in italiano.");
+    }
+    else if (AssistantLanguage == EMiaIAAssistantLanguage::Custom)
+    {
+        OnlineAssistantStatus = FString::Printf(
+            TEXT("Command confirmed. Enter another request in %s."),
+            *AssistantLanguageText().ToString());
     }
     else
     {
@@ -10931,9 +11137,13 @@ FReply SMiaIAEditorPanel::HandleDiscardAssistantProposal()
     AssistantProposal = {};
     OnlineAssistantStatus =
         AssistantLanguage == EMiaIAAssistantLanguage::Automatic
-        ? TEXT("Proposal discarded. English, Italian and mixed requests are accepted.")
+        ? TEXT("Proposal discarded. All installed languages and mixed requests are accepted.")
         : AssistantLanguage == EMiaIAAssistantLanguage::Italian
         ? TEXT("Proposta scartata. Inserisci un'altra richiesta in italiano.")
+        : AssistantLanguage == EMiaIAAssistantLanguage::Custom
+        ? FString::Printf(
+            TEXT("Proposal discarded. Enter another request in %s."),
+            *AssistantLanguageText().ToString())
         : TEXT("Proposal discarded. Enter another English request.");
     return FReply::Handled();
 }
@@ -10948,6 +11158,7 @@ FReply SMiaIAEditorPanel::HandleIncorrectAssistantProposal()
         assistant->MarkIncorrect(AssistantProposal.SourceText);
         SaveLocalAssistantCorpus();
         bAssistantLearningExpanded = true;
+        bAssistantConfigurationExpanded = false;
         AssistantLearningPhraseSelection =
             FromUtf8(AssistantProposal.SourceText);
         bAssistantLearningSelectionValidated = false;
@@ -11013,6 +11224,49 @@ void SMiaIAEditorPanel::LoadLocalAssistantCorpus(
     }
 }
 
+void SMiaIAEditorPanel::LoadLocalAssistantLanguagePacks(
+    MiaIA::Studio::LocalCommandAssistant& Assistant,
+    FString& Error) const
+{
+    Error.Empty();
+    const FString directory = LocalAssistantLanguagesDirectory();
+    TArray<FString> files;
+    IFileManager::Get().FindFiles(
+        files,
+        *FPaths::Combine(directory, TEXT("*.miaia-language")),
+        true,
+        false);
+    files.Sort();
+
+    for (const FString& file : files)
+    {
+        FString serialized;
+        const FString path = FPaths::Combine(directory, file);
+        if (!FFileHelper::LoadFileToString(serialized, *path))
+        {
+            if (Error.IsEmpty())
+            {
+                Error = FString::Printf(
+                    TEXT("Language pack could not be read: %s"),
+                    *file);
+            }
+            continue;
+        }
+
+        const FTCHARToUTF8 utf8(*serialized);
+        std::string importError;
+        if (!Assistant.ImportLanguagePack(
+                std::string_view(utf8.Get(), utf8.Length()),
+                importError) && Error.IsEmpty())
+        {
+            Error = FString::Printf(
+                TEXT("Language pack %s was ignored: %s"),
+                *file,
+                *FromUtf8(importError));
+        }
+    }
+}
+
 bool SMiaIAEditorPanel::SaveLocalAssistantCorpus()
 {
     const auto* assistant = LocalAssistant();
@@ -11038,6 +11292,7 @@ FReply SMiaIAEditorPanel::HandleToggleAssistantLearning()
     bAssistantLearningExpanded = !bAssistantLearningExpanded;
     if (bAssistantLearningExpanded)
     {
+        bAssistantConfigurationExpanded = false;
         EnsureAssistantLearningSelection();
     }
     RebuildConsoleSuggestions(
@@ -11184,13 +11439,11 @@ FReply SMiaIAEditorPanel::HandleValidatePendingAssistantPhrase()
     if (changed && SaveLocalAssistantCorpus())
     {
         bAssistantLearningSelectionValidated = true;
-        OnlineAssistantStatus =
-            TEXT("Phrase association saved at 100% confidence.");
+        SetAssistantConsoleStatus(TEXT("Phrase association saved at 100% confidence."));
     }
     else
     {
-        OnlineAssistantStatus =
-            TEXT("The pending phrase could not be validated or saved.");
+        SetAssistantConsoleStatus(TEXT("The pending phrase could not be validated or saved."));
     }
     EnsureAssistantLearningSelection();
     RebuildAssistantLearningSidebar();
@@ -11209,9 +11462,9 @@ FReply SMiaIAEditorPanel::HandleDeletePendingAssistantPhrase()
         ? assistant->RemoveValidated(phrase)
         : assistant->RemovePending(phrase);
     if (removed && SaveLocalAssistantCorpus())
-        OnlineAssistantStatus = TEXT("Local learning phrase deleted.");
+        SetAssistantConsoleStatus(TEXT("Local learning phrase deleted."));
     else
-        OnlineAssistantStatus = TEXT("The local learning phrase could not be deleted.");
+        SetAssistantConsoleStatus(TEXT("The local learning phrase could not be deleted."));
     AssistantLearningPhraseSelection.Empty();
     AssistantPendingIntentSelection.Empty();
     EnsureAssistantLearningSelection();
@@ -11232,9 +11485,9 @@ FReply SMiaIAEditorPanel::HandleExportAssistantCorpus()
             FromUtf8(assistant->ExportCorpus()),
             *path,
             FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM);
-    OnlineAssistantStatus = saved
+    SetAssistantConsoleStatus(saved
         ? FString::Printf(TEXT("Local corpus backup exported to %s"), *path)
-        : TEXT("The local corpus backup could not be exported.");
+        : TEXT("The local corpus backup could not be exported."));
     return FReply::Handled();
 }
 
@@ -11259,8 +11512,7 @@ FReply SMiaIAEditorPanel::HandleImportAssistantCorpus()
     std::string error;
     if (!FFileHelper::LoadFileToString(serialized, *path))
     {
-        OnlineAssistantStatus =
-            TEXT("The local corpus backup could not be read.");
+        SetAssistantConsoleStatus(TEXT("The local corpus backup could not be read."));
         return FReply::Handled();
     }
 
@@ -11270,11 +11522,11 @@ FReply SMiaIAEditorPanel::HandleImportAssistantCorpus()
             error) ||
         !SaveLocalAssistantCorpus())
     {
-        OnlineAssistantStatus = error.empty()
+        SetAssistantConsoleStatus(error.empty()
             ? TEXT("The imported corpus could not be saved.")
             : FString::Printf(
                 TEXT("The local corpus backup is invalid: %s"),
-                *FromUtf8(error));
+                *FromUtf8(error)));
         return FReply::Handled();
     }
 
@@ -11282,7 +11534,7 @@ FReply SMiaIAEditorPanel::HandleImportAssistantCorpus()
     AssistantPendingIntentSelection.Empty();
     EnsureAssistantLearningSelection();
     RebuildAssistantLearningSidebar();
-    OnlineAssistantStatus = TEXT("Local corpus backup imported.");
+    SetAssistantConsoleStatus(TEXT("Local corpus backup imported."));
     return FReply::Handled();
 }
 
@@ -11308,7 +11560,107 @@ FReply SMiaIAEditorPanel::HandleResetAssistantCorpus()
     AssistantPendingIntentSelection.Empty();
     SaveLocalAssistantCorpus();
     RebuildAssistantLearningSidebar();
-    OnlineAssistantStatus = TEXT("Local learning data reset.");
+    SetAssistantConsoleStatus(TEXT("Local learning data reset."));
+    return FReply::Handled();
+}
+
+FReply SMiaIAEditorPanel::HandleExportAssistantLanguageTemplate()
+{
+    const FString path = LocalAssistantLanguageTemplatePath();
+    if (FPaths::FileExists(path) && FMessageDialog::Open(
+        EAppMsgType::YesNo,
+        LOCTEXT(
+            "AssistantReplaceLanguageTemplateConfirmation",
+            "Replace the existing language template? Any translations in that template will be overwritten.")) !=
+        EAppReturnType::Yes)
+    {
+        return FReply::Handled();
+    }
+
+    const bool saved = IFileManager::Get().MakeDirectory(
+        *FPaths::GetPath(path),
+        true) && FFileHelper::SaveStringToFile(
+            FromUtf8(MiaIA::Studio::LocalCommandAssistant::
+                ExportLanguageTemplate()),
+            *path,
+            FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM);
+    SetAssistantConsoleStatus(saved
+        ? FString::Printf(
+            TEXT("Language template exported to %s. Replace xx and Language name on line 2; keep the English source in column 3 and enter translations in column 4 (TAB-separated). Save the edited file, then install it."),
+            *path)
+        : TEXT("The language template could not be exported."));
+    return FReply::Handled();
+}
+
+FReply SMiaIAEditorPanel::HandleImportAssistantLanguageTemplate()
+{
+    auto* assistant = LocalAssistant();
+    const FString templatePath = AssistantLanguageImportPath.IsEmpty()
+        ? LocalAssistantLanguageTemplatePath()
+        : AssistantLanguageImportPath.TrimStartAndEnd();
+    if (!assistant)
+        return FReply::Handled();
+
+    FString serialized;
+    if (!FFileHelper::LoadFileToString(serialized, *templatePath))
+    {
+        SetAssistantConsoleStatus(FString::Printf(
+            TEXT("The language pack could not be read: %s"), *templatePath));
+        return FReply::Handled();
+    }
+
+    const FTCHARToUTF8 utf8(*serialized);
+    std::string error;
+    MiaIA::Studio::LocalCommandAssistant validatedPack;
+    if (!validatedPack.ImportLanguagePack(
+        std::string_view(utf8.Get(), utf8.Length()), error))
+    {
+        SetAssistantConsoleStatus(FString::Printf(
+            TEXT("Invalid language pack %s: %s"),
+            *templatePath, *FromUtf8(error)));
+        return FReply::Handled();
+    }
+
+    const auto& imported = validatedPack.LanguagePacks().back();
+    const FString code = FromUtf8(imported.Code);
+    const FString packPath = LocalAssistantLanguagePackPath(code);
+    if (FPaths::FileExists(packPath) && FMessageDialog::Open(
+        EAppMsgType::YesNo,
+        FText::Format(
+            LOCTEXT(
+                "AssistantReplaceLanguagePackConfirmation",
+                "Replace the installed {0} language pack?"),
+            FText::FromString(code))) != EAppReturnType::Yes)
+    {
+        RebuildOnlineAssistantProvider();
+        return FReply::Handled();
+    }
+
+    const bool saved = IFileManager::Get().MakeDirectory(
+        *FPaths::GetPath(packPath),
+        true) && FFileHelper::SaveStringToFile(
+            FromUtf8(validatedPack.ExportLanguagePack(imported.Code)),
+            *packPath,
+            FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM);
+    if (!saved)
+    {
+        RebuildOnlineAssistantProvider();
+        SetAssistantConsoleStatus(TEXT("The validated language pack could not be installed."));
+        return FReply::Handled();
+    }
+
+    AssistantLanguage = EMiaIAAssistantLanguage::Custom;
+    AssistantCustomLanguageCode = code;
+    ++OnlineAssistantRequestSerial;
+    bOnlineAssistantEnabled = false;
+    bOnlineAssistantRequestPending = false;
+    bHasAssistantProposal = false;
+    AssistantProposal = {};
+    RebuildOnlineAssistantProvider();
+    RebuildConsoleSuggestions(FString());
+    SetAssistantConsoleStatus(FString::Printf(
+        TEXT("Language pack installed and selected: %s"),
+        *AssistantLanguageText().ToString()));
     return FReply::Handled();
 }
 
@@ -11376,6 +11728,16 @@ EVisibility SMiaIAEditorPanel::AssistantLearningPanelVisibility() const
         : EVisibility::Collapsed;
 }
 
+void SMiaIAEditorPanel::SetAssistantConsoleStatus(const FString& Message)
+{
+    OnlineAssistantStatus = Message;
+    if (!Message.IsEmpty())
+    {
+        ConsoleHistory += TEXT("Assistant: ") + Message + TEXT("\n");
+        UpdateConsoleOutput();
+    }
+}
+
 FText SMiaIAEditorPanel::OnlineAssistantStatusText() const
 {
     return FText::FromString(OnlineAssistantStatus);
@@ -11426,7 +11788,15 @@ FText SMiaIAEditorPanel::ConsoleInputHintText() const
     {
         return LOCTEXT(
             "OnlineAssistantInputHintAutomatic",
-            "Describe a MiaIA action in English, Italian, or both");
+            "Describe a MiaIA action in any installed language");
+    }
+
+    if (bOnlineAssistantEnabled &&
+        AssistantLanguage == EMiaIAAssistantLanguage::Custom)
+    {
+        return FText::FromString(FString::Printf(
+            TEXT("Describe a MiaIA action in %s"),
+            *AssistantLanguageText().ToString()));
     }
 
     return bOnlineAssistantEnabled
@@ -11787,6 +12157,62 @@ void SMiaIAEditorPanel::RebuildAssistantExamples()
                 .AutoWrapText(true)
             ]
         ];
+    }
+
+    if (AssistantProvider != EMiaIAAssistantProvider::Local ||
+        (AssistantLanguage != EMiaIAAssistantLanguage::Automatic &&
+            AssistantLanguage != EMiaIAAssistantLanguage::Custom))
+    {
+        return;
+    }
+
+    const auto* assistant = LocalAssistant();
+    if (!assistant)
+        return;
+    const std::string selectedCode(
+        TCHAR_TO_UTF8(*AssistantCustomLanguageCode));
+    for (const auto& pack : assistant->LanguagePacks())
+    {
+        if (AssistantLanguage == EMiaIAAssistantLanguage::Custom &&
+            pack.Code != selectedCode)
+        {
+            continue;
+        }
+        ConsoleSuggestionsContent->AddSlot()
+        .AutoHeight()
+        .Padding(2.0f, 5.0f, 2.0f, 2.0f)
+        [
+            SNew(STextBlock)
+            .Text(FText::FromString(FString::Printf(
+                TEXT("%s (%s)"),
+                *FromUtf8(pack.DisplayName),
+                *FromUtf8(pack.Code))))
+            .Font(FAppStyle::GetFontStyle(TEXT("SmallFontBold")))
+        ];
+        for (const auto& example : pack.Examples)
+        {
+            const FString phrase = FromUtf8(example.Text);
+            ConsoleSuggestionsContent->AddSlot()
+            .AutoHeight()
+            .Padding(0.0f, 1.0f)
+            [
+                SNew(SButton)
+                .ButtonStyle(&ButtonStyle)
+                .ContentPadding(FMargin(6.0f, 3.0f))
+                .ToolTipText(LOCTEXT(
+                    "AssistantLanguagePackExampleTip",
+                    "Copy this translated example into the assistant input without executing it."))
+                .OnClicked(
+                    this,
+                    &SMiaIAEditorPanel::ApplyAssistantExample,
+                    phrase)
+                [
+                    SNew(STextBlock)
+                    .Text(FText::FromString(phrase))
+                    .AutoWrapText(true)
+                ]
+            ];
+        }
     }
 }
 

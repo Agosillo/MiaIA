@@ -3,12 +3,12 @@
 ## Scope
 
 The command assistant belongs to MiaIA Studio, not to the mathematical Engine or
-public SDK. It accepts natural English, Italian, or mixed text, asks the selected provider to
+public SDK. It accepts natural text in the selected installed language, or mixed text in `Auto`, asks the selected provider to
 identify one intent and its entities, converts that structured result into an existing
 MiaIA Console command, and displays the exact proposal for confirmation.
 
-**MiaIA Local is the default provider.** Its default `Auto (English + Italiano)`
-language mode evaluates both corpora in the same session. It runs offline, needs no account or token,
+**MiaIA Local is the default provider.** Its default `Auto (all installed languages)`
+mode evaluates the built-in English and Italian corpora plus every installed Language Pack in the same session. It runs offline, needs no account or token,
 and sends no text outside the process. **Wit.ai is retained as an experimental online
 provider** for comparison and optional use.
 
@@ -26,7 +26,7 @@ persisted. Provider confidence is statistical rather than proof, which is why th
 behavior requires a separate explicit choice.
 
 ```text
-English, Italian, or mixed text
+Text in any installed language, including mixed text
     -> MiaIA Local (default) or Wit.ai (experimental)
     -> provider-neutral intent and entities
     -> local validated command proposal
@@ -44,16 +44,86 @@ sent. Assistant state and credentials are not stored in `.mai` files.
 standard library. It has no Unreal, Windows, HTTP, JSON, or token dependency, so the
 same library can be reused later by another Unreal target or platform.
 
-The provider combines a small bilingual phrase corpus with deterministic command
-rules. Intent recognition is separated from entity extraction: model names and
+The provider combines a built-in bilingual phrase corpus and installed Language Packs
+with deterministic command rules. Intent recognition is separated from entity extraction: model names and
 project paths remain text, while model IDs, topology sizes, epochs, learning rates,
 seeds, and step counts are extracted into the existing validated roles. Unknown text
 returns no intent and can never bypass `CommandAssistant::Propose` or the shared
 `MiaIACommandProcessor` allowlist.
 
-The automated native tests exercise the same English and Italian commands, including
-out-of-scope text and all current entity shapes. Add a paired English/Italian test
-whenever the local corpus or a supported command is extended.
+The automated native tests exercise the same English and Italian commands, a third
+installed language, `Auto`, out-of-scope text, and all current entity shapes.
+
+## Portable Language Packs
+
+Assistant configuration and learning controls are in the scrollable left sidebar.
+The right pane contains console history, the current recognized phrase/intent/command
+and its Confirm/Discard/Wrong interpretation controls, followed by console input.
+Console output wraps to the available pane width, including long unbroken paths.
+The parallel **Settings** and **Review (count)** buttons keep configuration and
+classification separate. Both start collapsed so examples remain visible. Settings
+contains provider/language options, backups and language-pack management; Review
+contains phrase classification only. A newly queued phrase opens Review and closes
+Settings automatically. Either panel can be closed by pressing its button again.
+Import/export, validation and configuration messages are written to console history, including the
+path actually read when an import fails.
+
+Language Packs add a third, fourth, or later language without recompiling Studio and
+without creating an online account. Open **Settings** and choose **Export language
+template**. Studio writes the editable UTF-8 tab-separated file:
+
+`Saved/MiaIA/CommandAssistant/language-template.miaia-language`
+
+Edit the `L` row by replacing `xx` and `Language name`, then translate the last column
+of any `E` rows you want to support. Keep the intent and English source columns
+unchanged. Empty translations are allowed and are skipped, so a language can be
+introduced incrementally. For example:
+
+```text
+MIAIA_LOCAL_LANGUAGE_PACK	1
+L	es	Espanol
+E	miaia_model_list	Show all models	Mostrar todos los modelos
+E	miaia_neuron_inspect	Inspect neuron 2	Inspeccionar neurona 2
+```
+
+Choose **Install language pack** to validate the edited template. The file is
+read from the editable **Language pack file** path in Settings; change this full path
+when using a renamed file such as `language-template-es.miaia-language`. Save your
+changes in the text editor before installing. Do not export again to install: export
+creates a new blank template. The literal `xx` / `Language name` placeholders must
+both be replaced. Use real TAB characters, not spaces or the two characters `\t`.
+Translations belong in column **four**, not in the English source column. An empty
+fourth column is skipped (including when an editor removes its trailing TAB).
+
+A valid pack is stored at `Saved/MiaIA/CommandAssistant/Languages/<code>.miaia-language`, selected
+immediately, added to the language menu, shown in the example sidebar, and loaded on
+later starts. Installing a pack clears any old proposal and disables the assistant;
+enable it again before testing the new language. Installing the same code asks before replacing that pack. To add another
+language, export a fresh template and repeat the process. Export also asks before
+overwriting an existing work-in-progress template.
+
+To uninstall a pack, close Studio and move its installed file (for example
+`Saved/MiaIA/CommandAssistant/Languages/es.miaia-language`) outside the `Languages`
+folder, then restart Studio. There is currently no uninstall button. Moving the file
+is reversible; removing the exported template alone does not uninstall a pack.
+This does not clear learned phrases in `local-corpus.miaia`, which are managed
+separately through Review.
+
+Language codes contain 2-24 lowercase letters, digits, or hyphens and begin with a
+letter; the `xx` placeholder and `auto`, `en`, and `it` are reserved. A pack must contain at least one translated
+phrase and can only reference the compiled allowlist of supported intents. Invalid,
+oversized, malformed, or unsupported entries are rejected atomically. Exact imported
+phrases are recognized at `100%`; similar phrases still require review. Numbers are
+extracted in the command-specific positional order after recognition, so translated
+inspection and topology examples retain the same validation boundary. Free-text model
+names and project paths currently use the built-in English/Italian marker vocabulary;
+additional marker words require a later pack-format extension.
+
+The Language Pack is intentionally separate from the learned-corpus backup. A pack is
+a reusable translation of built-in examples; `local-corpus.backup.miaia` contains one
+user's validated and pending phrases. Both formats live in portable `StudioCore`
+memory APIs while Unreal owns the file access, so the same packs can be reused by a
+future Unreal target or another C++ host.
 
 ## Supervised local learning
 
@@ -67,7 +137,7 @@ stored or replayed directly, and every future execution still passes through
 An unrecognized phrase is saved in the local **to classify** queue but does not affect
 recognition. Expanding **Review** changes the left Console sidebar into **Local
 learning**: its **To classify** and **Validated** sections list every user phrase and
-show their counts. Selecting an item edits it on the right. A pending phrase can be
+show their counts. Selecting an item edits it in the left configuration panel. A pending phrase can be
 assigned one of the supported intents with **Validate**; a validated phrase exposes
 its current intent and can be corrected with **Change intent**. **Delete** removes the
 selected item. **Wrong interpretation** removes any matching learned example, opens
@@ -78,7 +148,7 @@ nothing.
 The same left sidebar follows the current input mode. With the assistant disabled it
 shows exact Console **Commands**. With the assistant enabled it shows clickable
 **Assistant examples** for the selected language; clicking copies a natural-language
-example into the input without executing it. `Auto` shows both English and Italian.
+example into the input without executing it. `Auto` shows every installed language.
 Opening **Review** temporarily replaces those examples with the local corpus manager;
 closing it restores the appropriate command or assistant-example view.
 
@@ -101,7 +171,7 @@ The versioned corpus is stored outside `.mai` project archives under the Unreal
 Saved directory at `Saved/MiaIA/CommandAssistant/local-corpus.miaia`. `StudioCore`
 only imports and exports portable in-memory corpus text; the Unreal host owns file
 access, preserving the provider's independence from Windows and Unreal APIs. English,
-Italian, and automatically detected mixed examples retain their language metadata.
+Italian, installed custom languages, and automatically detected mixed examples retain their language metadata.
 Malformed, oversized, unsupported, or newer-format corpus data is ignored without
 replacing the active in-memory corpus.
 
@@ -239,7 +309,7 @@ Use the following exact intent names:
 | `miaia_project_save` | `project save ["<project_path>"]` |
 
 MiaIA Local additionally supports these inspection intents. They appear in the
-learning manager and in the bilingual sidebar examples; the Wit.ai archive generator
+learning manager and in the language-aware sidebar examples; the Wit.ai archive generator
 still supplies the original 13 intents.
 
 | Local inspection intent | Proposed command |
@@ -370,7 +440,7 @@ Token into Studio.
 
 ## Planned expansion path
 
-The next command-assistant tranche extends the bilingual local corpus from the current
+The next command-assistant tranche extends the local multi-language catalog from the current
 30 intents to the rest of the shared Console and then to Studio-only interface actions.
 Those actions must retain the same proposal, validation, confirmation, and automated
 test boundary. A later microphone path (`whisper.cpp`, `sherpa-onnx`, or another

@@ -3,6 +3,7 @@
 #include "CommandAssistant.h"
 
 #include <cstdint>
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -17,7 +18,7 @@ namespace MiaIA::Studio
 
     struct LocalCommandAssistantExample
     {
-        CommandAssistantLanguage Language{CommandAssistantLanguage::Automatic};
+        std::string LanguageCode{"auto"};
         std::string Text;
         std::string Intent;
         std::uint32_t Confirmations{1};
@@ -25,8 +26,21 @@ namespace MiaIA::Studio
 
     struct LocalCommandAssistantPendingPhrase
     {
-        CommandAssistantLanguage Language{CommandAssistantLanguage::Automatic};
+        std::string LanguageCode{"auto"};
         std::string Text;
+    };
+
+    struct LocalCommandAssistantLanguagePackExample
+    {
+        std::string Intent;
+        std::string Text;
+    };
+
+    struct LocalCommandAssistantLanguagePack
+    {
+        std::string Code;
+        std::string DisplayName;
+        std::vector<LocalCommandAssistantLanguagePackExample> Examples;
     };
 
     // Offline, deterministic NLU for MiaIA commands. This provider only uses
@@ -46,6 +60,8 @@ namespace MiaIA::Studio
 
         CommandAssistantLanguage Language() const;
         void SetLanguage(CommandAssistantLanguage language);
+        const std::string& LanguageCode() const;
+        bool SetLanguageCode(std::string code);
 
         bool LearnValidated(std::string text, std::string intent);
         bool RecordUnknown(std::string text);
@@ -70,15 +86,24 @@ namespace MiaIA::Studio
             std::string_view serialized,
             std::string& error);
 
+        static std::string ExportLanguageTemplate();
+        bool ImportLanguagePack(
+            std::string_view serialized,
+            std::string& error);
+        std::string ExportLanguagePack(std::string_view code) const;
+        const std::vector<LocalCommandAssistantLanguagePack>&
+            LanguagePacks() const;
+
         static const std::vector<std::string_view>& SupportedIntents();
 
     private:
-        CommandAssistantLanguage InferLanguage(
+        std::string InferLanguageCode(
             std::string_view text,
             std::string_view intent = {}) const;
 
-        CommandAssistantLanguage language_;
+        std::string languageCode_;
         std::vector<LocalCommandAssistantExample> learnedExamples_;
         std::vector<LocalCommandAssistantPendingPhrase> pendingPhrases_;
+        std::vector<LocalCommandAssistantLanguagePack> languagePacks_;
     };
 }

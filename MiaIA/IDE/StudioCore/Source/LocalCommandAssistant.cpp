@@ -9,7 +9,6 @@
 #include <cstdint>
 #include <iterator>
 #include <limits>
-#include <optional>
 #include <regex>
 #include <set>
 #include <sstream>
@@ -109,6 +108,8 @@ namespace
     constexpr std::size_t MaximumSerializedCorpusBytes = 1024 * 1024;
     constexpr std::size_t MaximumCorpusEntries = 2000;
     constexpr std::size_t MaximumPhraseBytes = 2048;
+    constexpr std::size_t MaximumLanguagePacks = 16;
+    constexpr std::size_t MaximumLanguageNameBytes = 128;
 
     bool IsSupportedIntent(const std::string_view intent)
     {
@@ -116,34 +117,42 @@ namespace
         return std::find(intents.begin(), intents.end(), intent) != intents.end();
     }
 
-    bool AcceptsLanguage(
-        const CommandAssistantLanguage selected,
-        const CommandAssistantLanguage candidate)
-    {
-        return selected == CommandAssistantLanguage::Automatic ||
-            selected == candidate;
-    }
-
-    std::string_view LanguageCode(const CommandAssistantLanguage language)
+    std::string_view BuiltinLanguageCode(
+        const CommandAssistantLanguage language)
     {
         switch (language)
         {
-        case CommandAssistantLanguage::English:
-            return "en";
-        case CommandAssistantLanguage::Italian:
-            return "it";
-        default:
-            return "auto";
+        case CommandAssistantLanguage::English: return "en";
+        case CommandAssistantLanguage::Italian: return "it";
+        default: return "auto";
         }
     }
 
-    std::optional<CommandAssistantLanguage> ParseLanguage(
-        const std::string_view code)
+    bool AcceptsLanguage(
+        const std::string_view selected,
+        const std::string_view candidate)
     {
-        if (code == "en") return CommandAssistantLanguage::English;
-        if (code == "it") return CommandAssistantLanguage::Italian;
-        if (code == "auto") return CommandAssistantLanguage::Automatic;
-        return std::nullopt;
+        return selected == "auto" || selected == candidate;
+    }
+
+    std::string NormalizeLanguageCode(std::string code)
+    {
+        std::transform(code.begin(), code.end(), code.begin(),
+            [](const unsigned char character)
+            {
+                return static_cast<char>(std::tolower(character));
+            });
+        if (code.size() < 2 || code.size() > 24 ||
+            !std::isalpha(static_cast<unsigned char>(code.front())))
+        {
+            return {};
+        }
+        const bool valid = std::all_of(code.begin(), code.end(),
+            [](const unsigned char character)
+            {
+                return std::isalnum(character) || character == '-';
+            });
+        return valid ? code : std::string{};
     }
 
     char HexDigit(const unsigned int value)
@@ -606,7 +615,7 @@ namespace
 
 MiaIA::Studio::LocalCommandAssistant::LocalCommandAssistant(
     const CommandAssistantLanguage language)
-    : language_(language)
+    : languageCode_(BuiltinLanguageCode(language))
 {
 }
 
@@ -617,11 +626,13 @@ bool MiaIA::Studio::LocalCommandAssistant::IsAvailable() const
 
 std::string MiaIA::Studio::LocalCommandAssistant::AvailabilityMessage() const
 {
-    if (language_ == CommandAssistantLanguage::Automatic)
-        return "MiaIA Local is ready for English, Italian, or mixed requests.";
-    return language_ == CommandAssistantLanguage::Italian
+    if (languageCode_ == "auto")
+        return languagePacks_.empty()
+            ? "MiaIA Local is ready for English, Italian, or mixed requests."
+            : "MiaIA Local is ready for all installed languages and mixed requests.";
+    return languageCode_ == "it"
         ? "MiaIA Local e pronto."
-        : "MiaIA Local is ready.";
+        : "MiaIA Local is ready for " + languageCode_ + '.';
 }
 
 bool MiaIA::Studio::LocalCommandAssistant::Interpret(
@@ -636,9 +647,9 @@ bool MiaIA::Studio::LocalCommandAssistant::Interpret(
     const std::string normalized = Normalize(text);
     if (normalized.empty())
     {
-        result.Error = language_ == CommandAssistantLanguage::Italian
+        result.Error = languageCode_ == "it"
             ? "Inserisci una richiesta MiaIA."
-            : language_ == CommandAssistantLanguage::English
+            : languageCode_ == "en"
                 ? "Enter a MiaIA request."
                 : "Enter a MiaIA request / Inserisci una richiesta MiaIA.";
         completion(std::move(result));
@@ -647,7 +658,7 @@ bool MiaIA::Studio::LocalCommandAssistant::Interpret(
 
     for (const auto& example : learnedExamples_)
     {
-        if (AcceptsLanguage(language_, example.Language) &&
+        if (AcceptsLanguage(languageCode_, example.LanguageCode) &&
             Normalize(example.Text) == normalized)
         {
             result.Intent = example.Intent;
@@ -662,12 +673,12 @@ bool MiaIA::Studio::LocalCommandAssistant::Interpret(
     // same rule-based proposal after the user marked it as incorrect.
     for (const auto& pending : pendingPhrases_)
     {
-        if (AcceptsLanguage(language_, pending.Language) &&
+        if (AcceptsLanguage(languageCode_, pending.LanguageCode) &&
             Normalize(pending.Text) == normalized)
         {
-            result.Error = language_ == CommandAssistantLanguage::Italian
+            result.Error = languageCode_ == "it"
                 ? "Frase in attesa di classificazione."
-                : language_ == CommandAssistantLanguage::English
+                : languageCode_ == "en"
                     ? "Phrase waiting for classification."
                     : "Phrase waiting for classification / Frase in attesa di classificazione.";
             completion(std::move(result));
@@ -680,7 +691,9 @@ bool MiaIA::Studio::LocalCommandAssistant::Interpret(
     const auto inputTokens = Tokens(normalized);
     for (const Example& example : Examples)
     {
-        if (!AcceptsLanguage(language_, example.Language))
+        if (!AcceptsLanguage(
+                languageCode_,
+                BuiltinLanguageCode(example.Language)))
             continue;
         const std::string candidate = Normalize(std::string(example.Text));
         const double score = normalized == candidate
@@ -695,7 +708,7 @@ bool MiaIA::Studio::LocalCommandAssistant::Interpret(
 
     for (const auto& example : learnedExamples_)
     {
-        if (!AcceptsLanguage(language_, example.Language))
+        if (!AcceptsLanguage(languageCode_, example.LanguageCode))
             continue;
         const std::string candidate = Normalize(example.Text);
         const double score = Similarity(inputTokens, Tokens(candidate));
@@ -711,7 +724,9 @@ bool MiaIA::Studio::LocalCommandAssistant::Interpret(
     {
         for (const auto language : {CommandAssistantLanguage::English, CommandAssistantLanguage::Italian})
         {
-            if (!AcceptsLanguage(language_, language)) continue;
+            if (!AcceptsLanguage(
+                    languageCode_,
+                    BuiltinLanguageCode(language))) continue;
             const std::string candidate = Normalize(std::string(
                 language == CommandAssistantLanguage::Italian ? entry.Italian : entry.English));
             const double score = normalized == candidate
@@ -723,23 +738,47 @@ bool MiaIA::Studio::LocalCommandAssistant::Interpret(
             }
         }
     }
+
+    for (const auto& pack : languagePacks_)
+    {
+        if (!AcceptsLanguage(languageCode_, pack.Code))
+            continue;
+        for (const auto& example : pack.Examples)
+        {
+            const std::string candidate = Normalize(example.Text);
+            const double score = normalized == candidate
+                ? 1.0 : Similarity(inputTokens, Tokens(candidate));
+            if (score > bestScore)
+            {
+                bestScore = score;
+                bestIntent = example.Intent;
+            }
+        }
+    }
+
     if (!ruleIntent.empty())
     {
-        result.Intent = ruleIntent;
-        result.Confidence = bestIntent == ruleIntent
-            ? std::max(0.85, bestScore)
-            : 0.85;
+        // An exact language-pack or corpus example is supervised data and
+        // therefore takes precedence over language-specific keyword rules.
+        result.Intent = bestScore >= 1.0 ? bestIntent : ruleIntent;
+        result.Confidence = bestScore >= 1.0
+            ? 1.0
+            : bestIntent == ruleIntent
+                ? std::max(0.85, bestScore)
+                : 0.85;
     }
     else if (bestScore >= 0.74)
     {
         result.Intent = bestIntent;
-        result.Confidence = std::min(0.90, bestScore);
+        result.Confidence = bestScore >= 1.0
+            ? 1.0
+            : std::min(0.90, bestScore);
     }
     else
     {
-        result.Error = language_ == CommandAssistantLanguage::Italian
+        result.Error = languageCode_ == "it"
             ? "Nessun comando MiaIA riconosciuto."
-            : language_ == CommandAssistantLanguage::English
+            : languageCode_ == "en"
                 ? "No MiaIA command was recognized."
                 : "No MiaIA command was recognized / Nessun comando MiaIA riconosciuto.";
         completion(std::move(result));
@@ -754,49 +793,104 @@ bool MiaIA::Studio::LocalCommandAssistant::Interpret(
 MiaIA::Studio::CommandAssistantLanguage
 MiaIA::Studio::LocalCommandAssistant::Language() const
 {
-    return language_;
+    if (languageCode_ == "en")
+        return CommandAssistantLanguage::English;
+    if (languageCode_ == "it")
+        return CommandAssistantLanguage::Italian;
+    return CommandAssistantLanguage::Automatic;
 }
 
 void MiaIA::Studio::LocalCommandAssistant::SetLanguage(
     const CommandAssistantLanguage language)
 {
-    language_ = language;
+    languageCode_ = BuiltinLanguageCode(language);
 }
 
-MiaIA::Studio::CommandAssistantLanguage
-MiaIA::Studio::LocalCommandAssistant::InferLanguage(
+const std::string& MiaIA::Studio::LocalCommandAssistant::LanguageCode() const
+{
+    return languageCode_;
+}
+
+bool MiaIA::Studio::LocalCommandAssistant::SetLanguageCode(std::string code)
+{
+    code = NormalizeLanguageCode(std::move(code));
+    if (code.empty())
+        return false;
+    if (code != "auto" && code != "en" && code != "it" &&
+        std::none_of(languagePacks_.begin(), languagePacks_.end(),
+            [&code](const LocalCommandAssistantLanguagePack& pack)
+            {
+                return pack.Code == code;
+            }))
+    {
+        return false;
+    }
+    languageCode_ = std::move(code);
+    return true;
+}
+
+std::string MiaIA::Studio::LocalCommandAssistant::InferLanguageCode(
     const std::string_view text,
     const std::string_view intent) const
 {
-    if (language_ != CommandAssistantLanguage::Automatic)
-        return language_;
+    if (languageCode_ != "auto")
+        return languageCode_;
 
     const std::string normalized = Normalize(std::string(text));
     const auto inputTokens = Tokens(normalized);
-    double englishScore{};
-    double italianScore{};
+    std::vector<std::pair<std::string, double>> scores{
+        {"en", 0.0}, {"it", 0.0}};
+
+    const auto updateScore = [&scores, &inputTokens, &normalized](
+        const std::string_view code,
+        const std::string_view phrase)
+    {
+        const std::string candidate = Normalize(std::string(phrase));
+        const double score = normalized == candidate
+            ? 1.0 : Similarity(inputTokens, Tokens(candidate));
+        const auto found = std::find_if(scores.begin(), scores.end(),
+            [code](const auto& value) { return value.first == code; });
+        if (found != scores.end())
+            found->second = std::max(found->second, score);
+    };
 
     for (const Example& example : Examples)
     {
         if (!intent.empty() && example.Intent != intent)
             continue;
-
-        const std::string candidate = Normalize(std::string(example.Text));
-        const double score = normalized == candidate
-            ? 1.0
-            : Similarity(inputTokens, Tokens(candidate));
-        if (example.Language == CommandAssistantLanguage::Italian)
-            italianScore = std::max(italianScore, score);
-        else
-            englishScore = std::max(englishScore, score);
+        updateScore(BuiltinLanguageCode(example.Language), example.Text);
+    }
+    for (const auto& entry : AssistantInspectionCatalog)
+    {
+        if (!intent.empty() && entry.Intent != intent)
+            continue;
+        updateScore("en", entry.English);
+        updateScore("it", entry.Italian);
+    }
+    for (const auto& pack : languagePacks_)
+    {
+        scores.emplace_back(pack.Code, 0.0);
+        for (const auto& example : pack.Examples)
+        {
+            if (!intent.empty() && example.Intent != intent)
+                continue;
+            updateScore(pack.Code, example.Text);
+        }
     }
 
+    std::sort(scores.begin(), scores.end(),
+        [](const auto& left, const auto& right)
+        {
+            return left.second > right.second;
+        });
     constexpr double MinimumLanguageAdvantage = 0.10;
-    if (englishScore >= italianScore + MinimumLanguageAdvantage)
-        return CommandAssistantLanguage::English;
-    if (italianScore >= englishScore + MinimumLanguageAdvantage)
-        return CommandAssistantLanguage::Italian;
-    return CommandAssistantLanguage::Automatic;
+    if (!scores.empty() &&
+        (scores.size() == 1 ||
+            scores[0].second >= scores[1].second + MinimumLanguageAdvantage))
+    {
+        return scores[0].first;
+    }
+    return "auto";
 }
 
 bool MiaIA::Studio::LocalCommandAssistant::LearnValidated(
@@ -810,10 +904,10 @@ bool MiaIA::Studio::LocalCommandAssistant::LearnValidated(
         return false;
     }
 
-    const CommandAssistantLanguage language = InferLanguage(text, intent);
+    const std::string language = InferLanguageCode(text, intent);
     for (auto& example : learnedExamples_)
     {
-        if (example.Language == language && example.Intent == intent &&
+        if (example.LanguageCode == language && example.Intent == intent &&
             Normalize(example.Text) == normalized)
         {
             if (example.Confirmations <
@@ -855,7 +949,7 @@ bool MiaIA::Studio::LocalCommandAssistant::RecordUnknown(std::string text)
         return false;
 
     pendingPhrases_.push_back(LocalCommandAssistantPendingPhrase{
-        InferLanguage(text), std::move(text)});
+        InferLanguageCode(text), std::move(text)});
     return true;
 }
 
@@ -914,7 +1008,7 @@ bool MiaIA::Studio::LocalCommandAssistant::ClassifyPending(
         return false;
     }
 
-    const CommandAssistantLanguage language = pending->Language;
+    const std::string language = pending->LanguageCode;
     std::string phrase = pending->Text;
     pendingPhrases_.erase(pending);
     learnedExamples_.push_back(LocalCommandAssistantExample{
@@ -1008,13 +1102,13 @@ std::string MiaIA::Studio::LocalCommandAssistant::ExportCorpus() const
     stream << "MIAIA_LOCAL_NLU\t1\n";
     for (const auto& example : learnedExamples_)
     {
-        stream << "V\t" << LanguageCode(example.Language) << '\t'
+        stream << "V\t" << example.LanguageCode << '\t'
             << example.Confirmations << '\t' << HexEncode(example.Text)
             << '\t' << HexEncode(example.Intent) << '\n';
     }
     for (const auto& pending : pendingPhrases_)
     {
-        stream << "P\t" << LanguageCode(pending.Language) << '\t'
+        stream << "P\t" << pending.LanguageCode << '\t'
             << HexEncode(pending.Text) << '\n';
     }
     return stream.str();
@@ -1068,7 +1162,8 @@ bool MiaIA::Studio::LocalCommandAssistant::ImportCorpus(
             if (fields.size() != 5 ||
                 learned.size() + pending.size() >= MaximumCorpusEntries)
                 return fail();
-            const auto language = ParseLanguage(fields[1]);
+            const std::string language = NormalizeLanguageCode(
+                std::string(fields[1]));
             std::uint32_t confirmations{};
             const auto parsed = std::from_chars(
                 fields[2].data(),
@@ -1076,7 +1171,7 @@ bool MiaIA::Studio::LocalCommandAssistant::ImportCorpus(
                 confirmations);
             std::string text;
             std::string intent;
-            if (!language || parsed.ec != std::errc{} ||
+            if (language.empty() || parsed.ec != std::errc{} ||
                 parsed.ptr != fields[2].data() + fields[2].size() ||
                 confirmations == 0 || !HexDecode(fields[3], text) ||
                 !HexDecode(fields[4], intent) || Normalize(text).empty() ||
@@ -1085,22 +1180,23 @@ bool MiaIA::Studio::LocalCommandAssistant::ImportCorpus(
                 return fail();
             }
             learned.push_back(LocalCommandAssistantExample{
-                *language, std::move(text), std::move(intent), confirmations});
+                language, std::move(text), std::move(intent), confirmations});
         }
         else if (fields[0] == "P")
         {
             if (fields.size() != 3 ||
                 learned.size() + pending.size() >= MaximumCorpusEntries)
                 return fail();
-            const auto language = ParseLanguage(fields[1]);
+            const std::string language = NormalizeLanguageCode(
+                std::string(fields[1]));
             std::string text;
-            if (!language || !HexDecode(fields[2], text) ||
+            if (language.empty() || !HexDecode(fields[2], text) ||
                 Normalize(text).empty())
             {
                 return fail();
             }
             pending.push_back(LocalCommandAssistantPendingPhrase{
-                *language, std::move(text)});
+                language, std::move(text)});
         }
         else
         {
@@ -1111,6 +1207,176 @@ bool MiaIA::Studio::LocalCommandAssistant::ImportCorpus(
     learnedExamples_ = std::move(learned);
     pendingPhrases_ = std::move(pending);
     return true;
+}
+
+std::string MiaIA::Studio::LocalCommandAssistant::ExportLanguageTemplate()
+{
+    std::ostringstream stream;
+    stream << "MIAIA_LOCAL_LANGUAGE_PACK\t1\n"
+        << "L\txx\tLanguage name\n";
+    for (const Example& example : Examples)
+    {
+        if (example.Language != CommandAssistantLanguage::English)
+            continue;
+        stream << "E\t" << example.Intent << '\t' << example.Text << "\t\n";
+    }
+    for (const auto& entry : AssistantInspectionCatalog)
+    {
+        stream << "E\t" << entry.Intent << '\t' << entry.English << "\t\n";
+    }
+    return stream.str();
+}
+
+bool MiaIA::Studio::LocalCommandAssistant::ImportLanguagePack(
+    const std::string_view serialized,
+    std::string& error)
+{
+    error.clear();
+    if (serialized.size() > MaximumSerializedCorpusBytes)
+    {
+        error = "The language pack is larger than the supported limit.";
+        return false;
+    }
+
+    std::istringstream stream{std::string(serialized)};
+    std::string line;
+    if (!std::getline(stream, line))
+    {
+        error = "The language pack is empty.";
+        return false;
+    }
+    if (!line.empty() && line.back() == '\r') line.pop_back();
+    if (line != "MIAIA_LOCAL_LANGUAGE_PACK\t1")
+    {
+        error = "The language pack header or version is invalid.";
+        return false;
+    }
+
+    LocalCommandAssistantLanguagePack imported;
+    bool hasLanguageRecord = false;
+    std::size_t lineNumber = 1;
+    while (std::getline(stream, line))
+    {
+        ++lineNumber;
+        if (!line.empty() && line.back() == '\r') line.pop_back();
+        if (line.empty()) continue;
+        const auto fields = SplitTabs(line);
+        const auto fail = [&]()
+        {
+            error = "Invalid language pack entry at line " +
+                std::to_string(lineNumber) +
+                ". Use real TAB separators: L<TAB>es<TAB>Espanol; "
+                "E<TAB>intent<TAB>English source<TAB>translation.";
+            return false;
+        };
+
+        if (fields.empty())
+            continue;
+        if (fields[0] == "L")
+        {
+            if (hasLanguageRecord || fields.size() != 3)
+                return fail();
+            imported.Code = NormalizeLanguageCode(std::string(fields[1]));
+            imported.DisplayName = std::string(fields[2]);
+            if (imported.Code == "xx" || imported.DisplayName == "Language name")
+            {
+                error = "Replace the placeholders on line " +
+                    std::to_string(lineNumber) +
+                    ": use L<TAB>es<TAB>Espanol for Spanish. Save the edited file before installing.";
+                return false;
+            }
+            if (imported.Code.empty() || imported.Code == "xx" ||
+                imported.Code == "auto" ||
+                imported.Code == "en" || imported.Code == "it" ||
+                imported.DisplayName.empty() ||
+                imported.DisplayName == "Language name" ||
+                imported.DisplayName.size() > MaximumLanguageNameBytes)
+            {
+                return fail();
+            }
+            hasLanguageRecord = true;
+        }
+        else if (fields[0] == "E")
+        {
+            if (!hasLanguageRecord || (fields.size() != 3 && fields.size() != 4) ||
+                imported.Examples.size() >= MaximumCorpusEntries)
+            {
+                return fail();
+            }
+            // Column three is the English source shown to translators.
+            // Empty translations are intentionally skipped so a partially
+            // translated template remains a valid, useful language pack.
+            if (fields.size() == 3 || fields[3].empty())
+                continue;
+            const std::string intent(fields[1]);
+            const std::string translation(fields[3]);
+            if (!IsSupportedIntent(intent) ||
+                translation.size() > MaximumPhraseBytes ||
+                Normalize(translation).empty())
+            {
+                return fail();
+            }
+            imported.Examples.push_back(
+                LocalCommandAssistantLanguagePackExample{
+                    intent, translation});
+        }
+        else
+        {
+            return fail();
+        }
+    }
+
+    if (!hasLanguageRecord || imported.Examples.empty())
+    {
+        error = "The language pack needs a language and at least one translation in column 4. "
+            "Keep the English source in column 3 and add a TAB before the translation.";
+        return false;
+    }
+
+    const auto existing = std::find_if(
+        languagePacks_.begin(), languagePacks_.end(),
+        [&imported](const LocalCommandAssistantLanguagePack& pack)
+        {
+            return pack.Code == imported.Code;
+        });
+    if (existing == languagePacks_.end() &&
+        languagePacks_.size() >= MaximumLanguagePacks)
+    {
+        error = "The maximum number of installed language packs was reached.";
+        return false;
+    }
+    if (existing != languagePacks_.end())
+        languagePacks_.erase(existing);
+    languagePacks_.push_back(std::move(imported));
+    return true;
+}
+
+std::string MiaIA::Studio::LocalCommandAssistant::ExportLanguagePack(
+    const std::string_view code) const
+{
+    const auto found = std::find_if(
+        languagePacks_.begin(), languagePacks_.end(),
+        [code](const LocalCommandAssistantLanguagePack& pack)
+        {
+            return pack.Code == code;
+        });
+    if (found == languagePacks_.end())
+        return {};
+
+    std::ostringstream stream;
+    stream << "MIAIA_LOCAL_LANGUAGE_PACK\t1\n"
+        << "L\t" << found->Code << '\t' << found->DisplayName << '\n';
+    for (const auto& example : found->Examples)
+    {
+        stream << "E\t" << example.Intent << "\t\t" << example.Text << '\n';
+    }
+    return stream.str();
+}
+
+const std::vector<MiaIA::Studio::LocalCommandAssistantLanguagePack>&
+MiaIA::Studio::LocalCommandAssistant::LanguagePacks() const
+{
+    return languagePacks_;
 }
 
 const std::vector<std::string_view>&

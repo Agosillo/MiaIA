@@ -60,7 +60,8 @@ enum class EMiaIAAssistantLanguage : uint8
 {
     Automatic,
     English,
-    Italian
+    Italian,
+    Custom
 };
 
 enum class EMiaIAAssistantProvider : uint8
@@ -282,8 +283,10 @@ private:
     TSharedRef<SWidget> BuildOnlineAssistantPanel(
         const FSlateBrush* PanelBorder);
     void RebuildOnlineAssistantProvider();
+    TSharedRef<SWidget> BuildAssistantProposalPanel(const FSlateBrush* PanelBorder);
     TSharedRef<SWidget> BuildAssistantLanguageMenu();
     FReply SelectAssistantLanguage(EMiaIAAssistantLanguage InLanguage);
+    FReply SelectAssistantCustomLanguage(FString InLanguageCode);
     FText AssistantLanguageText() const;
     TSharedRef<SWidget> BuildAssistantProviderMenu();
     FReply SelectAssistantProvider(EMiaIAAssistantProvider InProvider);
@@ -309,6 +312,8 @@ private:
     FReply HandleExportAssistantCorpus();
     FReply HandleImportAssistantCorpus();
     FReply HandleResetAssistantCorpus();
+    FReply HandleExportAssistantLanguageTemplate();
+    FReply HandleImportAssistantLanguageTemplate();
     TSharedRef<SWidget> BuildPendingAssistantIntentMenu();
     void EnsureAssistantLearningSelection();
     void RebuildAssistantExamples();
@@ -320,7 +325,12 @@ private:
     void LoadLocalAssistantCorpus(
         MiaIA::Studio::LocalCommandAssistant& Assistant,
         FString& Error) const;
+    void LoadLocalAssistantLanguagePacks(
+        MiaIA::Studio::LocalCommandAssistant& Assistant,
+        FString& Error) const;
     FText OnlineAssistantStatusText() const;
+    void SetAssistantConsoleStatus(const FString& Message);
+    FString AssistantLanguageImportPath;
     FText AssistantProposalText() const;
     FText AssistantLearningSummaryText() const;
     FText AssistantPendingPhraseText() const;
@@ -441,6 +451,7 @@ private:
         OnlineAssistant;
     EMiaIAAssistantLanguage AssistantLanguage{
         EMiaIAAssistantLanguage::Automatic};
+    FString AssistantCustomLanguageCode;
     EMiaIAAssistantProvider AssistantProvider{
         EMiaIAAssistantProvider::Local};
     MiaIA::Studio::CommandProposal AssistantProposal;
@@ -455,6 +466,7 @@ private:
     bool bOnlineAssistantRequestPending{};
     bool bHasAssistantProposal{};
     bool bAssistantSettingsExpanded{};
+    bool bAssistantConfigurationExpanded{};
     bool bAssistantLearningExpanded{};
     bool bAssistantLearningSelectionValidated{};
 #endif

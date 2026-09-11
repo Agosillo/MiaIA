@@ -461,6 +461,109 @@ int main()
             "miaia_help");
     });
 
+    runner.Run("Local command assistant language packs", [&]()
+    {
+        using namespace MiaIA::Studio;
+
+        const auto interpret = [](LocalCommandAssistant& assistant,
+            const std::string& text)
+        {
+            CommandAssistantUnderstanding result;
+            bool completed{};
+            assert(assistant.Interpret(text,
+                [&](CommandAssistantUnderstanding value)
+                {
+                    result = std::move(value);
+                    completed = true;
+                }));
+            assert(completed);
+            return result;
+        };
+
+        const std::string languageTemplate =
+            LocalCommandAssistant::ExportLanguageTemplate();
+        assert(languageTemplate.starts_with(
+            "MIAIA_LOCAL_LANGUAGE_PACK\t1\nL\txx\tLanguage name\n"));
+        for (const auto intent : LocalCommandAssistant::SupportedIntents())
+            assert(languageTemplate.find(intent) != std::string::npos);
+
+        const std::string spanishPack =
+            "MIAIA_LOCAL_LANGUAGE_PACK\t1\n"
+            "L\tes\tEspanol\n"
+            "E\tmiaia_model_list\tShow all models\tMostrar todos los modelos\n"
+            "E\tmiaia_neuron_inspect\tInspect neuron 2\tInspeccionar neurona 2\n";
+
+        LocalCommandAssistant spanish;
+        assert(!spanish.SetLanguageCode("es"));
+        std::string error;
+        assert(!spanish.ImportLanguagePack(languageTemplate, error));
+        assert(error.find("placeholders") != std::string::npos);
+        assert(!spanish.ImportLanguagePack(
+            "MIAIA_LOCAL_LANGUAGE_PACK\t1\nL\tes\tSpagna\n"
+            "E\tmiaia_help\tmostrar ayuda\t\n"
+            "E\tmiaia_help\tlistar los comandos disponibles\t\n", error));
+        assert(error.find("column 4") != std::string::npos);
+        assert(spanish.LanguagePacks().empty());
+        assert(spanish.ImportLanguagePack(spanishPack +
+            "E\tmiaia_help\tShow help\n", error));
+        assert(spanish.LanguagePacks()[0].Examples.size() == 2);
+        assert(spanish.ImportLanguagePack(spanishPack, error));
+        assert(error.empty());
+        assert(spanish.LanguagePacks().size() == 1);
+        assert(spanish.LanguagePacks()[0].Code == "es");
+        assert(spanish.LanguagePacks()[0].DisplayName == "Espanol");
+        assert(spanish.SetLanguageCode("ES"));
+        assert(spanish.LanguageCode() == "es");
+
+        auto result = interpret(spanish, "Mostrar todos los modelos");
+        assert(result.Intent == "miaia_model_list");
+        assert(result.Confidence == 1.0);
+        CommandProposal proposal;
+        assert(CommandAssistant::Propose(result, proposal));
+        assert(proposal.Command == "model list");
+
+        result = interpret(spanish, "Inspeccionar neurona 2");
+        assert(result.Intent == "miaia_neuron_inspect");
+        assert(result.Confidence == 1.0);
+        assert(CommandAssistant::Propose(result, proposal));
+        assert(proposal.Command == "inspect neuron 2");
+
+        spanish.SetLanguage(CommandAssistantLanguage::Automatic);
+        assert(interpret(spanish, "Mostrar todos los modelos").Intent ==
+            "miaia_model_list");
+        assert(spanish.SetLanguageCode("es"));
+        assert(spanish.LearnValidated(
+            "Presentar ayuda personalizada",
+            "miaia_help"));
+        assert(spanish.LearnedExamples().back().LanguageCode == "es");
+
+        LocalCommandAssistant restored;
+        assert(restored.ImportLanguagePack(
+            spanish.ExportLanguagePack("es"), error));
+        assert(restored.ImportCorpus(spanish.ExportCorpus(), error));
+        assert(restored.SetLanguageCode("es"));
+        assert(interpret(restored,
+            "Presentar ayuda personalizada").Intent == "miaia_help");
+        restored.SetLanguage(CommandAssistantLanguage::English);
+        assert(interpret(restored,
+            "Presentar ayuda personalizada").Intent.empty());
+
+        const std::size_t installed = restored.LanguagePacks().size();
+        assert(!restored.ImportLanguagePack(
+            "MIAIA_LOCAL_LANGUAGE_PACK\t1\n"
+            "L\tfr\tFrancais\n"
+            "E\tmiaia_not_supported\tUnknown\tInconnu\n",
+            error));
+        assert(!error.empty());
+        assert(restored.LanguagePacks().size() == installed);
+        assert(!restored.ImportLanguagePack(
+            "MIAIA_LOCAL_LANGUAGE_PACK\t1\n"
+            "L\ten\tReplacement\n"
+            "E\tmiaia_help\tShow help\tHelp\n",
+            error));
+        assert(restored.LanguagePacks().size() == installed);
+    });
+
     runner.Run("Assistant bilingual inspection commands", [&]()
     {
         using namespace MiaIA::Studio;

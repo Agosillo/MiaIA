@@ -264,6 +264,8 @@ MiaIA Local then gained an automatic bilingual mode and supervised user corpus. 
 
 Native tests exercise both languages through the complete provider-to-proposal path, including out-of-scope text and the current entity shapes. The architecture intentionally keeps future Unreal/Quest hosts and speech-to-text adapters above the same portable provider and confirmation boundary.
 
+MiaIA Local subsequently gained portable Language Packs. Studio exports a human-editable UTF-8 translation template covering the complete allowlisted intent catalog, validates partially translated packs atomically, stores each installed language separately under Saved, and discovers them on later starts. The language selector and example sidebar are populated dynamically; `Auto` evaluates English, Italian, every installed pack, and mixed requests. Exact imported phrases receive exact confidence, while fuzzy matches retain review. Language Packs remain separate from the supervised learned-corpus backup, and the standard-library core retains portable import/export and language metadata suitable for later Unreal targets. Native tests install Spanish as a third language, verify exact recognition and numeric entity extraction, exercise automatic selection and pack/corpus round trips, and reject reserved or unsupported entries without changing installed state.
+
 ## Current position
 
 MiaIA Local now exposes 17 additional bilingual inspection intents (30 total):
