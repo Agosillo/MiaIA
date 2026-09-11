@@ -86,9 +86,16 @@ E	miaia_model_list	Show all models	Mostrar todos los modelos
 E	miaia_neuron_inspect	Inspect neuron 2	Inspeccionar neurona 2
 ```
 
-Choose **Install language pack** to validate the edited template. The file is
-read from the editable **Language pack file** path in Settings; change this full path
-when using a renamed file such as `language-template-es.miaia-language`. Save your
+In Settings, **Browse...** opens a portable in-app file browser. Navigate folders
+or enter a folder path (including another drive) and press Enter, then select a
+`.miaia-language` file. Selecting a file does not install it. The full file path
+also remains editable manually.
+
+Choose **Preview and install language pack** to validate the selected file. Before
+any write, a confirmation shows its name/code, translated phrase count, source and
+destination paths, up to three examples, and whether it replaces an existing pack.
+Answering No leaves installed packs, the provider and the current proposal unchanged.
+The validated snapshot shown in the preview is the snapshot installed. Save your
 changes in the text editor before installing. Do not export again to install: export
 creates a new blank template. The literal `xx` / `Language name` placeholders must
 both be replaced. Use real TAB characters, not spaces or the two characters `\t`.
@@ -102,12 +109,18 @@ enable it again before testing the new language. Installing the same code asks b
 language, export a fresh template and repeat the process. Export also asks before
 overwriting an existing work-in-progress template.
 
-To uninstall a pack, close Studio and move its installed file (for example
-`Saved/MiaIA/CommandAssistant/Languages/es.miaia-language`) outside the `Languages`
-folder, then restart Studio. There is currently no uninstall button. Moving the file
-is reversible; removing the exported template alone does not uninstall a pack.
-This does not clear learned phrases in `local-corpus.miaia`, which are managed
-separately through Review.
+**Installed language packs (count)** lists names, codes and translated phrase counts.
+Each additional pack has **Remove...**, with a confirmation. English and Italian are
+built in and cannot be removed. Removal moves the verified installed file to
+`Saved/MiaIA/CommandAssistant/Languages/Removed/<code>-<unique-id>.miaia-language`;
+this folder is not loaded automatically. Browse to that file and reinstall to restore
+it. The console reports the recovery path. The language menu and examples refresh
+immediately; removing the selected language switches selection to Auto. The assistant
+is disabled and pending execution proposals are cleared after removal.
+
+Removal does not delete exported templates or learned/pending phrases in
+`local-corpus.miaia`. These are managed separately through Review, and learned phrases
+can therefore still be recognized in Auto even after their original pack is removed.
 
 Language codes contain 2-24 lowercase letters, digits, or hyphens and begin with a
 letter; the `xx` placeholder and `auto`, `en`, and `it` are reserved. A pack must contain at least one translated

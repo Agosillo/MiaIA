@@ -17,6 +17,7 @@
 #include "Containers/UnrealString.h"
 #include "Misc/ConfigCacheIni.h"
 #include "Misc/FileHelper.h"
+#include "Misc/Guid.h"
 #include "Misc/MessageDialog.h"
 #include "Misc/Paths.h"
 #include "Styling/AppStyle.h"
@@ -10241,6 +10242,29 @@ TSharedRef<SWidget> SMiaIAEditorPanel::BuildOnlineAssistantPanel(
                                     &SMiaIAEditorPanel::
                                         HandleExportAssistantLanguageTemplate)
                             ]
+                            + SVerticalBox::Slot().AutoHeight().Padding(0.0f, 3.0f)
+                            [
+                                SNew(SComboButton)
+                                .ComboButtonStyle(&ComboButtonStyle)
+                                .IsEnabled_Lambda([this]() { return LocalAssistant() != nullptr; })
+                                .OnGetMenuContent(this, &SMiaIAEditorPanel::BuildInstalledAssistantLanguageMenu)
+                                .ButtonContent()
+                                [
+                                    SNew(STextBlock).Text_Lambda([this]()
+                                    {
+                                        const auto* local = LocalAssistant();
+                                        return FText::FromString(FString::Printf(TEXT("Installed language packs (%llu)"),
+                                            local ? static_cast<unsigned long long>(local->LanguagePacks().size()) : 0ULL));
+                                    })
+                                ]
+                            ]
+                            + SVerticalBox::Slot().AutoHeight().Padding(0.0f, 3.0f)
+                            [
+                                SNew(SComboButton)
+                                .ComboButtonStyle(&ComboButtonStyle)
+                                .OnGetMenuContent(this, &SMiaIAEditorPanel::BuildAssistantLanguageBrowser)
+                                .ButtonContent()[SNew(STextBlock).Text(LOCTEXT("AssistantBrowsePack", "Browse..."))]
+                            ]
                             + SVerticalBox::Slot()
                             .AutoHeight()
                             .Padding(0.0f, 5.0f)
@@ -10268,7 +10292,7 @@ TSharedRef<SWidget> SMiaIAEditorPanel::BuildOnlineAssistantPanel(
                                 .ButtonStyle(&ButtonStyle)
                                 .Text(LOCTEXT(
                                     "AssistantImportLanguageTemplate",
-                                    "Install language pack"))
+                                    "Preview and install language pack"))
                                 .ToolTipText(LOCTEXT(
                                     "AssistantImportLanguageTemplateTip",
                                     "Validate and install the translated language template."))
@@ -11596,6 +11620,170 @@ FReply SMiaIAEditorPanel::HandleExportAssistantLanguageTemplate()
     return FReply::Handled();
 }
 
+TSharedRef<SWidget> SMiaIAEditorPanel::BuildAssistantLanguageBrowser()
+{
+    TSharedRef<SVerticalBox> content = SNew(SVerticalBox);
+    const FString path = AssistantLanguageImportPath.IsEmpty()
+        ? LocalAssistantLanguageTemplatePath() : AssistantLanguageImportPath.TrimStartAndEnd();
+    PopulateAssistantLanguageBrowser(content,
+        IFileManager::Get().DirectoryExists(*path) ? path : FPaths::GetPath(path));
+    return SNew(SBox).WidthOverride(540.0f).MaxDesiredHeight(420.0f)
+        [SNew(SScrollBox) + SScrollBox::Slot()[content]];
+}
+
+void SMiaIAEditorPanel::PopulateAssistantLanguageBrowser(
+    TSharedRef<SVerticalBox> Content, FString Directory)
+{
+    Directory = FPaths::ConvertRelativePathToFull(Directory);
+    FPaths::NormalizeDirectoryName(Directory);
+    const TWeakPtr<SVerticalBox> weakContent = Content;
+    Content->ClearChildren();
+    Content->AddSlot().AutoHeight()
+    [
+        SNew(STextBlock).AutoWrapText(true)
+        .Text(LOCTEXT("AssistantBrowseFolderHint", "Folder (enter a path and press Enter):"))
+    ];
+    Content->AddSlot().AutoHeight()
+    [
+        SNew(SEditableTextBox).Text(FText::FromString(Directory))
+        .OnTextCommitted_Lambda([this, weakContent](const FText& Text, ETextCommit::Type Type)
+        {
+            if (Type == ETextCommit::OnEnter)
+                if (const auto content = weakContent.Pin())
+                    PopulateAssistantLanguageBrowser(content.ToSharedRef(), Text.ToString());
+        })
+    ];
+    const FString parent = FPaths::ConvertRelativePathToFull(FPaths::Combine(Directory, TEXT("..")));
+    Content->AddSlot().AutoHeight().Padding(0.0f, 3.0f)
+    [
+        SNew(SButton).ButtonStyle(&ButtonStyle).Text(LOCTEXT("AssistantBrowseParent", "Parent folder"))
+        .OnClicked_Lambda([this, weakContent, parent]()
+        {
+            if (const auto content = weakContent.Pin())
+                PopulateAssistantLanguageBrowser(content.ToSharedRef(), parent);
+            return FReply::Handled();
+        })
+    ];
+    TArray<FString> directories;
+    TArray<FString> files;
+    IFileManager::Get().FindFiles(directories, *FPaths::Combine(Directory, TEXT("*")), false, true);
+    IFileManager::Get().FindFiles(files, *FPaths::Combine(Directory, TEXT("*.miaia-language")), true, false);
+    directories.Sort();
+    files.Sort();
+    for (const FString& folder : directories)
+    {
+        const FString path = FPaths::Combine(Directory, folder);
+        Content->AddSlot().AutoHeight().Padding(0.0f, 2.0f)
+        [
+            SNew(SButton).ButtonStyle(&ButtonStyle).Text(FText::FromString(folder + TEXT("/")))
+            .OnClicked_Lambda([this, weakContent, path]()
+            {
+                if (const auto content = weakContent.Pin())
+                    PopulateAssistantLanguageBrowser(content.ToSharedRef(), path);
+                return FReply::Handled();
+            })
+        ];
+    }
+    for (const FString& file : files)
+    {
+        const FString path = FPaths::Combine(Directory, file);
+        Content->AddSlot().AutoHeight().Padding(0.0f, 2.0f)
+        [
+            SNew(SButton).ButtonStyle(&ButtonStyle).Text(FText::FromString(file))
+            .OnClicked_Lambda([this, path]()
+            {
+                AssistantLanguageImportPath = path;
+                FSlateApplication::Get().DismissAllMenus();
+                SetAssistantConsoleStatus(FString::Printf(TEXT("Language pack selected: %s. Preview it before installing."), *path));
+                return FReply::Handled();
+            })
+        ];
+    }
+    if (files.IsEmpty())
+        Content->AddSlot().AutoHeight()[SNew(STextBlock).AutoWrapText(true)
+            .Text(LOCTEXT("AssistantBrowseNoFiles", "No language pack files found here. Check the folder path or open a subfolder."))];
+}
+
+TSharedRef<SWidget> SMiaIAEditorPanel::BuildInstalledAssistantLanguageMenu()
+{
+    TSharedRef<SVerticalBox> content = SNew(SVerticalBox);
+    content->AddSlot().AutoHeight()[SNew(STextBlock).AutoWrapText(true)
+        .Text(LOCTEXT("AssistantBuiltinLanguages", "English and Italian are built in and cannot be removed."))];
+    if (const auto* local = LocalAssistant())
+    {
+        for (const auto& pack : local->LanguagePacks())
+        {
+            const FString code = FromUtf8(pack.Code);
+            content->AddSlot().AutoHeight().Padding(0.0f, 5.0f)
+            [
+                SNew(SVerticalBox)
+                + SVerticalBox::Slot().AutoHeight()
+                [
+                    SNew(STextBlock).AutoWrapText(true).Text(FText::FromString(FString::Printf(
+                        TEXT("%s (%s) - %llu phrases"), *FromUtf8(pack.DisplayName), *code,
+                        static_cast<unsigned long long>(pack.Examples.size()))))
+                ]
+                + SVerticalBox::Slot().AutoHeight()
+                [
+                    SNew(SButton).ButtonStyle(&ButtonStyle).Text(LOCTEXT("AssistantRemovePack", "Remove..."))
+                    .OnClicked(this, &SMiaIAEditorPanel::HandleRemoveAssistantLanguagePack, code)
+                ]
+            ];
+        }
+        if (local->LanguagePacks().empty())
+            content->AddSlot().AutoHeight()[SNew(STextBlock).Text(LOCTEXT("AssistantNoInstalledPacks", "No additional language packs installed."))];
+    }
+    return SNew(SBox).WidthOverride(360.0f).MaxDesiredHeight(420.0f)
+        [SNew(SScrollBox) + SScrollBox::Slot()[content]];
+}
+
+FReply SMiaIAEditorPanel::HandleRemoveAssistantLanguagePack(FString Code)
+{
+    FSlateApplication::Get().DismissAllMenus();
+    const auto* local = LocalAssistant();
+    if (!local || std::none_of(local->LanguagePacks().begin(), local->LanguagePacks().end(),
+        [&Code](const auto& pack) { return FromUtf8(pack.Code) == Code; }))
+        return FReply::Handled();
+    const FString path = LocalAssistantLanguagePackPath(Code);
+    // Check the actual target before moving it; never remove a different pack.
+    FString serialized;
+    std::string error;
+    MiaIA::Studio::LocalCommandAssistant checked;
+    if (!FFileHelper::LoadFileToString(serialized, *path) ||
+        !checked.ImportLanguagePack(TCHAR_TO_UTF8(*serialized), error) ||
+        FromUtf8(checked.LanguagePacks().back().Code) != Code)
+    {
+        SetAssistantConsoleStatus(TEXT("The installed pack file could not be verified. No files were removed."));
+        return FReply::Handled();
+    }
+    if (FMessageDialog::Open(EAppMsgType::YesNo, FText::FromString(FString::Printf(
+        TEXT("Remove language pack %s?\n\nIts file will be moved to Languages/Removed and can be reinstalled. Learned phrases and exported templates will not be deleted."), *Code))) != EAppReturnType::Yes)
+        return FReply::Handled();
+    const FString removedPath = FPaths::Combine(LocalAssistantLanguagesDirectory(), TEXT("Removed"),
+        Code + TEXT("-") + FGuid::NewGuid().ToString(EGuidFormats::Digits) + TEXT(".miaia-language"));
+    if (!IFileManager::Get().MakeDirectory(*FPaths::GetPath(removedPath), true) ||
+        !IFileManager::Get().Move(*removedPath, *path, false, false))
+    {
+        SetAssistantConsoleStatus(TEXT("The language pack could not be moved. It remains installed."));
+        return FReply::Handled();
+    }
+    if (AssistantLanguage == EMiaIAAssistantLanguage::Custom && AssistantCustomLanguageCode == Code)
+    {
+        AssistantLanguage = EMiaIAAssistantLanguage::Automatic;
+        AssistantCustomLanguageCode.Empty();
+    }
+    ++OnlineAssistantRequestSerial;
+    bOnlineAssistantEnabled = false;
+    bOnlineAssistantRequestPending = false;
+    bHasAssistantProposal = false;
+    AssistantProposal = {};
+    RebuildOnlineAssistantProvider();
+    RebuildConsoleSuggestions(FString());
+    SetAssistantConsoleStatus(FString::Printf(
+        TEXT("Language pack %s removed. Assistant disabled; learned phrases preserved. Recoverable file: %s"), *Code, *removedPath));
+    return FReply::Handled();
+}
+
 FReply SMiaIAEditorPanel::HandleImportAssistantLanguageTemplate()
 {
     auto* assistant = LocalAssistant();
@@ -11628,26 +11816,31 @@ FReply SMiaIAEditorPanel::HandleImportAssistantLanguageTemplate()
     const auto& imported = validatedPack.LanguagePacks().back();
     const FString code = FromUtf8(imported.Code);
     const FString packPath = LocalAssistantLanguagePackPath(code);
-    if (FPaths::FileExists(packPath) && FMessageDialog::Open(
-        EAppMsgType::YesNo,
-        FText::Format(
-            LOCTEXT(
-                "AssistantReplaceLanguagePackConfirmation",
-                "Replace the installed {0} language pack?"),
-            FText::FromString(code))) != EAppReturnType::Yes)
+    FString preview = FString::Printf(
+        TEXT("Language: %s (%s)\nTranslated phrases: %llu\nSource: %s\nDestination: %s\n\n%s\n\nExamples:\n"),
+        *FromUtf8(imported.DisplayName), *code,
+        static_cast<unsigned long long>(imported.Examples.size()), *templatePath, *packPath,
+        FPaths::FileExists(packPath) ? TEXT("This REPLACES the installed pack for this language.") : TEXT("This installs a new language pack."));
+    for (std::size_t i = 0; i < std::min<std::size_t>(3, imported.Examples.size()); ++i)
+        preview += FromUtf8(imported.Examples[i].Text).Left(160) + TEXT(" -> ") +
+            FromUtf8(imported.Examples[i].Intent) + TEXT("\n");
+    preview += TEXT("\nInstall this pack? Learned phrases are preserved. The assistant will be disabled until you enable it again.");
+    if (FMessageDialog::Open(EAppMsgType::YesNo, FText::FromString(preview)) != EAppReturnType::Yes)
     {
-        RebuildOnlineAssistantProvider();
         return FReply::Handled();
     }
 
+    const FString temporaryPath = packPath + TEXT(".") + FGuid::NewGuid().ToString(EGuidFormats::Digits) + TEXT(".tmp");
     const bool saved = IFileManager::Get().MakeDirectory(
         *FPaths::GetPath(packPath),
         true) && FFileHelper::SaveStringToFile(
             FromUtf8(validatedPack.ExportLanguagePack(imported.Code)),
-            *packPath,
-            FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM);
+            *temporaryPath,
+            FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM) &&
+        IFileManager::Get().Move(*packPath, *temporaryPath, true, false);
     if (!saved)
     {
+        IFileManager::Get().Delete(*temporaryPath, false, false);
         RebuildOnlineAssistantProvider();
         SetAssistantConsoleStatus(TEXT("The validated language pack could not be installed."));
         return FReply::Handled();

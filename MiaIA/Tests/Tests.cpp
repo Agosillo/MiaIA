@@ -607,6 +607,24 @@ int main()
             "Presentar ayuda personalizada").Intent.empty());
 
         const std::size_t installed = restored.LanguagePacks().size();
+        const std::string savedCorpus = restored.ExportCorpus();
+        const std::string previousPack = restored.ExportLanguagePack("es");
+        LocalCommandAssistant preview;
+        assert(preview.ImportLanguagePack(previousPack, error));
+        assert(restored.ExportCorpus() == savedCorpus);
+        assert(restored.ExportLanguagePack("es") == previousPack);
+        assert(restored.ImportLanguagePack(
+            "MIAIA_LOCAL_LANGUAGE_PACK\t1\nL\tes\tEspanol\n"
+            "E\tmiaia_help\tShow help\tAyuda\n", error));
+        assert(restored.LanguagePacks().size() == installed);
+        assert(restored.LanguagePacks().back().Examples.size() == 1);
+        assert(restored.ExportCorpus() == savedCorpus);
+        // Rebuilding without the removed pack must preserve the separate corpus.
+        LocalCommandAssistant withoutPack;
+        assert(withoutPack.ImportCorpus(savedCorpus, error));
+        assert(withoutPack.LanguagePacks().empty());
+        assert(withoutPack.ExportCorpus() == savedCorpus);
+        assert(restored.ImportLanguagePack(previousPack, error));
         assert(!restored.ImportLanguagePack(
             "MIAIA_LOCAL_LANGUAGE_PACK\t1\n"
             "L\tfr\tFrancais\n"

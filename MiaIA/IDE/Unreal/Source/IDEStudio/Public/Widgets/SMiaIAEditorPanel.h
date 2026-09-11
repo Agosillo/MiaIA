@@ -314,6 +314,10 @@ private:
     FReply HandleResetAssistantCorpus();
     FReply HandleExportAssistantLanguageTemplate();
     FReply HandleImportAssistantLanguageTemplate();
+    TSharedRef<SWidget> BuildAssistantLanguageBrowser();
+    void PopulateAssistantLanguageBrowser(TSharedRef<SVerticalBox> Content, FString Directory);
+    TSharedRef<SWidget> BuildInstalledAssistantLanguageMenu();
+    FReply HandleRemoveAssistantLanguagePack(FString Code);
     TSharedRef<SWidget> BuildPendingAssistantIntentMenu();
     void EnsureAssistantLearningSelection();
     void RebuildAssistantExamples();
