@@ -53,6 +53,7 @@
   <ItemGroup>
     <ClInclude Include="Include\CommandAssistant.h" />
     <ClInclude Include="Include\AssistantInspectionCatalog.h" />
+    <ClInclude Include="Include\AssistantStudioActions.h" />
     <ClInclude Include="Include\AssistantParameterCatalog.h" />
     <ClInclude Include="Include\ConsoleSessionHistory.h" />
     <ClInclude Include="Include\LocalCommandAssistant.h" />

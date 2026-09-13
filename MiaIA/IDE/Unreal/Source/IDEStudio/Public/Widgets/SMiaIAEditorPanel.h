@@ -4,6 +4,7 @@
 #include "Containers/Map.h"
 #include "CommandAssistant.h"
 #include "ConsoleSessionHistory.h"
+#include "AssistantStudioActions.h"
 #include "MiaIABlueprintTypes.h"
 #include "MiaIAInstanceService.h"
 #include "Styling/MiaIAEditorTheme.h"
@@ -142,6 +143,7 @@ private:
         double CurrentTime,
         float DeltaTime);
     FReply HandleRefresh();
+    void ApplyStudioViewAction(MiaIA::Studio::StudioViewAction Action);
     FReply HandleFitView();
     FReply HandleResetLayout();
     TSharedRef<SWidget> BuildLayoutMenu();
@@ -330,6 +332,7 @@ private:
     TSharedRef<SWidget> BuildPendingAssistantIntentMenu();
     void EnsureAssistantLearningSelection();
     void RebuildAssistantExamples();
+    EVisibility AssistantExampleVisibility(FString Phrase) const;
     void AddInspectionAssistantExamples();
     void RebuildAssistantLearningSidebar();
     MiaIA::Studio::LocalCommandAssistant* LocalAssistant();
@@ -359,7 +362,7 @@ private:
 #endif
     FText ConsoleSidebarTitleText() const;
     FReply ApplyConsoleSuggestion(FString Completion);
-    void RebuildConsoleSuggestions(const FString& Input);
+    void RebuildConsoleSuggestions(const FString& Input, bool ForceRebuild = true);
     void SetConsoleInputText(const FString& Text, bool EditHistory = true);
     void UpdateConsoleOutput();
 
@@ -459,6 +462,7 @@ private:
     MiaIA::Studio::ConsoleHistoryFilter ConsoleRecallFilter{MiaIA::Studio::ConsoleHistoryFilter::Automatic};
     MiaIA::Studio::ConsoleHistorySource ConsoleInputSource{MiaIA::Studio::ConsoleHistorySource::Console};
     FString FirstConsoleSuggestion;
+    bool bAssistantExamplesBuilt{};
 #if MIAIA_WITH_WIT_AI
     std::unique_ptr<MiaIA::Studio::ICommandAssistantProvider>
         OnlineAssistant;

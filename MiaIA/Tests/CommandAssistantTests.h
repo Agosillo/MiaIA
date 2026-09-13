@@ -5,6 +5,7 @@
 #include "../IDE/StudioCore/Include/LocalCommandAssistant.h"
 #include "../IDE/StudioCore/Include/AssistantParameterCatalog.h"
 #include "../IDE/StudioCore/Include/ConsoleSessionHistory.h"
+#include "../IDE/StudioCore/Include/AssistantStudioActions.h"
 #include <algorithm>
 #include <array>
 #include <limits>
@@ -14,6 +15,90 @@
 
 inline void RunCommandAssistantTests(MiaIA::Tests::TestRunner& runner)
 {
+    runner.Run("Assistant example filtering is textual and restores all on empty input", [&]()
+    {
+        using MiaIA::Studio::LocalCommandAssistant;
+        MIAIA_CHECK(LocalCommandAssistant::MatchesExample("Mostra tutte le connessioni", "mostra"));
+        MIAIA_CHECK(LocalCommandAssistant::MatchesExample("Mostra tutte le connessioni", "  TUTTE   LE "));
+        MIAIA_CHECK(!LocalCommandAssistant::MatchesExample("Crea una rete", "mostra"));
+        MIAIA_CHECK(!LocalCommandAssistant::MatchesExample("Show all connections", "hide"));
+        MIAIA_CHECK(LocalCommandAssistant::MatchesExample("Mostrar conexiones", "conex"));
+        MIAIA_CHECK(LocalCommandAssistant::MatchesExample("Show all connections", ""));
+        MIAIA_CHECK(LocalCommandAssistant::MatchesExample("Mostra le connessioni", "   "));
+    });
+    runner.Run("Studio view actions share bilingual proposals and strict host dispatch", [&]()
+    {
+        using namespace MiaIA::Studio;
+        for (const auto& entry : AssistantStudioActions)
+        {
+            for (const auto language : {CommandAssistantLanguage::English, CommandAssistantLanguage::Italian,
+                CommandAssistantLanguage::Automatic})
+            {
+                LocalCommandAssistant assistant(language);
+                const auto phrase = language == CommandAssistantLanguage::Italian ? entry.Command.Italian : entry.Command.English;
+                CommandAssistantUnderstanding understood;
+                MIAIA_CHECK(assistant.Interpret(std::string(phrase), [&](auto result) { understood = std::move(result); }));
+                CommandProposal proposal;
+                MIAIA_CHECK(CommandAssistant::Propose(understood, proposal));
+                MIAIA_CHECK(proposal.Command == entry.Command.Command);
+                MIAIA_CHECK(proposal.FullyConfident);
+                MIAIA_CHECK(ParseStudioViewAction(proposal.Command) == entry.Action);
+                MIAIA_CHECK(!ParseStudioViewAction(proposal.Command + " extra"));
+                understood.Entities.push_back({"value", "value", "1", 1.0});
+                MIAIA_CHECK(!CommandAssistant::Propose(understood, proposal));
+            }
+        }
+        MIAIA_CHECK(!ParseStudioViewAction("studio reset everything"));
+        MIAIA_CHECK(!ParseStudioViewAction("studio view 3d; project new"));
+        MIAIA_CHECK(!ParseStudioViewAction("help"));
+        for (const auto& sample : {
+            std::pair{"mostra neuron labels", "studio labels show"},
+            std::pair{"nascondi connections", "studio connections hide"},
+            std::pair{"passa in 3d", "studio view 3d"},
+            std::pair{"imposta il layout compatto", "studio layout packed"},
+            std::pair{"please fit the view", "studio view fit"}})
+        {
+            LocalCommandAssistant assistant;
+            CommandAssistantUnderstanding understood;
+            assistant.Interpret(sample.first, [&](auto result) { understood = std::move(result); });
+            CommandProposal proposal;
+            MIAIA_CHECK(CommandAssistant::Propose(understood, proposal));
+            MIAIA_CHECK(proposal.Command == sample.second);
+            MIAIA_CHECK(!proposal.FullyConfident);
+        }
+        for (const auto text : {"do not hide neuron labels", "non mostrare le connessioni",
+            "show neuron labels and hide connections", "switch to 2d and 3d", "set layout packed 12",
+            "hide connections 5", "switch to 4d", "reset all preferences", "show connections and connections"})
+        {
+            LocalCommandAssistant assistant;
+            CommandAssistantUnderstanding understood;
+            assistant.Interpret(text, [&](auto result) { understood = std::move(result); });
+            CommandProposal proposal;
+            MIAIA_CHECK(!CommandAssistant::Propose(understood, proposal));
+        }
+    });
+    runner.Run("Studio actions can be translated and learned without extending allowlist", [&]()
+    {
+        using namespace MiaIA::Studio;
+        const auto text = LocalCommandAssistant::ExportLanguageTemplate();
+        for (const auto& entry : AssistantStudioActions)
+            MIAIA_CHECK(text.find(entry.Command.Intent) != std::string::npos);
+        LocalCommandAssistant assistant;
+        std::string error;
+        MIAIA_CHECK(assistant.ImportLanguagePack(
+            "MIAIA_LOCAL_LANGUAGE_PACK\t2\nL\tes\tEspanol\nE\tmiaia_studio_view_3d\tSwitch to 3D\tver en tres dimensiones\n", error));
+        MIAIA_CHECK(assistant.SetLanguageCode("es"));
+        CommandAssistantUnderstanding understood;
+        assistant.Interpret("ver en tres dimensiones", [&](auto result) { understood = std::move(result); });
+        CommandProposal proposal;
+        MIAIA_CHECK(CommandAssistant::Propose(understood, proposal));
+        MIAIA_CHECK(proposal.Command == "studio view 3d");
+        MIAIA_CHECK(assistant.LearnValidated("vista espacial", "miaia_studio_view_3d"));
+        assistant.Interpret("vista espacial", [&](auto result) { understood = std::move(result); });
+        MIAIA_CHECK(CommandAssistant::Propose(understood, proposal));
+        MIAIA_CHECK(proposal.Command == "studio view 3d");
+        MIAIA_CHECK(!assistant.LearnValidated("execute anything", "miaia_studio_arbitrary"));
+    });
     runner.Run("Console output remains continuous across recall filters", [&]()
     {
         using namespace MiaIA::Studio;
@@ -494,6 +579,26 @@ inline void RunCommandAssistantTests(MiaIA::Tests::TestRunner& runner)
             "miaia_help");
     });
 
+    runner.Run("Italian sidebar network example preserves mixed parameter labels", [&]()
+    {
+        using namespace MiaIA::Studio;
+        for (const auto language : {CommandAssistantLanguage::Italian, CommandAssistantLanguage::Automatic})
+        {
+            LocalCommandAssistant assistant(language);
+            for (const auto phrase : {
+                "Crea una rete con 2 input, 4 neuroni per hidden layer, 1 hidden layer e 1 output",
+                "Crea una rete con 2 input, 4 neuroni per livello nascosto, 1 livello nascosto e 1 output",
+                "Crea una rete con 1 output, 1 hidden layer, 4 neuroni per hidden layer e 2 input"})
+            {
+                CommandAssistantUnderstanding result;
+                MIAIA_CHECK(assistant.Interpret(phrase, [&](auto value) { result = std::move(value); }));
+                CommandProposal proposal;
+                MIAIA_CHECK(CommandAssistant::Propose(result, proposal));
+                MIAIA_CHECK(proposal.Command == "create 2 4 1 1");
+                MIAIA_CHECK(result.Entities.size() == 4);
+            }
+        }
+    });
     runner.Run("Local network labelled parameters", [&]()
     {
         using namespace MiaIA::Studio;

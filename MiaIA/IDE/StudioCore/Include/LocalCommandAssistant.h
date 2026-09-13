@@ -55,6 +55,7 @@ namespace MiaIA::Studio
     class LocalCommandAssistant final : public ICommandAssistantProvider
     {
     public:
+        static bool MatchesExample(std::string_view phrase, std::string_view input);
         explicit LocalCommandAssistant(
             CommandAssistantLanguage language =
                 CommandAssistantLanguage::Automatic);

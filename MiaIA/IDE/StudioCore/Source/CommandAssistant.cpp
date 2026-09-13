@@ -1,5 +1,5 @@
 #include "../Include/CommandAssistant.h"
-#include "../Include/AssistantInspectionCatalog.h"
+#include "../Include/AssistantStudioActions.h"
 #include "../Include/AssistantParameterCatalog.h"
 
 #include <algorithm>
@@ -143,7 +143,7 @@ namespace
     {
         const std::string intent = Lower(understanding.Intent);
 
-        for (const auto& entry : MiaIA::Studio::AssistantInspectionCatalog)
+        for (const auto& entry : MiaIA::Studio::AssistantBuiltinCommands())
         {
             if (entry.Intent != intent) continue;
             std::map<std::string, std::string> supplied;

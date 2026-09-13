@@ -2,10 +2,13 @@
 
 ## Scope
 
+See the [Studio action inventory](ActionInventory.md) for the current GUI/CLI/intent
+coverage and the planned, approval-gated expansion to view and navigation actions.
+
 The command assistant belongs to MiaIA Studio, not to the mathematical Engine or
 public SDK. It accepts natural text in the selected installed language, or mixed text in `Auto`, asks the selected provider to
-identify one intent and its entities, converts that structured result into an existing
-MiaIA Console command, and displays the exact proposal for confirmation.
+identify one intent and its entities, converts that structured result into a validated
+MiaIA Console command or allowlisted Studio view action, and displays the exact proposal for confirmation.
 
 **MiaIA Local is the default provider.** Its default `Auto (all installed languages)`
 mode evaluates the built-in English and Italian corpora plus every installed Language Pack in the same session. It runs offline, needs no account or token,
@@ -14,7 +17,9 @@ provider** for comparison and optional use.
 
 The assistant never executes a recognized intent directly. `Confirm command`, or an
 exact local response of `confirm`, `yes`, `ok`, or `execute`, passes the displayed
-command to the shared `MiaIACommandProcessor`. `Discard`, `cancel`, `no`, or `discard`
+command to the host dispatcher: model/data commands use the shared
+`MiaIACommandProcessor`; the finite `studio ...` view-action catalog uses existing
+Studio handlers. `Discard`, `cancel`, `no`, or `discard`
 removes the proposal. Confirmation responses are always handled locally. The normal
 Console remains available when the assistant is disabled.
 
@@ -31,7 +36,7 @@ Text in any installed language, including mixed text
     -> provider-neutral intent and entities
     -> local validated command proposal
     -> explicit user confirmation
-    -> shared MiaIA command processor
+    -> shared MiaIA command processor OR allowlisted Studio view handler
 ```
 
 MiaIA Local uses no network. Wit.ai receives only the text entered while that provider
@@ -48,8 +53,9 @@ The provider combines a built-in bilingual phrase corpus and installed Language 
 with deterministic command rules. Intent recognition is separated from entity extraction: model names and
 project paths remain text, while model IDs, topology sizes, epochs, learning rates,
 seeds, and step counts are extracted into the existing validated roles. Unknown text
-returns no intent and can never bypass `CommandAssistant::Propose` or the shared
-`MiaIACommandProcessor` allowlist.
+returns no intent and can never bypass `CommandAssistant::Propose`. Studio view
+actions have a separate finite host-side allowlist; arbitrary commands cannot be
+supplied by a language pack.
 
 The automated native tests exercise the same English and Italian commands, a third
 installed language, `Auto`, out-of-scope text, and all current entity shapes.
@@ -259,7 +265,7 @@ When a proposal below exact `100%` confidence is accepted with **Confirm command
 the source phrase and provider-neutral intent are stored as a validated example. The
 same normalized phrase then matches at `100%`; the raw proposed command is never
 stored or replayed directly, and every future execution still passes through
-`CommandAssistant::Propose` and `MiaIACommandProcessor`.
+`CommandAssistant::Propose` and the appropriate allowlisted host dispatcher.
 
 An unrecognized phrase is saved in the local **to classify** queue but does not affect
 recognition. Expanding **Review** changes the left Console sidebar into **Local
@@ -439,6 +445,57 @@ when the language changes, requiring an explicit re-enable. The local adapter ca
 `GET https://api.wit.ai/message` with API version `20260908` and OAuth bearer
 authentication. Copy each private application's Client Access Token into Assistant
 settings or the release-only packaging environment described above.
+
+## Studio view and layout actions
+
+The following actions reuse existing Studio controls. No new toolbar controls are
+introduced; bilingual examples appear in the existing assistant example sidebar. While typing,
+the sidebar shows phrases containing the normalized input text (case and whitespace
+insensitive), including installed-pack examples. Empty input shows all examples for
+the selected language. Typing changes widget visibility instead of rebuilding the
+example list; provider/language/pack changes still refresh its contents.
+The existing manual confirmation and exact-100%-only Confident mode apply unchanged.
+
+| Intent | Proposed Studio command | English / Italian example |
+| --- | --- | --- |
+| `miaia_studio_view_2d` | `studio view 2d` | Switch to 2D / Passa alla vista 2D |
+| `miaia_studio_view_3d` | `studio view 3d` | Switch to 3D / Passa alla vista 3D |
+| `miaia_studio_layout_expanded` | `studio layout expanded` | Set layout expanded / Imposta layout expanded |
+| `miaia_studio_layout_packed` | `studio layout packed` | Set layout packed / Imposta layout packed |
+| `miaia_studio_labels_show` | `studio labels show` | Show neuron labels / Mostra le etichette dei neuroni |
+| `miaia_studio_labels_hide` | `studio labels hide` | Hide neuron labels / Nascondi le etichette dei neuroni |
+| `miaia_studio_connections_show` | `studio connections show` | Show connections / Mostra le connessioni |
+| `miaia_studio_connections_all` | `studio connections all` | Show all connections / Mostra tutte le connessioni |
+| `miaia_studio_connections_selected` | `studio connections selected` | Show only selected connections / Mostra solo le connessioni selezionate |
+| `miaia_studio_connections_hide` | `studio connections hide` | Hide connections / Nascondi le connessioni |
+| `miaia_studio_fit_view` | `studio view fit` | Fit view / Adatta la vista |
+| `miaia_studio_reset_layout` | `studio layout reset` | Reset layout / Ripristina il layout |
+
+These are explicit actions, not toggles: “hide connections” always hides them.
+The twelve fixed intents accept no extra entities or numeric arguments. Translate their
+complete examples in exported language packs; there are no free parameter slots for
+these fixed actions. Supervised reassignment/learning uses the same intent catalog.
+Constrained English/Italian rules also accept mixed phrases such as “mostra neuron
+labels” and “nascondi connections”. Negated, conflicting or compound non-exact requests
+are not silently reduced to one view action; repeat a single explicit request.
+
+The exact commands can also be typed into Studio with the assistant disabled.
+They are host commands, not Engine/SDK operations and not part of the 74-entry shared
+CLI catalog. Console.exe has no view host and rejects them as unknown commands.
+Additional tokens or unknown `studio` commands in Studio produce an error and no action.
+
+Existing GUI side effects are preserved: entering 3D fits its view; choosing Packed
+from Coaxial Rings or Spiral Tokens returns to Classic. Labels and connection
+visibility use the same saved preferences as the checkboxes. Showing connections
+does not reset the separate visibility percentage or All/Selected setting.
+“Show all connections” enables connections and selects All; “Show only selected
+connections” enables them and selects Selected. Neither changes the percentage.
+With Selected and no selected neuron/connection, no edges are drawn; a zero
+visibility percentage also keeps edges invisible.
+Fit and Reset operate on the active renderer; Reset layout uses the current 2D
+layout reset / 3D reset-view behavior, **not** Reset visualization defaults.
+Compact views retain their existing rendering restrictions. No network parameters,
+training state or mathematical topology are changed.
 
 ## Supported intents
 

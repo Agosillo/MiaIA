@@ -11,6 +11,7 @@ The project is currently at **0.1 Alpha**. The C++ engine, public SDK facade, sh
 - [Unreal integration](Unreal/Unreal.md) documents the current Blueprint-facing SDK adapter and build workflow.
 - [MiaIA Studio](Studio/Studio.md) documents the shared graphical application model and standalone delivery path.
 - [Studio command assistant](Studio/OnlineAssistant.md) documents the default offline MiaIA Local provider, automatic multi-language interpretation, portable Language Packs, supervised local learning, the experimental Wit.ai option, and the shared command-proposal safety boundary.
+- [Studio action inventory](Studio/ActionInventory.md) maps current IDE actions and every CLI entry to assistant coverage, separates textual reports from graphical effects, and records approval gates for the next implementation slices.
 - [MiaIA project format](Project/Project.md) defines the `.mai` v2 container, v1 migration, and safety behavior.
 - [Coding guidelines](Coding/Coding.md) records the conventions used by the C++ codebase.
 - [Architectural decisions](ADR/ADR.md) summarizes the decisions that currently shape the project.

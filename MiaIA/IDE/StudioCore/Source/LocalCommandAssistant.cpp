@@ -1,5 +1,5 @@
 #include "../Include/LocalCommandAssistant.h"
-#include "../Include/AssistantInspectionCatalog.h"
+#include "../Include/AssistantStudioActions.h"
 #include "../Include/AssistantParameterCatalog.h"
 
 #include <algorithm>
@@ -381,6 +381,24 @@ namespace
 
     std::string RuleIntent(const std::string& text)
     {
+        // Full-phrase matches avoid silently dropping negations, extra values or
+        // a second action. Supervised exact translations still work independently.
+        static const std::array studioRules{
+            std::pair{R"((show|mostra|visualizza) (all|tutte)( the| le)? (connections|connessioni))", "miaia_studio_connections_all"},
+            std::pair{R"((show|mostra|visualizza)( only| solo)?( the| le)? (selected connections|connessioni selezionate))", "miaia_studio_connections_selected"},
+            std::pair{R"((switch|passa|set|imposta|show|mostra|use|usa)( to| alla| la| the| in| a| al)?( view| vista)? (2d)( view| vista)?)", "miaia_studio_view_2d"},
+            std::pair{R"((switch|passa|set|imposta|show|mostra|use|usa)( to| alla| la| the| in| a| al)?( view| vista)? (3d)( view| vista)?)", "miaia_studio_view_3d"},
+            std::pair{R"((set|imposta|use|usa)( the| il)? layout( to| a)? (expanded|espanso))", "miaia_studio_layout_expanded"},
+            std::pair{R"((set|imposta|use|usa)( the| il)? layout( to| a)? (packed|compatto))", "miaia_studio_layout_packed"},
+            std::pair{R"((show|mostra|visualizza)( the| le)? (neuron labels|labels|etichette|etichette neuroni|etichette dei neuroni))", "miaia_studio_labels_show"},
+            std::pair{R"((hide|nascondi)( the| le)? (neuron labels|labels|etichette|etichette neuroni|etichette dei neuroni))", "miaia_studio_labels_hide"},
+            std::pair{R"((show|mostra|visualizza)( the| le)? (connections|connessioni))", "miaia_studio_connections_show"},
+            std::pair{R"((hide|nascondi)( the| le)? (connections|connessioni))", "miaia_studio_connections_hide"},
+            std::pair{R"((fit|adatta)( the| la)? (view|vista))", "miaia_studio_fit_view"},
+            std::pair{R"((reset|ripristina)( the| il)? layout)", "miaia_studio_reset_layout"}
+        };
+        for (const auto& [pattern, intent] : studioRules)
+            if (std::regex_match(text, std::regex(std::string("(?:please |per favore )?") + pattern))) return intent;
         const bool inspect = ContainsAny(text, {"inspect", "ispeziona", "show", "mostra", "vedi"});
         const bool compare = ContainsAny(text, {"compare", "confronta"});
         const bool list = ContainsAny(text, {"list", "elenca", "show", "mostra"});
@@ -753,8 +771,11 @@ namespace
     void ExtractEntities(CommandAssistantUnderstanding& result, const std::string& language,
         const std::vector<MiaIA::Studio::LocalCommandAssistantLanguagePack>& packs)
     {
+        // Fixed Studio actions carry no entities. In particular, the 2 in 2D
+        // is a view name, not a positional numeric parameter.
+        if (MiaIA::Studio::FindStudioIntent(result.Intent)) return;
         if (ExtractLabelledEntities(result, language, packs)) return;
-        for (const auto& entry : MiaIA::Studio::AssistantInspectionCatalog)
+        for (const auto& entry : MiaIA::Studio::AssistantBuiltinCommands())
         {
             if (entry.Intent != result.Intent) continue;
             // Retain signs and decimal points so validation rejects invalid
@@ -821,6 +842,12 @@ namespace
             if (!path.empty()) AddEntity(result, "project_path", path);
         }
     }
+}
+
+bool MiaIA::Studio::LocalCommandAssistant::MatchesExample(std::string_view phrase, std::string_view input)
+{
+    const auto query = Normalize(std::string(input));
+    return query.empty() || Normalize(std::string(phrase)).find(query) != std::string::npos;
 }
 
 MiaIA::Studio::LocalCommandAssistant::LocalCommandAssistant(
@@ -915,7 +942,7 @@ bool MiaIA::Studio::LocalCommandAssistant::Interpret(
         const double score = normalized == candidate
             ? 1.0
             : Similarity(inputTokens, Tokens(candidate));
-        if (score > bestScore)
+        if (score > bestScore || normalized == candidate)
         {
             bestScore = score;
             bestIntent = example.Intent;
@@ -928,7 +955,7 @@ bool MiaIA::Studio::LocalCommandAssistant::Interpret(
             continue;
         const std::string candidate = Normalize(example.Text);
         const double score = Similarity(inputTokens, Tokens(candidate));
-        if (score > bestScore)
+        if (score > bestScore || normalized == candidate)
         {
             bestScore = score;
             bestIntent = example.Intent;
@@ -936,7 +963,7 @@ bool MiaIA::Studio::LocalCommandAssistant::Interpret(
     }
 
     const std::string ruleIntent = RuleIntent(normalized);
-    for (const auto& entry : AssistantInspectionCatalog)
+    for (const auto& entry : AssistantBuiltinCommands())
     {
         for (const auto language : {CommandAssistantLanguage::English, CommandAssistantLanguage::Italian})
         {
@@ -947,7 +974,7 @@ bool MiaIA::Studio::LocalCommandAssistant::Interpret(
                 language == CommandAssistantLanguage::Italian ? entry.Italian : entry.English));
             const double score = normalized == candidate
                 ? 1.0 : Similarity(inputTokens, Tokens(candidate));
-            if (score > bestScore)
+            if (score > bestScore || normalized == candidate)
             {
                 bestScore = score;
                 bestIntent = entry.Intent;
@@ -964,7 +991,7 @@ bool MiaIA::Studio::LocalCommandAssistant::Interpret(
             const std::string candidate = Normalize(example.Text);
             const double score = normalized == candidate
                 ? 1.0 : Similarity(inputTokens, Tokens(candidate));
-            if (score > bestScore)
+            if (score > bestScore || normalized == candidate)
             {
                 bestScore = score;
                 bestIntent = example.Intent;
@@ -1001,6 +1028,24 @@ bool MiaIA::Studio::LocalCommandAssistant::Interpret(
         return true;
     }
 
+    if (const auto* action = FindStudioIntent(result.Intent))
+    {
+        // Token similarity can reach 1.0 after removing stop words or repeated
+        // words. Only literal normalized examples qualify as exact Studio actions.
+        bool exact = (AcceptsLanguage(languageCode_, "en") && normalized == Normalize(std::string(action->Command.English))) ||
+            (AcceptsLanguage(languageCode_, "it") && normalized == Normalize(std::string(action->Command.Italian)));
+        for (const auto& pack : languagePacks_)
+            if (AcceptsLanguage(languageCode_, pack.Code))
+                for (const auto& example : pack.Examples)
+                    exact = exact || (example.Intent == result.Intent && Normalize(example.Text) == normalized);
+        if (!exact && ruleIntent != result.Intent)
+        {
+            result.Error = "Please request one explicit Studio action (view, layout, show/hide, fit or reset).";
+            completion(std::move(result));
+            return true;
+        }
+        if (!exact) result.Confidence = std::min(result.Confidence, 0.90);
+    }
     ExtractEntities(result, languageCode_, languagePacks_);
     completion(std::move(result));
     return true;
@@ -1076,7 +1121,7 @@ std::string MiaIA::Studio::LocalCommandAssistant::InferLanguageCode(
             continue;
         updateScore(BuiltinLanguageCode(example.Language), example.Text);
     }
-    for (const auto& entry : AssistantInspectionCatalog)
+    for (const auto& entry : AssistantBuiltinCommands())
     {
         if (!intent.empty() && entry.Intent != intent)
             continue;
@@ -1436,7 +1481,7 @@ std::string MiaIA::Studio::LocalCommandAssistant::ExportLanguageTemplate()
             continue;
         stream << "E\t" << example.Intent << '\t' << example.Text << "\t\n";
     }
-    for (const auto& entry : AssistantInspectionCatalog)
+    for (const auto& entry : AssistantBuiltinCommands())
     {
         stream << "E\t" << entry.Intent << '\t' << entry.English << "\t\n";
     }
@@ -1672,7 +1717,7 @@ MiaIA::Studio::LocalCommandAssistant::SupportedIntents()
     static const std::vector<std::string_view> intents = []
     {
         std::vector<std::string_view> result(IntentNames.begin(), IntentNames.end());
-        for (const auto& entry : AssistantInspectionCatalog)
+        for (const auto& entry : AssistantBuiltinCommands())
             result.push_back(entry.Intent);
         return result;
     }();

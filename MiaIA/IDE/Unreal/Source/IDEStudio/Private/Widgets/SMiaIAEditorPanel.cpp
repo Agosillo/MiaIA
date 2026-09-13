@@ -4,7 +4,7 @@
 #include "Assistant/MiaIAWitCommandAssistant.h"
 #include "Async/Async.h"
 #include "LocalCommandAssistant.h"
-#include "AssistantInspectionCatalog.h"
+#include "AssistantStudioActions.h"
 #endif
 #include "MiaIACommandProcessor.h"
 #include "MiaIABlueprintLibrary.h"
@@ -6461,13 +6461,9 @@ TSharedRef<SWidget> SMiaIAEditorPanel::BuildLayoutMenu()
                 .OnCheckStateChanged_Lambda(
                     [this](ECheckBoxState newState)
                     {
-                        VisualizationSettings.bShowNeuronLabels =
-                            newState == ECheckBoxState::Checked;
-                        SaveVisualizationSettings(VisualizationSettings);
-                        NetworkView->SetVisualizationSettings(
-                            VisualizationSettings);
-                        Network3DView->SetVisualizationSettings(
-                            VisualizationSettings);
+                        ApplyStudioViewAction(newState == ECheckBoxState::Checked
+                            ? MiaIA::Studio::StudioViewAction::LabelsShow
+                            : MiaIA::Studio::StudioViewAction::LabelsHide);
                     })
                 .ToolTipText(LOCTEXT(
                     "ShowNeuronLabelsTooltip",
@@ -6535,13 +6531,9 @@ TSharedRef<SWidget> SMiaIAEditorPanel::BuildLayoutMenu()
                 .OnCheckStateChanged_Lambda(
                     [this](ECheckBoxState newState)
                     {
-                        VisualizationSettings.bShowConnections =
-                            newState == ECheckBoxState::Checked;
-                        SaveVisualizationSettings(VisualizationSettings);
-                        NetworkView->SetVisualizationSettings(
-                            VisualizationSettings);
-                        Network3DView->SetVisualizationSettings(
-                            VisualizationSettings);
+                        ApplyStudioViewAction(newState == ECheckBoxState::Checked
+                            ? MiaIA::Studio::StudioViewAction::ConnectionsShow
+                            : MiaIA::Studio::StudioViewAction::ConnectionsHide);
                     })
                 .ToolTipText(LOCTEXT(
                     "ShowConnectionsTooltip",
@@ -6756,6 +6748,38 @@ FReply SMiaIAEditorPanel::HandleResetVisualizationSettings()
     Network3DView->SetVisualizationSettings(VisualizationSettings);
     FSlateApplication::Get().DismissAllMenus();
     return FReply::Handled();
+}
+
+void SMiaIAEditorPanel::ApplyStudioViewAction(MiaIA::Studio::StudioViewAction Action)
+{
+    // Both confirmed assistant commands and manual Studio commands reuse these
+    // existing controls, including their persistence and renderer side effects.
+    using ActionType = MiaIA::Studio::StudioViewAction;
+    switch (Action)
+    {
+    case ActionType::View2D: SelectViewMode(EMiaIAStudioViewMode::TwoDimensional); return;
+    case ActionType::View3D: SelectViewMode(EMiaIAStudioViewMode::ThreeDimensional); return;
+    case ActionType::LayoutExpanded: SelectLayoutMode(MiaIA::Studio::StudioLayoutMode::Expanded); return;
+    case ActionType::LayoutPacked: SelectLayoutMode(MiaIA::Studio::StudioLayoutMode::Packed); return;
+    case ActionType::FitView: HandleFitView(); return;
+    case ActionType::ResetLayout: HandleResetLayout(); return;
+    case ActionType::LabelsShow: VisualizationSettings.bShowNeuronLabels = true; break;
+    case ActionType::LabelsHide: VisualizationSettings.bShowNeuronLabels = false; break;
+    case ActionType::ConnectionsShow: VisualizationSettings.bShowConnections = true; break;
+    case ActionType::ConnectionsHide: VisualizationSettings.bShowConnections = false; break;
+    case ActionType::ConnectionsAll:
+        VisualizationSettings.ConnectionDisplay = EMiaIAConnectionDisplayMode::All;
+        VisualizationSettings.bShowConnections = true;
+        break;
+    case ActionType::ConnectionsSelected:
+        VisualizationSettings.ConnectionDisplay = EMiaIAConnectionDisplayMode::Selected;
+        VisualizationSettings.bShowConnections = true;
+        break;
+    default: return;
+    }
+    SaveVisualizationSettings(VisualizationSettings);
+    if (NetworkView.IsValid()) NetworkView->SetVisualizationSettings(VisualizationSettings);
+    if (Network3DView.IsValid()) Network3DView->SetVisualizationSettings(VisualizationSettings);
 }
 
 FReply SMiaIAEditorPanel::HandleFitView()
@@ -9781,9 +9805,21 @@ void SMiaIAEditorPanel::ExecuteConsoleCommand(const FString& Command, MiaIA::Stu
         ConsoleHistory.RecordInput(Origin, TCHAR_TO_UTF8(*command));
 
     bool exitRequested{};
-    const FString output = UMiaIABlueprintLibrary::ExecuteCommand(
-        command,
-        exitRequested);
+    FString output;
+    if (const auto action = MiaIA::Studio::ParseStudioViewAction(TCHAR_TO_UTF8(*command.ToLower())))
+    {
+        ApplyStudioViewAction(*action);
+        output = TEXT("Studio action applied: ") + command + TEXT("\n");
+    }
+    else if (command.Equals(TEXT("studio"), ESearchCase::IgnoreCase) ||
+        command.StartsWith(TEXT("studio "), ESearchCase::IgnoreCase))
+    {
+        output = TEXT("Unsupported Studio action or extra arguments. No action applied.\n");
+    }
+    else
+    {
+        output = UMiaIABlueprintLibrary::ExecuteCommand(command, exitRequested);
+    }
     AppendConsoleMessage(FString::Printf(TEXT("\n> %s\n"), *command), Origin);
     AppendConsoleMessage(output, Origin);
 
@@ -12129,7 +12165,7 @@ void SMiaIAEditorPanel::HandleConsoleTextChanged(const FText& Text)
         ConsoleHistory.EditInput(ActiveConsoleInputSource(), TCHAR_TO_UTF8(*input));
     }
 
-    RebuildConsoleSuggestions(input);
+    RebuildConsoleSuggestions(input, false);
 }
 
 FReply SMiaIAEditorPanel::HandleConsoleInputKeyDown(
@@ -12203,7 +12239,7 @@ FReply SMiaIAEditorPanel::ApplyConsoleSuggestion(FString Completion)
 }
 
 void SMiaIAEditorPanel::RebuildConsoleSuggestions(
-    const FString& Input)
+    const FString& Input, bool ForceRebuild)
 {
     if (SyncConsoleInputMode())
     {
@@ -12217,6 +12253,16 @@ void SMiaIAEditorPanel::RebuildConsoleSuggestions(
         return;
     }
 
+    // Example widgets bind their visibility to the live input. Typing must not
+    // destroy/recreate the sidebar or reset its scroll position.
+#if MIAIA_WITH_WIT_AI
+    if (!ForceRebuild && bOnlineAssistantEnabled && !bAssistantLearningExpanded && bAssistantExamplesBuilt)
+    {
+        ConsoleSuggestionsContent->Invalidate(EInvalidateWidgetReason::Layout);
+        return;
+    }
+#endif
+    bAssistantExamplesBuilt = false;
     ConsoleSuggestionsContent->ClearChildren();
 #if MIAIA_WITH_WIT_AI
     if (AssistantProvider == EMiaIAAssistantProvider::Local &&
@@ -12229,6 +12275,7 @@ void SMiaIAEditorPanel::RebuildConsoleSuggestions(
     {
         RebuildAssistantExamples();
         AddInspectionAssistantExamples();
+        bAssistantExamplesBuilt = true;
         return;
     }
 #endif
@@ -12307,6 +12354,13 @@ FReply SMiaIAEditorPanel::ApplyAssistantExample(FString Example)
     return FReply::Handled();
 }
 
+EVisibility SMiaIAEditorPanel::AssistantExampleVisibility(FString Phrase) const
+{
+    const FString input = ConsoleInput.IsValid() ? ConsoleInput->GetText().ToString() : FString();
+    return MiaIA::Studio::LocalCommandAssistant::MatchesExample(TCHAR_TO_UTF8(*Phrase), TCHAR_TO_UTF8(*input))
+        ? EVisibility::Visible : EVisibility::Collapsed;
+}
+
 void SMiaIAEditorPanel::RebuildAssistantExamples()
 {
     if (!ConsoleSuggestionsContent.IsValid())
@@ -12368,6 +12422,7 @@ void SMiaIAEditorPanel::RebuildAssistantExamples()
         .Padding(0.0f, 1.0f)
         [
             SNew(SButton)
+                .Visibility(this, &SMiaIAEditorPanel::AssistantExampleVisibility, phrase)
             .ButtonStyle(&ButtonStyle)
             .ContentPadding(FMargin(6.0f, 3.0f))
             .ToolTipText(LOCTEXT(
@@ -12423,6 +12478,7 @@ void SMiaIAEditorPanel::RebuildAssistantExamples()
             .Padding(0.0f, 1.0f)
             [
                 SNew(SButton)
+                .Visibility(this, &SMiaIAEditorPanel::AssistantExampleVisibility, phrase)
                 .ButtonStyle(&ButtonStyle)
                 .ContentPadding(FMargin(6.0f, 3.0f))
                 .ToolTipText(LOCTEXT(
@@ -12445,7 +12501,7 @@ void SMiaIAEditorPanel::RebuildAssistantExamples()
 void SMiaIAEditorPanel::AddInspectionAssistantExamples()
 {
     if (AssistantProvider != EMiaIAAssistantProvider::Local) return;
-    for (const auto& entry : MiaIA::Studio::AssistantInspectionCatalog)
+    for (const auto& entry : MiaIA::Studio::AssistantBuiltinCommands())
     {
         for (const auto language : {EMiaIAAssistantLanguage::English, EMiaIAAssistantLanguage::Italian})
         {
@@ -12456,6 +12512,7 @@ void SMiaIAEditorPanel::AddInspectionAssistantExamples()
             ConsoleSuggestionsContent->AddSlot().AutoHeight().Padding(0.0f, 1.0f)
             [
                 SNew(SButton)
+                .Visibility(this, &SMiaIAEditorPanel::AssistantExampleVisibility, phrase)
                 .ButtonStyle(&ButtonStyle)
                 .OnClicked(this, &SMiaIAEditorPanel::ApplyAssistantExample, phrase)
                 [
@@ -12558,7 +12615,7 @@ void SMiaIAEditorPanel::SetConsoleInputText(const FString& Text, bool EditHistor
     ConsoleInput->SetText(FText::FromString(Text));
     ConsoleInput->GoTo(ETextLocation::EndOfDocument);
     bUpdatingConsoleInput = false;
-    RebuildConsoleSuggestions(Text);
+    RebuildConsoleSuggestions(Text, false);
 }
 
 void SMiaIAEditorPanel::UpdateConsoleOutput()
