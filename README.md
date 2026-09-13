@@ -2,6 +2,58 @@
   <img src="MiaIA/IDE/Unreal/Build/Brand/MiaIAStudio-Splash.png" alt="MiaIA Studio — Visualize, Experiment, Inspect, Debug" width="960">
 </p>
 
+<table>
+  <tr>
+    <td align="center" width="50%">
+      <a href="MiaIA/Docs/Images/Studio/2DClassicAllSelected.png"><img src="MiaIA/Docs/Images/Studio/2DClassicAllSelected.png" alt="MiaIA Studio Classic 2D view with all network connections visible" width="460"></a><br>
+      <strong>Classic 2D</strong> · All connections
+    </td>
+    <td align="center" width="50%">
+      <a href="MiaIA/Docs/Images/Studio/2DClassicOnlySelected.png"><img src="MiaIA/Docs/Images/Studio/2DClassicOnlySelected.png" alt="MiaIA Studio Classic 2D view showing the selected neuron's connections" width="460"></a><br>
+      <strong>Classic 2D</strong> · Selected neuron connections
+    </td>
+  </tr>
+  <tr>
+    <td align="center" width="50%">
+      <a href="MiaIA/Docs/Images/Studio/CoaxialRingsAllSelected.png"><img src="MiaIA/Docs/Images/Studio/CoaxialRingsAllSelected.png" alt="MiaIA Studio Coaxial Rings 3D view with all network connections visible" width="460"></a><br>
+      <strong>Coaxial Rings 3D</strong> · All connections
+    </td>
+    <td align="center" width="50%">
+      <a href="MiaIA/Docs/Images/Studio/CoaxialRingsOnlySelected.png"><img src="MiaIA/Docs/Images/Studio/CoaxialRingsOnlySelected.png" alt="MiaIA Studio Coaxial Rings 3D view showing the selected neuron's connections" width="460"></a><br>
+      <strong>Coaxial Rings 3D</strong> · Selected neuron connections
+    </td>
+  </tr>
+  <tr>
+    <td align="center" width="50%">
+      <a href="MiaIA/Docs/Images/Studio/SpiralTokenAllSelected.png"><img src="MiaIA/Docs/Images/Studio/SpiralTokenAllSelected.png" alt="MiaIA Studio Spiral Tokens 3D view with all network connections visible" width="460"></a><br>
+      <strong>Spiral Tokens 3D</strong> · All connections
+    </td>
+    <td align="center" width="50%">
+      <a href="MiaIA/Docs/Images/Studio/SpiralTokenOnlySelected.png"><img src="MiaIA/Docs/Images/Studio/SpiralTokenOnlySelected.png" alt="MiaIA Studio Spiral Tokens 3D view showing the selected neuron's connections" width="460"></a><br>
+      <strong>Spiral Tokens 3D</strong> · Selected neuron connections
+    </td>
+  </tr>
+</table>
+
+<table>
+  <tr>
+    <td align="center" width="33%">
+      <a href="MiaIA/Docs/Images/Studio/ModelsDetail.png"><img src="MiaIA/Docs/Images/Studio/ModelsDetail.png" alt="MiaIA Studio model visualization detail" width="220"></a><br>
+      <strong>Models</strong>
+    </td>
+    <td align="center" width="33%">
+      <a href="MiaIA/Docs/Images/Studio/CoaxialRingsDetail.png"><img src="MiaIA/Docs/Images/Studio/CoaxialRingsDetail.png" alt="Close-up of Coaxial Rings with neuron labels and network connections" width="220"></a><br>
+      <strong>Coaxial Rings</strong> · Network detail
+    </td>
+    <td align="center" width="33%">
+      <a href="MiaIA/Docs/Images/Studio/CoaxialRingsSelectedDetail.png"><img src="MiaIA/Docs/Images/Studio/CoaxialRingsSelectedDetail.png" alt="Close-up of Coaxial Rings showing only the selected neuron's connections" width="220"></a><br>
+      <strong>Coaxial Rings</strong> · Selected connections
+    </td>
+  </tr>
+</table>
+
+<p align="center"><em>Explore the whole network, then focus on a single neuron. Click any image to enlarge.</em></p>
+
 <h1 align="center">MiaIA Studio</h1>
 
 <p align="center">
@@ -16,7 +68,9 @@
 </p>
 
 <p align="center">
-  <a href="https://www.nonop.biz/miaia">Website &amp; Downloads</a>
+  <strong><a href="https://apps.microsoft.com/detail/9nqb4kbwz5pp">Download MiaIA Studio for Windows — Microsoft Store</a></strong>
+  &nbsp;&middot;&nbsp;
+  <a href="https://www.nonop.biz/miaia">Website</a>
   &nbsp;&middot;&nbsp;
   <a href="MiaIA/Docs/README.md">Documentation</a>
   &nbsp;&middot;&nbsp;
@@ -57,7 +111,7 @@ The MiaIA Studio **0.1 Alpha** release includes:
 - The packaged application is currently verified for Windows x64. Other platforms and solution configurations are not release targets yet.
 - Alpha APIs and workflows can change; preserve important interoperable models through ONNX exports where supported.
 
-Official releases are published at [www.nonop.biz/miaia](https://www.nonop.biz/miaia). The corresponding source code is maintained in this repository.
+Download the Windows app directly from the [Microsoft Store](https://apps.microsoft.com/detail/9nqb4kbwz5pp). Visit [www.nonop.biz/miaia](https://www.nonop.biz/miaia) for official project information. The corresponding source code is maintained in this repository.
 
 ## Documentation
 
