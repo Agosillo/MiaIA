@@ -3,6 +3,7 @@
 #include "Containers/Set.h"
 #include "Containers/Map.h"
 #include "CommandAssistant.h"
+#include "ConsoleSessionHistory.h"
 #include "MiaIABlueprintTypes.h"
 #include "MiaIAInstanceService.h"
 #include "Styling/MiaIAEditorTheme.h"
@@ -278,7 +279,14 @@ private:
         const FKeyEvent& KeyEvent);
     FReply HandleConsoleSend();
     FReply HandleClearConsoleOutput();
-    void ExecuteConsoleCommand(const FString& Command);
+    void ExecuteConsoleCommand(const FString& Command,
+        MiaIA::Studio::ConsoleHistorySource Origin = MiaIA::Studio::ConsoleHistorySource::Console);
+    void AppendConsoleMessage(const FString& Message, MiaIA::Studio::ConsoleHistorySource Origin, bool SharedStatus = false);
+    MiaIA::Studio::ConsoleHistorySource ActiveConsoleInputSource() const;
+    bool SyncConsoleInputMode();
+    TSharedRef<SWidget> BuildConsoleHistoryFilterMenu();
+    FText ConsoleHistoryFilterText() const;
+    FReply SelectConsoleHistoryFilter(MiaIA::Studio::ConsoleHistoryFilter Filter);
 #if MIAIA_WITH_WIT_AI
     TSharedRef<SWidget> BuildOnlineAssistantPanel(
         const FSlateBrush* PanelBorder);
@@ -313,6 +321,7 @@ private:
     FReply HandleImportAssistantCorpus();
     FReply HandleResetAssistantCorpus();
     FReply HandleExportAssistantLanguageTemplate();
+    FReply HandleExportAssistantParameterTemplate(FString Code);
     FReply HandleImportAssistantLanguageTemplate();
     TSharedRef<SWidget> BuildAssistantLanguageBrowser();
     void PopulateAssistantLanguageBrowser(TSharedRef<SVerticalBox> Content, FString Directory);
@@ -351,7 +360,7 @@ private:
     FText ConsoleSidebarTitleText() const;
     FReply ApplyConsoleSuggestion(FString Completion);
     void RebuildConsoleSuggestions(const FString& Input);
-    void SetConsoleInputText(const FString& Text);
+    void SetConsoleInputText(const FString& Text, bool EditHistory = true);
     void UpdateConsoleOutput();
 
     bool CanResume() const;
@@ -446,9 +455,9 @@ private:
     FString RelationshipKey;
     FString TrainingTimelineKey;
     TSet<int64> ExpandedExplorerLayerIds;
-    FString ConsoleHistory;
-    TArray<FString> ConsoleCommandHistory;
-    FString ConsoleHistoryDraft;
+    MiaIA::Studio::ConsoleSessionHistory ConsoleHistory;
+    MiaIA::Studio::ConsoleHistoryFilter ConsoleRecallFilter{MiaIA::Studio::ConsoleHistoryFilter::Automatic};
+    MiaIA::Studio::ConsoleHistorySource ConsoleInputSource{MiaIA::Studio::ConsoleHistorySource::Console};
     FString FirstConsoleSuggestion;
 #if MIAIA_WITH_WIT_AI
     std::unique_ptr<MiaIA::Studio::ICommandAssistantProvider>
@@ -476,7 +485,6 @@ private:
 #endif
     FText DialogTitle;
     FText DialogContent;
-    int32 ConsoleHistoryIndex{};
     int32 DetailedNeuronLimit{};
     int32 DetailedConnectionLimit{};
     int32 PendingDetailedNeuronLimit{};

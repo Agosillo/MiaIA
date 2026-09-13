@@ -144,6 +144,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="TestHarness.h" />
+    <ClInclude Include="CommandAssistantTests.h" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\IDE\StudioCore\StudioCore.vcxproj">

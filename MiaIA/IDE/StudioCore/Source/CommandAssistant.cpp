@@ -1,5 +1,6 @@
 #include "../Include/CommandAssistant.h"
 #include "../Include/AssistantInspectionCatalog.h"
+#include "../Include/AssistantParameterCatalog.h"
 
 #include <algorithm>
 #include <charconv>
@@ -9,6 +10,7 @@
 #include <initializer_list>
 #include <limits>
 #include <locale>
+#include <map>
 #include <optional>
 #include <sstream>
 #include <string_view>
@@ -144,6 +146,19 @@ namespace
         for (const auto& entry : MiaIA::Studio::AssistantInspectionCatalog)
         {
             if (entry.Intent != intent) continue;
+            std::map<std::string, std::string> supplied;
+            for (const auto& entity : understanding.Entities)
+            {
+                std::string role = Lower(entity.Role.empty() ? entity.Name : entity.Role);
+                if (role.starts_with("miaia_")) role.erase(0, 6);
+                const auto* definition = MiaIA::Studio::FindAssistantParameter(intent, role);
+                if (!definition || !MiaIA::Studio::ValidAssistantParameter(*definition, entity.Value) || supplied.contains(role))
+                {
+                    error = "Unknown, repeated or invalid parameter: " + role + ".";
+                    return false;
+                }
+                supplied.emplace(role, entity.Value);
+            }
             command = entry.Command;
             for (auto role : entry.Roles)
             {
@@ -153,7 +168,7 @@ namespace
                 const auto text = FindValue(understanding, {role});
                 if (!text && optional) continue;
                 std::uint64_t value{};
-                const bool zeroAllowed = role.find("index") != std::string_view::npos;
+                const bool zeroAllowed = role.find("index") != std::string_view::npos || role == "sample_limit";
                 if (!text || !TryUnsigned(*text, value) || (!zeroAllowed && value == 0))
                 {
                     error = "Missing or invalid " + std::string(role) + ".";
@@ -161,6 +176,33 @@ namespace
                     return false;
                 }
                 command += " " + std::to_string(value);
+            }
+            if (intent == "miaia_dataset_diagnose")
+            {
+                // Match SignalHealthConfiguration defaults when one threshold
+                // is omitted; these must preserve exploding > vanishing.
+                const auto threshold = [&](const char* role, double defaultValue)
+                {
+                    const auto found = supplied.find(role);
+                    if (found == supplied.end()) return defaultValue;
+                    std::istringstream stream(found->second);
+                    stream.imbue(std::locale::classic());
+                    stream >> defaultValue;
+                    return defaultValue;
+                };
+                if (threshold("exploding_magnitude", 100.0) <= threshold("vanishing_magnitude", 1.0e-8))
+                {
+                    error = "exploding_magnitude must exceed vanishing_magnitude.";
+                    command.clear();
+                    return false;
+                }
+                for (const auto& [role, value] : supplied)
+                {
+                    if (role == "sample_limit") continue;
+                    std::string option = role;
+                    std::replace(option.begin(), option.end(), '_', '-');
+                    command += " --" + option + " " + value;
+                }
             }
             return true;
         }
@@ -214,67 +256,51 @@ namespace
 
         if (intent == "miaia_network_create")
         {
-            const auto inputsEntity = FindValue(
-                understanding,
-                { "inputs", "input_count", "miaia_inputs" });
-            const auto hiddenWidthEntity = FindValue(
-                understanding,
-                { "hidden_width", "miaia_hidden_width" });
-            const auto hiddenLayersEntity = FindValue(
-                understanding,
-                { "hidden_layers", "miaia_hidden_layers" });
-            const auto outputsEntity = FindValue(
-                understanding,
-                { "outputs", "output_count", "miaia_outputs" });
-
-            // The console intentionally supports bare `create`, which uses
-            // its documented 10/32/2/3 defaults.  Once any topology value is
-            // supplied, however, require the complete shape so the assistant
-            // never guesses the remaining dimensions.
-            if (!inputsEntity && !hiddenWidthEntity &&
-                !hiddenLayersEntity && !outputsEntity)
+            // All eight create parameters use the same typed catalog as local
+            // extraction. Validate again here for every provider, including Wit.
+            std::map<std::string, std::string> values;
+            for (const auto& entity : understanding.Entities)
+            {
+                std::string role = Lower(entity.Role.empty() ? entity.Name : entity.Role);
+                if (role.starts_with("miaia_")) role.erase(0, 6);
+                if (role == "input_count") role = "inputs";
+                if (role == "output_count") role = "outputs";
+                const auto* definition = MiaIA::Studio::FindAssistantParameter(intent, role);
+                if (!definition || !MiaIA::Studio::ValidAssistantParameter(*definition, entity.Value) ||
+                    values.contains(role))
+                {
+                    error = "Unknown, repeated or invalid create parameter: " + role + ".";
+                    return false;
+                }
+                values.emplace(role, entity.Value);
+            }
+            if (values.empty())
             {
                 command = "create";
                 return true;
             }
-
-            std::uint64_t inputs{};
-            std::uint64_t hiddenWidth{};
-            std::uint64_t hiddenLayers{};
-            std::uint64_t outputs{};
-
-            if (!RequirePositiveEntity(
-                    understanding,
-                    { "inputs", "input_count", "miaia_inputs" },
-                    "inputs",
-                    inputs,
-                    error) ||
-                !RequirePositiveEntity(
-                    understanding,
-                    { "hidden_width", "miaia_hidden_width" },
-                    "hidden_width",
-                    hiddenWidth,
-                    error) ||
-                !RequirePositiveEntity(
-                    understanding,
-                    { "hidden_layers", "miaia_hidden_layers" },
-                    "hidden_layers",
-                    hiddenLayers,
-                    error) ||
-                !RequirePositiveEntity(
-                    understanding,
-                    { "outputs", "output_count", "miaia_outputs" },
-                    "outputs",
-                    outputs,
-                    error))
+            command = "create";
+            for (const auto role : {"inputs", "hidden_width", "hidden_layers", "outputs"})
             {
-                return false;
+                const auto found = values.find(role);
+                std::uint64_t value{};
+                if (found == values.end() || !TryUnsigned(found->second, value) ||
+                    value > static_cast<std::uint64_t>(std::numeric_limits<int>::max()))
+                {
+                    command.clear();
+                    error = "Missing or out-of-range create parameter: " + std::string(role) + ".";
+                    return false;
+                }
+                command += " " + std::to_string(value);
             }
-
-            command = "create " + std::to_string(inputs) + ' ' +
-                std::to_string(hiddenWidth) + ' ' +
-                std::to_string(hiddenLayers) + ' ' +
-                std::to_string(outputs);
+            for (const auto role : {"hidden_activation", "output_activation", "weight", "bias"})
+            {
+                const auto found = values.find(role);
+                if (found == values.end()) continue;
+                std::string option = role;
+                std::replace(option.begin(), option.end(), '_', '-');
+                command += " --" + option + " " + Lower(found->second);
+            }
             return true;
         }
 
@@ -315,6 +341,11 @@ namespace
                 Lower(*orderValue) == "sequential" ||
                 Lower(*orderValue) == "sequenziale")
             {
+                if (FindValue(understanding, {"seed", "miaia_seed"}))
+                {
+                    error = "A seed requires shuffle sample_order; it cannot be ignored.";
+                    return false;
+                }
                 return true;
             }
 

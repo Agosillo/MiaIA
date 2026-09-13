@@ -974,11 +974,6 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
 #if MIAIA_WITH_WIT_AI
     RebuildOnlineAssistantProvider();
 #endif
-    ConsoleHistory = TEXT(
-        "MiaIA Studio Console\n"
-        "Type 'help' to list the shared CLI commands. "
-        "Use Up/Down for history and Tab for completion.\n");
-    ConsoleHistoryIndex = 0;
     SAssignNew(ConsoleOutputScrollBar, SScrollBar)
         .Style(&ScrollBarStyle)
         .Orientation(Orient_Vertical)
@@ -2676,7 +2671,7 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
                                         .IsReadOnly(true)
                                         .AutoWrapText(true)
                                         .WrappingPolicy(ETextWrappingPolicy::AllowPerCharacterWrapping)
-                                        .Text(FText::FromString(ConsoleHistory))
+                                        .Text(ConsoleText())
                                         .VScrollBar(ConsoleOutputScrollBar)
                                     ]
                                 ]
@@ -2692,6 +2687,18 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
                                 .Padding(4.0f, 6.0f, 0.0f, 0.0f)
                                 [
                                     SNew(SHorizontalBox)
+                                    + SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(0.0f, 0.0f, 6.0f, 0.0f)
+                                    [SNew(STextBlock).Text(LOCTEXT("ConsoleHistoryFilterLabel", "History"))]
+                                    + SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(0.0f, 0.0f, 6.0f, 0.0f)
+                                    [
+                                        SNew(SComboButton)
+                                        .ComboButtonStyle(&ComboButtonStyle)
+                                        .OnGetMenuContent(this, &SMiaIAEditorPanel::BuildConsoleHistoryFilterMenu)
+                                        .ToolTipText(LOCTEXT("ConsoleHistoryFilterTip",
+                                            "Filter Up/Down recall: Auto follows input mode; All recalls commands and phrases. Output always remains visible."))
+                                        .ButtonContent()
+                                        [SNew(STextBlock).Text(this, &SMiaIAEditorPanel::ConsoleHistoryFilterText)]
+                                    ]
                                     + SHorizontalBox::Slot()
                                     .FillWidth(1.0f)
                                     [
@@ -2754,7 +2761,7 @@ void SMiaIAEditorPanel::Construct(const FArguments& InArgs)
                                             "Clear output"))
                                         .ToolTipText(LOCTEXT(
                                             "ConsoleClearOutputTooltip",
-                                            "Clear only the displayed command output. Command history and MiaIA state are preserved."))
+                                            "Clear the output log. Input histories, drafts and MiaIA state are preserved."))
                                         .OnClicked(
                                             this,
                                             &SMiaIAEditorPanel::HandleClearConsoleOutput)
@@ -8944,10 +8951,10 @@ FReply SMiaIAEditorPanel::HandleCreateContext()
     }
 
     RefreshAfterContextMutation();
-    ConsoleHistory += FString::Printf(
+    AppendConsoleMessage(FString::Printf(
         TEXT("\n> model create \"%s\"\nModel context #%llu created and selected.\n"),
         *name,
-        ActiveContext.Id);
+        ActiveContext.Id), MiaIA::Studio::ConsoleHistorySource::Console);
     UpdateConsoleOutput();
     return FReply::Handled();
 }
@@ -8979,12 +8986,12 @@ FReply SMiaIAEditorPanel::HandleForkActiveContext()
 
     RefreshAfterContextMutation();
     ModelComparisonReferenceContextId = sourceContextId;
-    ConsoleHistory += FString::Printf(
+    AppendConsoleMessage(FString::Printf(
         TEXT("\n> model fork %llu \"%s\"\nModel context #%llu forked from #%llu and selected.\n"),
         sourceContextId,
         *name,
         ActiveContext.Id,
-        sourceContextId);
+        sourceContextId), MiaIA::Studio::ConsoleHistorySource::Console);
     UpdateConsoleOutput();
     return FReply::Handled();
 }
@@ -9005,10 +9012,10 @@ FReply SMiaIAEditorPanel::HandleSelectContext(uint64 ContextId)
     }
 
     RefreshAfterContextMutation();
-    ConsoleHistory += FString::Printf(
+    AppendConsoleMessage(FString::Printf(
         TEXT("\n> model select %llu\nModel context #%llu selected.\n"),
         ContextId,
-        ContextId);
+        ContextId), MiaIA::Studio::ConsoleHistorySource::Console);
     UpdateConsoleOutput();
     return FReply::Handled();
 }
@@ -9039,11 +9046,11 @@ FReply SMiaIAEditorPanel::HandleRenameActiveContext()
     }
 
     RefreshAfterContextMutation();
-    ConsoleHistory += FString::Printf(
+    AppendConsoleMessage(FString::Printf(
         TEXT("\n> model rename %llu \"%s\"\nModel context #%llu renamed.\n"),
         contextId,
         *name,
-        contextId);
+        contextId), MiaIA::Studio::ConsoleHistorySource::Console);
     UpdateConsoleOutput();
     return FReply::Handled();
 }
@@ -9084,10 +9091,10 @@ FReply SMiaIAEditorPanel::HandleRemoveActiveContext()
     }
 
     RefreshAfterContextMutation();
-    ConsoleHistory += FString::Printf(
+    AppendConsoleMessage(FString::Printf(
         TEXT("\n> model remove %llu\nModel context #%llu removed.\n"),
         contextId,
-        contextId);
+        contextId), MiaIA::Studio::ConsoleHistorySource::Console);
     UpdateConsoleOutput();
     return FReply::Handled();
 }
@@ -9215,7 +9222,7 @@ FReply SMiaIAEditorPanel::HandleNewProject()
         return FReply::Handled();
     }
 
-    ConsoleHistory += TEXT("\n> project new\nNew MiaIA project created.\n");
+    AppendConsoleMessage(TEXT("\n> project new\nNew MiaIA project created.\n"), MiaIA::Studio::ConsoleHistorySource::Console);
     UpdateConsoleOutput();
     FMiaIAInstanceService::Refresh(MiaIAInstance);
     ResetActiveContextPresentation();
@@ -9252,9 +9259,9 @@ FReply SMiaIAEditorPanel::HandleSaveProject()
         return FReply::Handled();
     }
 
-    ConsoleHistory += FString::Printf(
+    AppendConsoleMessage(FString::Printf(
         TEXT("\n> project save\nMiaIA project saved to %s.\n"),
-        *info.Path);
+        *info.Path), MiaIA::Studio::ConsoleHistorySource::Console);
     UpdateConsoleOutput();
     return FReply::Handled();
 }
@@ -9491,24 +9498,24 @@ FReply SMiaIAEditorPanel::HandleConfirmProjectPath()
     switch (action)
     {
     case EMiaIAProjectPathAction::Open:
-        ConsoleHistory += FString::Printf(
+        AppendConsoleMessage(FString::Printf(
             TEXT("\n> project open \"%s\"\nMiaIA project opened.\n"),
-            *path);
+            *path), MiaIA::Studio::ConsoleHistorySource::Console);
         break;
     case EMiaIAProjectPathAction::SaveAs:
-        ConsoleHistory += FString::Printf(
+        AppendConsoleMessage(FString::Printf(
             TEXT("\n> project save \"%s\"\nMiaIA project saved.\n"),
-            *path);
+            *path), MiaIA::Studio::ConsoleHistorySource::Console);
         break;
     case EMiaIAProjectPathAction::ImportOnnx:
-        ConsoleHistory += FString::Printf(
+        AppendConsoleMessage(FString::Printf(
             TEXT("\n> import onnx \"%s\"\nONNX model imported.\n"),
-            *path);
+            *path), MiaIA::Studio::ConsoleHistorySource::Console);
         break;
     case EMiaIAProjectPathAction::ExportOnnx:
-        ConsoleHistory += FString::Printf(
+        AppendConsoleMessage(FString::Printf(
             TEXT("\n> export onnx \"%s\"\nONNX model exported.\n"),
-            *path);
+            *path), MiaIA::Studio::ConsoleHistorySource::Console);
         break;
     default:
         break;
@@ -9760,7 +9767,7 @@ void SMiaIAEditorPanel::HandleConsoleCommandCommitted(
     ExecuteConsoleCommand(command);
 }
 
-void SMiaIAEditorPanel::ExecuteConsoleCommand(const FString& Command)
+void SMiaIAEditorPanel::ExecuteConsoleCommand(const FString& Command, MiaIA::Studio::ConsoleHistorySource Origin)
 {
     const FString command = Command.TrimStartAndEnd();
 
@@ -9769,30 +9776,25 @@ void SMiaIAEditorPanel::ExecuteConsoleCommand(const FString& Command)
         return;
     }
 
-    if (ConsoleCommandHistory.IsEmpty() ||
-        ConsoleCommandHistory.Last() != command)
-    {
-        ConsoleCommandHistory.Add(command);
-    }
-
-    ConsoleHistoryIndex = ConsoleCommandHistory.Num();
-    ConsoleHistoryDraft.Empty();
+    // Assistant requests are recalled as natural phrases, not generated CLI.
+    if (Origin == MiaIA::Studio::ConsoleHistorySource::Console)
+        ConsoleHistory.RecordInput(Origin, TCHAR_TO_UTF8(*command));
 
     bool exitRequested{};
     const FString output = UMiaIABlueprintLibrary::ExecuteCommand(
         command,
         exitRequested);
-    ConsoleHistory += FString::Printf(TEXT("\n> %s\n"), *command);
-    ConsoleHistory += output;
+    AppendConsoleMessage(FString::Printf(TEXT("\n> %s\n"), *command), Origin);
+    AppendConsoleMessage(output, Origin);
 
     if (exitRequested)
     {
-        ConsoleHistory += TEXT(
-            "Exit is available only in the standalone Console.\n");
+        AppendConsoleMessage(TEXT(
+            "Exit is available only in the standalone Console.\n"), Origin);
     }
 
     UpdateConsoleOutput();
-    SetConsoleInputText(FString());
+    if (ActiveConsoleInputSource() == Origin) SetConsoleInputText(FString());
 
     const bool replacedNetwork =
         output.Contains(TEXT("Dense network created.")) ||
@@ -10244,6 +10246,21 @@ TSharedRef<SWidget> SMiaIAEditorPanel::BuildOnlineAssistantPanel(
                             ]
                             + SVerticalBox::Slot().AutoHeight().Padding(0.0f, 3.0f)
                             [
+                                SNew(SButton)
+                                .ButtonStyle(&ButtonStyle)
+                                .Text(LOCTEXT("AssistantExportParameters", "Export parameter synonyms"))
+                                .ToolTipText(LOCTEXT("AssistantExportParametersTip",
+                                    "Export an editable pack for the selected language (English in Auto). Edit P rows, then preview and install. Installed phrases and synonyms are included."))
+                                .IsEnabled_Lambda([this]() { return LocalAssistant() != nullptr; })
+                                .OnClicked_Lambda([this]()
+                                {
+                                    const auto* local = LocalAssistant();
+                                    return local ? HandleExportAssistantParameterTemplate(
+                                        FromUtf8(local->LanguageCode() == "auto" ? "en" : local->LanguageCode())) : FReply::Handled();
+                                })
+                            ]
+                            + SVerticalBox::Slot().AutoHeight().Padding(0.0f, 3.0f)
+                            [
                                 SNew(SComboButton)
                                 .ComboButtonStyle(&ComboButtonStyle)
                                 .IsEnabled_Lambda([this]() { return LocalAssistant() != nullptr; })
@@ -10282,7 +10299,7 @@ TSharedRef<SWidget> SMiaIAEditorPanel::BuildOnlineAssistantPanel(
                                     AssistantLanguageImportPath = Text.ToString();
                                 })
                                 .ToolTipText(LOCTEXT("AssistantLanguageFileTip",
-                                    "Enter the full path of the edited UTF-8 language pack. Translate the fourth column, keeping TAB separators."))
+                                    "Enter the full path of the edited UTF-8 language pack. E translations use column 4; P parameter synonyms use column 5. Keep TAB separators."))
                             ]
                             + SVerticalBox::Slot()
                             .AutoHeight()
@@ -10697,6 +10714,7 @@ TSharedRef<SWidget> SMiaIAEditorPanel::BuildAssistantLanguageMenu()
         {
             for (const auto& pack : assistant->LanguagePacks())
             {
+                if (pack.Code == "en" || pack.Code == "it") continue; // Built-in language buttons also use supplements.
                 const FString code = FromUtf8(pack.Code);
                 const FString label = FString::Printf(
                     TEXT("%s (%s)"),
@@ -10935,14 +10953,7 @@ void SMiaIAEditorPanel::RequestOnlineAssistant(const FString& Text)
         return;
     }
 
-    if (ConsoleCommandHistory.IsEmpty() ||
-        ConsoleCommandHistory.Last() != requestText)
-    {
-        ConsoleCommandHistory.Add(requestText);
-    }
-
-    ConsoleHistoryIndex = ConsoleCommandHistory.Num();
-    ConsoleHistoryDraft.Empty();
+    ConsoleHistory.RecordInput(MiaIA::Studio::ConsoleHistorySource::Assistant, TCHAR_TO_UTF8(*requestText));
     bHasAssistantProposal = false;
     AssistantProposal = {};
     bOnlineAssistantRequestPending = true;
@@ -10951,9 +10962,9 @@ void SMiaIAEditorPanel::RequestOnlineAssistant(const FString& Text)
         ? TEXT("Interpreting locally...")
         : TEXT("Interpreting with Wit.ai...");
     const uint64 requestSerial = ++OnlineAssistantRequestSerial;
-    ConsoleHistory += FString::Printf(
+    AppendConsoleMessage(FString::Printf(
         TEXT("\n? %s\nAssistant: interpreting...\n"),
-        *requestText);
+        *requestText), MiaIA::Studio::ConsoleHistorySource::Assistant);
     UpdateConsoleOutput();
     SetConsoleInputText(FString());
 
@@ -10984,8 +10995,7 @@ void SMiaIAEditorPanel::RequestOnlineAssistant(const FString& Text)
         bOnlineAssistantRequestPending = false;
         OnlineAssistantStatus =
             TEXT("The assistant request could not be started.");
-        ConsoleHistory +=
-            TEXT("Assistant: request could not be started.\n");
+        AppendConsoleMessage(TEXT("Assistant: request could not be started.\n"), MiaIA::Studio::ConsoleHistorySource::Assistant);
         UpdateConsoleOutput();
     }
 }
@@ -10997,6 +11007,16 @@ void SMiaIAEditorPanel::HandleOnlineAssistantResult(
     if (RequestSerial != OnlineAssistantRequestSerial ||
         !bOnlineAssistantEnabled)
     {
+        // Keep the late reply under its original request's source, but never
+        // execute it, change the new pending request, or reopen a stale proposal.
+        MiaIA::Studio::CommandProposal completed;
+        const bool valid = MiaIA::Studio::CommandAssistant::Propose(Understanding, completed);
+        AppendConsoleMessage(FString::Printf(
+            TEXT("\nAssistant reply for: %s\n%s\nRequest no longer active; nothing executed.\n"),
+            *FromUtf8(Understanding.Text),
+            valid ? *FString::Printf(TEXT("Proposed command: %s"), *FromUtf8(completed.Command))
+                : *FromUtf8(completed.Error)), MiaIA::Studio::ConsoleHistorySource::Assistant);
+        UpdateConsoleOutput();
         return;
     }
 
@@ -11038,11 +11058,11 @@ void SMiaIAEditorPanel::HandleOnlineAssistantResult(
 
         bHasAssistantProposal = false;
         AssistantProposal = {};
-        ConsoleHistory += FString::Printf(
+        AppendConsoleMessage(FString::Printf(
             TEXT("Assistant: %s (intent: %s, confidence: %.2f%%)\n"),
             *OnlineAssistantStatus,
             Understanding.Intent.empty() ? TEXT("none") : *FromUtf8(Understanding.Intent),
-            Understanding.Confidence * 100.0);
+            Understanding.Confidence * 100.0), MiaIA::Studio::ConsoleHistorySource::Assistant);
         UpdateConsoleOutput();
         return;
     }
@@ -11063,13 +11083,13 @@ void SMiaIAEditorPanel::HandleOnlineAssistantResult(
         AssistantProposal = std::move(proposal);
         bHasAssistantProposal = false;
         OnlineAssistantStatus = FromUtf8(error);
-        ConsoleHistory += FString::Printf(
+        AppendConsoleMessage(FString::Printf(
             TEXT("Assistant: %s (intent: %s, confidence: %.2f%%)\n"),
             *OnlineAssistantStatus,
             Understanding.Intent.empty()
                 ? TEXT("none")
                 : *FromUtf8(Understanding.Intent),
-            Understanding.Confidence * 100.0);
+            Understanding.Confidence * 100.0), MiaIA::Studio::ConsoleHistorySource::Assistant);
         UpdateConsoleOutput();
         return;
     }
@@ -11080,22 +11100,22 @@ void SMiaIAEditorPanel::HandleOnlineAssistantResult(
         AssistantProposal.FullyConfident)
     {
         const FString command = FromUtf8(AssistantProposal.Command);
-        ConsoleHistory += TEXT(
-            "Assistant: exact 100% confidence; command auto-confirmed.\n");
+        AppendConsoleMessage(TEXT(
+            "Assistant: exact 100% confidence; command auto-confirmed.\n"), MiaIA::Studio::ConsoleHistorySource::Assistant);
         bHasAssistantProposal = false;
         AssistantProposal = {};
         OnlineAssistantStatus =
             TEXT("Command auto-confirmed at exact 100% confidence.");
-        ExecuteConsoleCommand(command);
+        ExecuteConsoleCommand(command, MiaIA::Studio::ConsoleHistorySource::Assistant);
         return;
     }
 
     bHasAssistantProposal = true;
     OnlineAssistantStatus =
         TEXT("Review the proposed command before confirming it.");
-    ConsoleHistory += FString::Printf(
+    AppendConsoleMessage(FString::Printf(
         TEXT("Assistant proposed: %s\n"),
-        *FromUtf8(AssistantProposal.Command));
+        *FromUtf8(AssistantProposal.Command)), MiaIA::Studio::ConsoleHistorySource::Assistant);
     UpdateConsoleOutput();
 }
 
@@ -11149,7 +11169,8 @@ FReply SMiaIAEditorPanel::HandleConfirmAssistantProposal()
         OnlineAssistantStatus =
             TEXT("Command confirmed. Enter another English request.");
     }
-    ExecuteConsoleCommand(command);
+    AppendConsoleMessage(TEXT("Assistant: command confirmed.\n"), MiaIA::Studio::ConsoleHistorySource::Assistant);
+    ExecuteConsoleCommand(command, MiaIA::Studio::ConsoleHistorySource::Assistant);
     return FReply::Handled();
 }
 
@@ -11157,7 +11178,7 @@ FReply SMiaIAEditorPanel::HandleDiscardAssistantProposal()
 {
     if (bHasAssistantProposal)
     {
-        ConsoleHistory += TEXT("Assistant proposal discarded.\n");
+        AppendConsoleMessage(TEXT("Assistant proposal discarded.\n"), MiaIA::Studio::ConsoleHistorySource::Assistant);
         UpdateConsoleOutput();
     }
 
@@ -11190,8 +11211,8 @@ FReply SMiaIAEditorPanel::HandleIncorrectAssistantProposal()
         AssistantLearningPhraseSelection =
             FromUtf8(AssistantProposal.SourceText);
         bAssistantLearningSelectionValidated = false;
-        ConsoleHistory += TEXT(
-            "Assistant interpretation marked as wrong and queued for classification.\n");
+        AppendConsoleMessage(TEXT(
+            "Assistant interpretation marked as wrong and queued for classification.\n"), MiaIA::Studio::ConsoleHistorySource::Assistant);
         UpdateConsoleOutput();
     }
 
@@ -11614,9 +11635,32 @@ FReply SMiaIAEditorPanel::HandleExportAssistantLanguageTemplate()
             FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM);
     SetAssistantConsoleStatus(saved
         ? FString::Printf(
-            TEXT("Language template exported to %s. Replace xx and Language name on line 2; keep the English source in column 3 and enter translations in column 4 (TAB-separated). Save the edited file, then install it."),
+            TEXT("Language template exported to %s. Replace xx and Language name on line 2. Translate column 4 of E rows and column 5 of P rows (TAB-separated). Keep intents and parameter roles unchanged. Save, then preview and install."),
             *path)
         : TEXT("The language template could not be exported."));
+    return FReply::Handled();
+}
+
+FReply SMiaIAEditorPanel::HandleExportAssistantParameterTemplate(FString Code)
+{
+    // Export a snapshot for editing; vocabulary changes only after the existing
+    // preview-and-install flow validates and persists the replacement pack.
+    FSlateApplication::Get().DismissAllMenus();
+    const auto* local = LocalAssistant();
+    if (!local) return FReply::Handled();
+    const std::string contents = local->ExportParameterTemplate(TCHAR_TO_UTF8(*Code));
+    if (contents.empty()) return FReply::Handled();
+    const FString path = FPaths::Combine(FPaths::GetPath(LocalAssistantLanguageTemplatePath()),
+        TEXT("parameters-") + Code + TEXT(".miaia-language"));
+    if (FPaths::FileExists(path) && FMessageDialog::Open(EAppMsgType::YesNo,
+        FText::FromString(FString::Printf(TEXT("Replace the editable parameter file?\n%s\nUnsaved translations in this file will be overwritten."), *path))) != EAppReturnType::Yes)
+        return FReply::Handled();
+    const bool saved = IFileManager::Get().MakeDirectory(*FPaths::GetPath(path), true) &&
+        FFileHelper::SaveStringToFile(FromUtf8(contents), *path, FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM);
+    if (saved) AssistantLanguageImportPath = path;
+    SetAssistantConsoleStatus(saved ? FString::Printf(
+        TEXT("Parameter synonyms exported for %s: %s. Edit column 5 of P rows (TAB-separated); duplicate rows for more synonyms. Keep intent and role unchanged. Save, then Preview and install language pack. Existing installed phrases are included."), *Code, *path)
+        : TEXT("Parameter synonyms could not be exported."));
     return FReply::Handled();
 }
 
@@ -11708,7 +11752,7 @@ TSharedRef<SWidget> SMiaIAEditorPanel::BuildInstalledAssistantLanguageMenu()
 {
     TSharedRef<SVerticalBox> content = SNew(SVerticalBox);
     content->AddSlot().AutoHeight()[SNew(STextBlock).AutoWrapText(true)
-        .Text(LOCTEXT("AssistantBuiltinLanguages", "English and Italian are built in and cannot be removed."))];
+        .Text(LOCTEXT("AssistantBuiltinLanguages", "Built-in English and Italian cannot be removed. Removing an en/it supplement only removes its added phrases and parameter synonyms."))];
     if (const auto* local = LocalAssistant())
     {
         for (const auto& pack : local->LanguagePacks())
@@ -11720,8 +11764,14 @@ TSharedRef<SWidget> SMiaIAEditorPanel::BuildInstalledAssistantLanguageMenu()
                 + SVerticalBox::Slot().AutoHeight()
                 [
                     SNew(STextBlock).AutoWrapText(true).Text(FText::FromString(FString::Printf(
-                        TEXT("%s (%s) - %llu phrases"), *FromUtf8(pack.DisplayName), *code,
-                        static_cast<unsigned long long>(pack.Examples.size()))))
+                        TEXT("%s (%s) - %llu phrases, %llu parameter synonyms"), *FromUtf8(pack.DisplayName), *code,
+                        static_cast<unsigned long long>(pack.Examples.size()),
+                        static_cast<unsigned long long>(pack.ParameterAliases.size()))))
+                ]
+                + SVerticalBox::Slot().AutoHeight()
+                [
+                    SNew(SButton).ButtonStyle(&ButtonStyle).Text(LOCTEXT("AssistantExportEditablePack", "Export editable pack..."))
+                    .OnClicked(this, &SMiaIAEditorPanel::HandleExportAssistantParameterTemplate, code)
                 ]
                 + SVerticalBox::Slot().AutoHeight()
                 [
@@ -11804,6 +11854,14 @@ FReply SMiaIAEditorPanel::HandleImportAssistantLanguageTemplate()
     const FTCHARToUTF8 utf8(*serialized);
     std::string error;
     MiaIA::Studio::LocalCommandAssistant validatedPack;
+    // Preview against all installed vocabulary so conflicts are rejected before
+    // writing, not discovered on restart after an existing file was replaced.
+    for (const auto& installed : assistant->LanguagePacks())
+        if (!validatedPack.ImportLanguagePack(assistant->ExportLanguagePack(installed.Code), error))
+        {
+            SetAssistantConsoleStatus(FromUtf8(error));
+            return FReply::Handled();
+        }
     if (!validatedPack.ImportLanguagePack(
         std::string_view(utf8.Get(), utf8.Length()), error))
     {
@@ -11817,13 +11875,17 @@ FReply SMiaIAEditorPanel::HandleImportAssistantLanguageTemplate()
     const FString code = FromUtf8(imported.Code);
     const FString packPath = LocalAssistantLanguagePackPath(code);
     FString preview = FString::Printf(
-        TEXT("Language: %s (%s)\nTranslated phrases: %llu\nSource: %s\nDestination: %s\n\n%s\n\nExamples:\n"),
+        TEXT("Language: %s (%s)\nTranslated phrases: %llu\nParameter synonyms: %llu\nSource: %s\nDestination: %s\n\n%s\n\nExamples:\n"),
         *FromUtf8(imported.DisplayName), *code,
-        static_cast<unsigned long long>(imported.Examples.size()), *templatePath, *packPath,
+        static_cast<unsigned long long>(imported.Examples.size()),
+        static_cast<unsigned long long>(imported.ParameterAliases.size()), *templatePath, *packPath,
         FPaths::FileExists(packPath) ? TEXT("This REPLACES the installed pack for this language.") : TEXT("This installs a new language pack."));
     for (std::size_t i = 0; i < std::min<std::size_t>(3, imported.Examples.size()); ++i)
         preview += FromUtf8(imported.Examples[i].Text).Left(160) + TEXT(" -> ") +
             FromUtf8(imported.Examples[i].Intent) + TEXT("\n");
+    for (std::size_t i = 0; i < std::min<std::size_t>(5, imported.ParameterAliases.size()); ++i)
+        preview += FromUtf8(imported.ParameterAliases[i].Text) + TEXT(" -> ") +
+            FromUtf8(imported.ParameterAliases[i].Intent) + TEXT(" / ") + FromUtf8(imported.ParameterAliases[i].Role) + TEXT("\n");
     preview += TEXT("\nInstall this pack? Learned phrases are preserved. The assistant will be disabled until you enable it again.");
     if (FMessageDialog::Open(EAppMsgType::YesNo, FText::FromString(preview)) != EAppReturnType::Yes)
     {
@@ -11846,8 +11908,9 @@ FReply SMiaIAEditorPanel::HandleImportAssistantLanguageTemplate()
         return FReply::Handled();
     }
 
-    AssistantLanguage = EMiaIAAssistantLanguage::Custom;
-    AssistantCustomLanguageCode = code;
+    AssistantLanguage = code == TEXT("en") ? EMiaIAAssistantLanguage::English
+        : code == TEXT("it") ? EMiaIAAssistantLanguage::Italian : EMiaIAAssistantLanguage::Custom;
+    AssistantCustomLanguageCode = AssistantLanguage == EMiaIAAssistantLanguage::Custom ? code : FString();
     ++OnlineAssistantRequestSerial;
     bOnlineAssistantEnabled = false;
     bOnlineAssistantRequestPending = false;
@@ -11930,7 +11993,9 @@ void SMiaIAEditorPanel::SetAssistantConsoleStatus(const FString& Message)
     OnlineAssistantStatus = Message;
     if (!Message.IsEmpty())
     {
-        ConsoleHistory += TEXT("Assistant: ") + Message + TEXT("\n");
+        // Configuration feedback must remain visible even while the assistant
+        // is disabled (for example after installing or exporting a pack).
+        AppendConsoleMessage(TEXT("Assistant: ") + Message + TEXT("\n"), MiaIA::Studio::ConsoleHistorySource::Assistant, true);
         UpdateConsoleOutput();
     }
 }
@@ -12061,8 +12126,7 @@ void SMiaIAEditorPanel::HandleConsoleTextChanged(const FText& Text)
 
     if (!bUpdatingConsoleInput)
     {
-        ConsoleHistoryIndex = ConsoleCommandHistory.Num();
-        ConsoleHistoryDraft = input;
+        ConsoleHistory.EditInput(ActiveConsoleInputSource(), TCHAR_TO_UTF8(*input));
     }
 
     RebuildConsoleSuggestions(input);
@@ -12079,51 +12143,14 @@ FReply SMiaIAEditorPanel::HandleConsoleInputKeyDown(
         return ApplyConsoleSuggestion(FirstConsoleSuggestion);
     }
 
-    if (key == EKeys::Up)
+    if (key == EKeys::Up || key == EKeys::Down)
     {
-        if (ConsoleCommandHistory.IsEmpty())
+        if (const auto recalled = ConsoleHistory.Recall(ActiveConsoleInputSource(), key == EKeys::Up, ConsoleRecallFilter))
         {
-            return FReply::Unhandled();
+            SetConsoleInputText(UTF8_TO_TCHAR(recalled->c_str()), false);
+            return FReply::Handled();
         }
-
-        if (ConsoleHistoryIndex >= ConsoleCommandHistory.Num())
-        {
-            ConsoleHistoryDraft = ConsoleInput.IsValid()
-                ? ConsoleInput->GetText().ToString()
-                : FString();
-            ConsoleHistoryIndex = ConsoleCommandHistory.Num() - 1;
-        }
-        else if (ConsoleHistoryIndex > 0)
-        {
-            --ConsoleHistoryIndex;
-        }
-
-        SetConsoleInputText(
-            ConsoleCommandHistory[ConsoleHistoryIndex]);
-        return FReply::Handled();
-    }
-
-    if (key == EKeys::Down)
-    {
-        if (ConsoleCommandHistory.IsEmpty() ||
-            ConsoleHistoryIndex >= ConsoleCommandHistory.Num())
-        {
-            return FReply::Unhandled();
-        }
-
-        ++ConsoleHistoryIndex;
-
-        if (ConsoleHistoryIndex == ConsoleCommandHistory.Num())
-        {
-            SetConsoleInputText(ConsoleHistoryDraft);
-        }
-        else
-        {
-            SetConsoleInputText(
-                ConsoleCommandHistory[ConsoleHistoryIndex]);
-        }
-
-        return FReply::Handled();
+        return FReply::Unhandled();
     }
 
     return FReply::Unhandled();
@@ -12143,10 +12170,7 @@ FReply SMiaIAEditorPanel::HandleConsoleSend()
 
 FReply SMiaIAEditorPanel::HandleClearConsoleOutput()
 {
-    ConsoleHistory = TEXT(
-        "MiaIA Studio Console\n"
-        "Type 'help' to list the shared CLI commands. "
-        "Use Up/Down for history and Tab for completion.\n");
+    ConsoleHistory.ClearOutput();
     UpdateConsoleOutput();
 
     if (ConsoleInput.IsValid())
@@ -12181,6 +12205,11 @@ FReply SMiaIAEditorPanel::ApplyConsoleSuggestion(FString Completion)
 void SMiaIAEditorPanel::RebuildConsoleSuggestions(
     const FString& Input)
 {
+    if (SyncConsoleInputMode())
+    {
+        UpdateConsoleOutput();
+        return; // Restoring the other mode's draft already rebuilt suggestions.
+    }
     FirstConsoleSuggestion.Empty();
 
     if (!ConsoleSuggestionsContent.IsValid())
@@ -12517,8 +12546,9 @@ void SMiaIAEditorPanel::RebuildAssistantLearningSidebar()
 }
 #endif
 
-void SMiaIAEditorPanel::SetConsoleInputText(const FString& Text)
+void SMiaIAEditorPanel::SetConsoleInputText(const FString& Text, bool EditHistory)
 {
+    if (EditHistory) ConsoleHistory.EditInput(ActiveConsoleInputSource(), TCHAR_TO_UTF8(*Text));
     if (!ConsoleInput.IsValid())
     {
         return;
@@ -12533,13 +12563,78 @@ void SMiaIAEditorPanel::SetConsoleInputText(const FString& Text)
 
 void SMiaIAEditorPanel::UpdateConsoleOutput()
 {
+    SyncConsoleInputMode();
     if (!ConsoleOutput.IsValid())
     {
         return;
     }
 
-    ConsoleOutput->SetText(FText::FromString(ConsoleHistory));
+    ConsoleOutput->SetText(ConsoleText());
     ConsoleOutput->ScrollTo(ETextLocation::EndOfDocument);
+}
+
+void SMiaIAEditorPanel::AppendConsoleMessage(const FString& Message, MiaIA::Studio::ConsoleHistorySource Origin, bool SharedStatus)
+{
+    ConsoleHistory.Append(Origin, TCHAR_TO_UTF8(*Message), SharedStatus);
+}
+
+MiaIA::Studio::ConsoleHistorySource SMiaIAEditorPanel::ActiveConsoleInputSource() const
+{
+#if MIAIA_WITH_WIT_AI
+    if (bOnlineAssistantEnabled) return MiaIA::Studio::ConsoleHistorySource::Assistant;
+#endif
+    return MiaIA::Studio::ConsoleHistorySource::Console;
+}
+
+bool SMiaIAEditorPanel::SyncConsoleInputMode()
+{
+    const auto source = ActiveConsoleInputSource();
+    if (source == ConsoleInputSource) return false;
+    ConsoleInputSource = source;
+    SetConsoleInputText(UTF8_TO_TCHAR(ConsoleHistory.CurrentInput(source).c_str()), false);
+    return true;
+}
+
+TSharedRef<SWidget> SMiaIAEditorPanel::BuildConsoleHistoryFilterMenu()
+{
+    using Filter = MiaIA::Studio::ConsoleHistoryFilter;
+    TSharedRef<SVerticalBox> menu = SNew(SVerticalBox);
+    const auto add = [&](Filter filter, const FText& label)
+    {
+        menu->AddSlot().AutoHeight().Padding(0.0f, 2.0f)
+        [
+            SNew(SCheckBox)
+            .IsChecked_Lambda([this, filter]() { return ConsoleRecallFilter == filter ? ECheckBoxState::Checked : ECheckBoxState::Unchecked; })
+            .OnCheckStateChanged_Lambda([this, filter](ECheckBoxState) { SelectConsoleHistoryFilter(filter); })
+            [SNew(STextBlock).Text(label)]
+        ];
+    };
+    add(Filter::Automatic, LOCTEXT("ConsoleHistoryAutomatic", "Auto (follow input mode)"));
+    add(Filter::All, LOCTEXT("ConsoleHistoryAll", "All"));
+    add(Filter::Console, LOCTEXT("ConsoleHistoryConsole", "Console"));
+    add(Filter::Assistant, LOCTEXT("ConsoleHistoryAssistant", "Assistant"));
+    return SNew(SBox).WidthOverride(220.0f)[menu];
+}
+
+FText SMiaIAEditorPanel::ConsoleHistoryFilterText() const
+{
+    using Filter = MiaIA::Studio::ConsoleHistoryFilter;
+    switch (ConsoleRecallFilter)
+    {
+    case Filter::All: return LOCTEXT("ConsoleHistoryAll", "All");
+    case Filter::Console: return LOCTEXT("ConsoleHistoryConsole", "Console");
+    case Filter::Assistant: return LOCTEXT("ConsoleHistoryAssistant", "Assistant");
+    default: return ActiveConsoleInputSource() == MiaIA::Studio::ConsoleHistorySource::Assistant
+        ? LOCTEXT("ConsoleHistoryAutoAssistant", "Auto (Assistant)")
+        : LOCTEXT("ConsoleHistoryAutoConsole", "Auto (Console)");
+    }
+}
+
+FReply SMiaIAEditorPanel::SelectConsoleHistoryFilter(MiaIA::Studio::ConsoleHistoryFilter Filter)
+{
+    ConsoleRecallFilter = Filter;
+    FSlateApplication::Get().DismissAllMenus();
+    return FReply::Handled();
 }
 
 bool SMiaIAEditorPanel::CanResume() const
@@ -12755,7 +12850,9 @@ FText SMiaIAEditorPanel::NegativeMetricLegendText() const
 
 FText SMiaIAEditorPanel::ConsoleText() const
 {
-    return FText::FromString(ConsoleHistory);
+    FString text = TEXT("MiaIA Studio Console\nType 'help' for commands. Up/Down uses History; Tab completes commands.\n");
+    text += UTF8_TO_TCHAR(ConsoleHistory.Output().c_str());
+    return FText::FromString(text);
 }
 
 FText SMiaIAEditorPanel::ForwardTraceSummaryText() const

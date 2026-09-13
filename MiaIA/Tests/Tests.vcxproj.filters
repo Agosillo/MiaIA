@@ -23,5 +23,8 @@
     <ClInclude Include="TestHarness.h">
       <Filter>File di intestazione</Filter>
     </ClInclude>
+    <ClInclude Include="CommandAssistantTests.h">
+      <Filter>File di intestazione</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

@@ -68,6 +68,31 @@ Settings automatically. Either panel can be closed by pressing its button again.
 Import/export, validation and configuration messages are written to console history, including the
 path actually read when an import fails.
 
+### Console and Assistant history
+
+The **History** selector, immediately before the input field, controls only what **Up/Down** recalls:
+
+- **Auto** (default): commands when the assistant is disabled, phrases when enabled.
+- **Console**: directly submitted CLI commands.
+- **Assistant**: submitted natural-language phrases.
+- **All**: both in their original submission order.
+
+Changing the recall filter does not change the input interpretation mode. Review a
+recalled entry before submitting it. Generated CLI commands and bare confirmations
+such as `ok` are not additional input-history entries.
+
+**Output is always a single, continuous chronological log.** Switching input mode
+or recall filter never hides existing output, results, errors or pending proposals.
+Late provider replies are logged but cannot execute or replace a newer request.
+
+Each input mode retains its draft and recall position. Down after the newest entry
+restores the draft. Changing the recall filter restarts navigation from the newest
+matching entry, preserving the current input as its draft.
+
+**Clear output** explicitly clears the entire output log, not the input histories,
+drafts, learned phrases or model state. History is session-local and is not exported
+with projects or language packs.
+
 Language Packs add a third, fourth, or later language without recompiling Studio and
 without creating an online account. Open **Settings** and choose **Export language
 template**. Studio writes the editable UTF-8 tab-separated file:
@@ -80,7 +105,7 @@ unchanged. Empty translations are allowed and are skipped, so a language can be
 introduced incrementally. For example:
 
 ```text
-MIAIA_LOCAL_LANGUAGE_PACK	1
+MIAIA_LOCAL_LANGUAGE_PACK	2
 L	es	Espanol
 E	miaia_model_list	Show all models	Mostrar todos los modelos
 E	miaia_neuron_inspect	Inspect neuron 2	Inspeccionar neurona 2
@@ -109,7 +134,9 @@ enable it again before testing the new language. Installing the same code asks b
 language, export a fresh template and repeat the process. Export also asks before
 overwriting an existing work-in-progress template.
 
-**Installed language packs (count)** lists names, codes and translated phrase counts.
+**Installed language packs (count)** lists names, codes, translated phrase counts and
+parameter synonym counts. **Export editable pack...** includes its current phrases
+and synonyms, plus blank parameter rows for further translation.
 Each additional pack has **Remove...**, with a confirmation. English and Italian are
 built in and cannot be removed. Removal moves the verified installed file to
 `Saved/MiaIA/CommandAssistant/Languages/Removed/<code>-<unique-id>.miaia-language`;
@@ -123,22 +150,107 @@ Removal does not delete exported templates or learned/pending phrases in
 can therefore still be recognized in Auto even after their original pack is removed.
 
 Language codes contain 2-24 lowercase letters, digits, or hyphens and begin with a
-letter; the `xx` placeholder and `auto`, `en`, and `it` are reserved. A pack must contain at least one translated
-phrase and can only reference the compiled allowlist of supported intents. Invalid,
+letter; the `xx` placeholder and `auto` are reserved. Version 2 also accepts `en` and
+`it` supplements without replacing their built-in corpora. A pack must contain at
+least one translated phrase or parameter synonym and can only reference the compiled
+catalog of supported intents and roles. Invalid,
 oversized, malformed, or unsupported entries are rejected atomically. Exact imported
 phrases are recognized at `100%`; similar phrases still require review. Inspection
 numbers retain their command-specific positional order. Network creation instead
-requires labelled topology values, as described below. Pack v1 translates intent
-examples, not parameter-label vocabulary; additional languages do not automatically
-gain translated parameter parsing. Free-text model
-names and project paths currently use the built-in English/Italian marker vocabulary;
-additional marker words require a later pack-format extension.
+requires labelled topology values, as described below. Existing version 1 packs
+remain importable; newly exported packs use version 2. Parameter vocabulary can now
+be translated with `P` records, including markers for quoted model names and project
+paths. A translated intent example alone still does not teach parameter labels.
 
 The Language Pack is intentionally separate from the learned-corpus backup. A pack is
 a reusable translation of built-in examples; `local-corpus.backup.miaia` contains one
 user's validated and pending phrases. Both formats live in portable `StudioCore`
 memory APIs while Unreal owns the file access, so the same packs can be reused by a
 future Unreal target or another C++ host.
+
+## Editable and exportable parameter synonyms
+
+Choose the language, then **Settings > Export parameter synonyms**. In Auto, this
+exports an English supplement; choose Italian or another language first to edit that
+language. Studio writes `Saved/MiaIA/CommandAssistant/parameters-<code>.miaia-language`
+and selects it as the import path. Existing installed phrases and aliases are retained
+in the export. Export does not change the active vocabulary.
+
+Edit the file in a UTF-8 text editor, keeping real TAB separators:
+
+```text
+MIAIA_LOCAL_LANGUAGE_PACK	2
+L	en	English
+P	miaia_network_create	hidden_width	neurons per hidden layer	units per tier
+P	miaia_network_create	hidden_layers	hidden layers	depth
+P	miaia_network_create	weight	initial weight	connection start
+P	miaia_training_start	learning_rate	learning rate	speed
+P	miaia_model_create	model_name	name	title
+P	miaia_project_save	project_path	path	destination
+```
+
+Each `P` row has five columns: record type, intent, parameter role, source label,
+and editable synonym. **Only column 5 is the synonym**; columns 2 and 3 identify its
+meaning. Duplicate a row to add another synonym. Empty fifth columns are skipped.
+`E` rows still have four columns and translate whole intent examples. Preserve them
+when editing an existing pack. A parameter-only pack is valid, including for `en`
+and `it`. Supplements add vocabulary; they do not delete built-in labels.
+
+Save and choose **Preview and install language pack**. The preview shows both counts
+and sample mappings before asking to replace an installed pack. Enable the assistant
+again after installation. To change a custom association, edit its role/synonym row
+and reinstall the complete pack. To delete a custom synonym, remove its `P` row and
+reinstall; to remove the entire supplement, use **Installed language packs > Remove...**.
+The existing recoverable removal workflow applies; built-in English/Italian and the
+learned corpus remain untouched. Do not export a fresh blank language template over
+the file you are editing.
+
+Synonyms are scoped to **intent + role + pack language**. Auto accepts all installed
+vocabulary, including mixed phrases. The same label cannot name two different roles
+within an intent, even across installed languages: import rejects that ambiguity
+before replacing the file. Long labels take precedence over their shorter prefixes,
+so `neurons per layer` is not confused with `layer`. Synonyms are literal text, not
+regular expressions; case-insensitive matching covers ASCII, with UTF-8 labels
+preserved. Types, numeric limits, activation choices and command syntax are not
+editable in packs. A pack accepts at most 256 distinct parameter aliases.
+
+Examples after installing the sample supplement:
+
+```text
+Create a network with 2 inputs, 4 units per tier, 0 depth, 1 output, connection start -0.25
+Start training epochs 200 speed 0.005
+Create a model title "Vision Model 2"
+Save project destination "C:\My Projects\model 2.mai"
+```
+
+When using custom parameter labels, label **all** supplied values. Do not mix a new
+label with positional numbers whose roles would have to be guessed. Put text values
+after their label and quote names/paths, especially when they contain spaces or
+parameter-like words. Exact learned intent matches still extract values afresh and
+validate them: editing/removing a synonym also affects already learned phrases.
+
+The shared `AssistantParameterCatalog.h` covers every parameter role of currently
+exposed intents: network creation, model creation/selection, project paths, training
+session start/run and inspection/comparison, including dataset diagnostic options.
+It is designed to grow with **every console command**, not to be a four-number
+network parser. Commands not yet exposed as intents (such as input vectors, backward
+trace and editing individual network elements) still require the console. Their
+typed schemas and intent exposure belong to the next coverage steps; installing a
+pack does not make them available prematurely.
+
+The dependency-free regression suite is shared with the full native tests. From a
+Visual Studio x64 Native Tools command prompt, at the repository root:
+
+```bat
+if not exist MiaIA\x64\Release\AssistantChecks mkdir MiaIA\x64\Release\AssistantChecks
+cl /nologo /std:c++20 /EHsc /utf-8 /W4 /FoMiaIA\x64\Release\AssistantChecks\ /FeMiaIA\x64\Release\AssistantChecks\AssistantTests.exe MiaIA\Tests\CommandAssistantStandalone.cpp MiaIA\IDE\StudioCore\Source\CommandAssistant.cpp MiaIA\IDE\StudioCore\Source\LocalCommandAssistant.cpp
+MiaIA\x64\Release\AssistantChecks\AssistantTests.exe
+```
+
+This runs without Unreal, ONNX or an online service. The standard `Tests` project
+calls the identical suite, including legacy EN/IT requests, pack v1 compatibility,
+v2 replacement/round-trip/conflict tests, mixed languages, all eight `create`
+parameters, signed/finite validation and diagnostic option limits.
 
 ## Supervised local learning
 
@@ -175,16 +287,32 @@ does not remove built-in intents, rules, or assistant examples.
 
 Classification associates the phrase with an intent, not with a stored executable
 command. Entities are extracted again from the phrase whenever it is interpreted. A
-custom network topology needs all four positive integer values, labelled as
+custom network topology needs all four integer values, labelled as
 **inputs, neurons per hidden layer, hidden layers, outputs**, in any order. For example:
 `Create a network with 1 output, 3 hidden layers, 2 inputs and 4 neurons per hidden layer`
 becomes `create 2 4 3 1`. Labels before numbers also work, such as `inputs: 2` or
-`hidden_width: 4`. The first semantic-parameter implementation focuses on English,
-retaining the existing Italian input/hidden-layer/output vocabulary; it does not add
-Spanish parameter labels. Numbers must be digits, not spelled-out words.
+`hidden_width: 4`. Inputs, hidden width and outputs must be positive; **hidden layers
+may be zero**, as in the engine. Counts must fit the console's integer range.
+English and Italian are built in (`neuroni per layer`, `layer hidden`, and `layer`
+are also accepted); other labels come from packs. Numbers must be digits, not
+spelled-out words.
+
+The four optional `create` parameters are also supported: `hidden_activation` and
+`output_activation` accept `sigmoid`, `relu`, `tanh`, `linear`; `weight` and `bias`
+accept finite signed numbers, including zero, dot decimals and scientific notation.
+Use distinct labels for hidden/output activation. For example:
+
+```text
+Crea una rete 2 input 4 neuroni per layer 0 layer hidden 1 output attivazione hidden relu attivazione output linear peso iniziale -0.25 bias 0
+```
+
+proposes `create 2 4 0 1 --hidden-activation relu --output-activation linear --weight -0.25 --bias 0`.
+Optional settings require a complete explicit topology, matching the CLI syntax;
+`create` alone retains its existing defaults. Decimal commas are rejected rather
+than silently reinterpreted. No activation names are automatically translated.
 
 `Create a network` intentionally uses Console defaults. Partial, unlabelled,
-duplicate, extra, negative or fractional parameters block the proposal and request
+duplicate, extra or invalid parameters block the proposal and request
 clarification. The user must repeat the complete corrected phrase; no conversational
 parameter state or automatic completion is stored yet. A recognized intent with a
 parameter error is not added to the unknown-intent Review queue. Learning an intent

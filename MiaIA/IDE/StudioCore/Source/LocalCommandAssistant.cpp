@@ -1,5 +1,6 @@
 #include "../Include/LocalCommandAssistant.h"
 #include "../Include/AssistantInspectionCatalog.h"
+#include "../Include/AssistantParameterCatalog.h"
 
 #include <algorithm>
 #include <array>
@@ -532,96 +533,227 @@ namespace
         return {};
     }
 
-    void ExtractNetworkEntities(CommandAssistantUnderstanding& result,
-        const std::string& language)
+    std::string RegexLiteral(std::string_view value)
     {
-        // Parse labelled spans, never infer a topology from number position.
-        // Keep punctuation/signs intact: normalization would erase decimal commas.
-        std::string text = result.Text;
-        std::transform(text.begin(), text.end(), text.begin(),
-            [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-        static const std::string roles =
-            R"(neurons?\s+(?:per|in\s+each)\s+(?:hidden\s+)?layers?|neuroni?\s+per\s+(?:ogni\s+)?(?:livello|strato)(?:\s+nascosto)?|hidden_width|hidden\s+width|hidden_layers|hidden\s+layers?|layers?\s+hidden|(?:livelli|livello|strati|strato)\s+nascost[oi]|inputs?|ingress[oi]|outputs?|uscit[ae])";
-        static const std::string number = R"([+-]?[0-9]+(?:[.,][0-9]+)?(?:[eE][+-]?[0-9]+)?)";
-        static const std::regex labelled(
-            "(" + number + ")\\s+(" + roles + ")\\b|\\b(" + roles + ")\\s*[:=]?\\s*(" + number + ")");
-        static const std::regex numeric(number);
-        static const std::regex label("\\b(?:" + roles + ")\\b");
-        constexpr std::array<std::string_view, 4> names{
-            "inputs", "hidden_width", "hidden_layers", "outputs"};
-        const std::array<std::string, 4> descriptions = language == "it"
-            ? std::array<std::string, 4>{"input", "neuroni per livello nascosto", "livelli nascosti", "output"}
-            : std::array<std::string, 4>{"inputs", "neurons per hidden layer", "hidden layers", "outputs"};
-        const auto clarify = [&](const std::string& details)
+        std::string escaped;
+        for (char c : value)
         {
-            result.Entities.clear();
-            result.Error = (language == "it" ? "Specifica la rete: "
-                : "Please clarify the network: ") + details;
-        };
-        std::array<std::string, 4> values;
-        std::string remainder = text;
-        for (std::sregex_iterator it(text.begin(), text.end(), labelled), end; it != end; ++it)
-        {
-            const std::string value = (*it)[1].matched ? (*it)[1].str() : (*it)[4].str();
-            const std::string role = (*it)[2].matched ? (*it)[2].str() : (*it)[3].str();
-            const auto numberGroup = (*it)[1].matched ? 1 : 4;
-            const auto begin = static_cast<std::size_t>(it->position(numberGroup));
-            const auto endNumber = begin + value.size();
-            const auto wordCharacter = [](unsigned char c) { return std::isalnum(c) || c == '_'; };
-            if ((begin > 0 && wordCharacter(text[begin - 1])) ||
-                (endNumber < text.size() && wordCharacter(text[endNumber])))
+            if (c == ' ') escaped += R"(\s+)";
+            else
             {
-                clarify("use a separate positive integer for each parameter.");
-                return;
+                if (std::string_view(R"(\.^$|()[]{}*+?)").find(c) != std::string_view::npos) escaped += '\\';
+                escaped += c;
             }
-            const std::size_t index = role.starts_with("neuron") || role.find("width") != std::string::npos ? 1
-                : role.starts_with("input") || role.starts_with("ingress") ? 0
-                : role.starts_with("output") || role.starts_with("uscit") ? 3 : 2;
-            if (!values[index].empty())
-            {
-                clarify(descriptions[index] + (language == "it" ? " ripetuto; indica un solo valore."
-                    : " repeated; provide one value only."));
-                return;
-            }
-            if (value.find_first_not_of("0123456789") != std::string::npos ||
-                value.find_first_not_of('0') == std::string::npos)
-            {
-                clarify(descriptions[index] + (language == "it" ? ": serve un intero positivo."
-                    : ": a positive integer is required."));
-                return;
-            }
-            values[index] = value;
-            remainder.replace(static_cast<std::size_t>(it->position()),
-                static_cast<std::size_t>(it->length()), static_cast<std::size_t>(it->length()), ' ');
         }
-        if (std::regex_search(remainder, numeric) || std::regex_search(remainder, label))
-        {
-            clarify(language == "it" ? "associa ogni numero a input, neuroni per livello nascosto, livelli nascosti oppure output; ripeti la frase completa."
-                : "label every number as inputs, neurons per hidden layer, hidden layers or outputs; repeat the complete request.");
-            return;
-        }
-        if (std::all_of(values.begin(), values.end(), [](const auto& value) { return value.empty(); }))
-        {
-            static const std::regex parameterHint(R"(\b(?:with|con|layers?|neurons?|livelli|strati|neuroni)\b)");
-            if (std::regex_search(text, parameterHint))
-                clarify("use labelled digits, for example: 2 inputs, 4 neurons per hidden layer, 3 hidden layers, 1 output.");
-            return; // Only an unparameterized request uses the console defaults.
-        }
-        std::string missing;
-        for (std::size_t i = 0; i < values.size(); ++i)
-            if (values[i].empty()) missing += (missing.empty() ? "" : ", ") + descriptions[i];
-        if (!missing.empty())
-        {
-            clarify((language == "it" ? "mancano " : "missing ") + missing +
-                (language == "it" ? ". Ripeti la frase completa." : ". Repeat the complete request."));
-            return;
-        }
-        for (std::size_t i = 0; i < values.size(); ++i)
-            AddEntity(result, std::string(names[i]), values[i]);
+        return escaped;
     }
 
-    void ExtractEntities(CommandAssistantUnderstanding& result, const std::string& language)
+    bool ParameterWord(unsigned char c)
     {
+        return c >= 128 || std::isalnum(c) || c == '_' || c == '-';
+    }
+
+    bool HasParameterOption(std::string_view text)
+    {
+        bool quoted = false;
+        for (std::size_t i = 0; i < text.size(); ++i)
+        {
+            if (text[i] == '"') quoted = !quoted;
+            if (!quoted && text[i] == '-' && i + 1 < text.size() && text[i + 1] == '-' &&
+                (i == 0 || std::isspace(static_cast<unsigned char>(text[i - 1])))) return true;
+        }
+        return false;
+    }
+
+    // Generic labelled extraction, shared by all exposed intents. A language
+    // pack supplies labels only; definitions supply types and validation.
+    bool ExtractLabelledEntities(CommandAssistantUnderstanding& result,
+        const std::string& language,
+        const std::vector<MiaIA::Studio::LocalCommandAssistantLanguagePack>& packs)
+    {
+        using namespace MiaIA::Studio;
+        struct Label { std::string Text; const AssistantParameterDefinition* Definition; };
+        std::vector<Label> labels;
+        std::vector<std::string> customLabels;
+        for (const auto& definition : AssistantParameters())
+        {
+            if (definition.Intent != result.Intent) continue;
+            for (const auto& text : definition.Labels) labels.push_back({ParameterLabel(text), &definition});
+            std::string option = definition.Role;
+            std::replace(option.begin(), option.end(), '_', '-');
+            labels.push_back({"--" + option, &definition});
+        }
+        for (const auto& pack : packs)
+        {
+            if (!AcceptsLanguage(language, pack.Code)) continue;
+            for (const auto& alias : pack.ParameterAliases)
+            {
+                if (alias.Intent != result.Intent) continue;
+                const auto* definition = FindAssistantParameter(alias.Intent, alias.Role);
+                if (!definition) continue;
+                if (std::none_of(labels.begin(), labels.end(), [&](const auto& label) { return label.Text == alias.Text; }))
+                    customLabels.push_back(alias.Text);
+                labels.push_back({alias.Text, definition});
+            }
+        }
+        if (labels.empty())
+        {
+            if (!HasParameterOption(result.Text)) return false;
+            result.Error = "This intent does not accept command-line options.";
+            return true;
+        }
+        std::sort(labels.begin(), labels.end(), [](const auto& a, const auto& b)
+        {
+            return a.Text.size() != b.Text.size() ? a.Text.size() > b.Text.size() : a.Text < b.Text;
+        });
+        std::string pattern;
+        for (const auto& label : labels)
+        {
+            if (!pattern.empty()) pattern += '|';
+            pattern += RegexLiteral(label.Text);
+        }
+        const std::regex labelPattern(pattern);
+        // Lowercase ASCII without removing signs, decimal commas, quoting or UTF-8.
+        std::string text = result.Text;
+        for (auto& c : text) if (c >= 'A' && c <= 'Z') c += 'a' - 'A';
+        struct Span { std::size_t Begin, End; const AssistantParameterDefinition* Definition; };
+        std::vector<Span> spans;
+        bool hasCustomLabel = false;
+        bool hasExplicitLabel = false;
+        for (std::sregex_iterator it(text.begin(), text.end(), labelPattern), end; it != end; ++it)
+        {
+            const auto begin = static_cast<std::size_t>(it->position());
+            if (std::count(text.begin(), text.begin() + begin, '"') % 2 != 0) continue;
+            const auto after = begin + static_cast<std::size_t>(it->length());
+            if ((begin && ParameterWord(text[begin - 1])) ||
+                (after < text.size() && ParameterWord(text[after]))) continue;
+            const auto normalized = ParameterLabel(it->str());
+            const auto found = std::find_if(labels.begin(), labels.end(),
+                [&](const auto& label) { return label.Text == normalized; });
+            if (found == labels.end()) continue;
+            spans.push_back({begin, after, found->Definition});
+            hasExplicitLabel |= normalized.starts_with("--") || normalized.find('_') != std::string::npos;
+            hasCustomLabel |= std::find(customLabels.begin(), customLabels.end(), normalized) != customLabels.end();
+        }
+        // Preserve documented positional forms for existing non-network intents.
+        // Custom vocabulary opts into labelled extraction (no positional guessing).
+        if (result.Intent != "miaia_network_create" && !hasCustomLabel && !hasExplicitLabel && !HasParameterOption(text)) return false;
+        const auto fail = [&](const std::string& message)
+        {
+            result.Entities.clear();
+            result.Error = (language == "it" ? "Specifica i parametri: " : "Please clarify the parameters: ") + message;
+        };
+        static const std::string numeric = R"([+-]?(?:[0-9]+(?:[.,][0-9]+)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?)";
+        std::string remainder = text;
+        for (const auto& span : spans)
+        {
+            const auto& definition = *span.Definition;
+            std::string valuePattern = numeric;
+            if (definition.Type != AssistantParameterType::Choice)
+                for (const auto& choice : definition.Choices) valuePattern += "|" + RegexLiteral(choice);
+            if (definition.Type == AssistantParameterType::Choice)
+                valuePattern = R"([A-Za-z][A-Za-z0-9_-]*)";
+            else if (definition.Type == AssistantParameterType::Text)
+                valuePattern = R"("[^"\r\n]+"|[^\r\n]+)";
+            // A before-label value is preferred, unless already consumed by the
+            // preceding label. This supports both "2 inputs" and "inputs: 2".
+            const std::regex before("(" + valuePattern + R"()\s+$)");
+            const std::regex after(R"(^\s*[:=]?\s*(?:of\s+|is\s+|di\s+)?()" + valuePattern + ")");
+            std::smatch match;
+            std::string prefix = remainder.substr(0, span.Begin);
+            std::string suffix = remainder.substr(span.End);
+            std::string value;
+            std::size_t valueBegin{}, valueEnd{};
+            if (definition.Type != AssistantParameterType::Text && std::regex_search(prefix, match, before) &&
+                (definition.Type != AssistantParameterType::Choice || ValidAssistantParameter(definition, match[1].str())))
+            {
+                value = match[1].str();
+                valueBegin = static_cast<std::size_t>(match.position(1));
+            }
+            else if (std::regex_search(suffix, match, after))
+            {
+                value = match[1].str();
+                valueBegin = span.End + static_cast<std::size_t>(match.position(1));
+            }
+            else
+            {
+                fail("missing or invalid value for " + definition.Role + ". Repeat the complete request.");
+                return true;
+            }
+            valueEnd = valueBegin + value.size();
+            if ((valueBegin && ParameterWord(text[valueBegin - 1])) ||
+                (valueBegin && (text[valueBegin - 1] == '.' || text[valueBegin - 1] == '+')) ||
+                (valueEnd < text.size() && ParameterWord(text[valueEnd])) ||
+                (valueEnd + 1 < text.size() && text[valueEnd] == '.' && ParameterWord(text[valueEnd + 1])))
+            {
+                fail("invalid value for " + definition.Role + ".");
+                return true;
+            }
+            // Values may not swallow another parameter label.
+            if (std::any_of(spans.begin(), spans.end(), [&](const auto& other)
+                { return valueBegin < other.End && valueEnd > other.Begin; }))
+            {
+                fail("use a separate value for " + definition.Role + "; quote text values.");
+                return true;
+            }
+            if (definition.Type == AssistantParameterType::Text)
+            {
+                value = result.Text.substr(valueBegin, value.size());
+                if (value.size() >= 2 && value.front() == '"' && value.back() == '"')
+                    value = value.substr(1, value.size() - 2);
+            }
+            if (!ValidAssistantParameter(definition, value))
+            {
+                fail("invalid value for " + definition.Role + ".");
+                return true;
+            }
+            if (std::any_of(result.Entities.begin(), result.Entities.end(),
+                [&](const auto& entity) { return entity.Role == definition.Role; }))
+            {
+                fail(definition.Role + " repeated; provide one value only.");
+                return true;
+            }
+            AddEntity(result, definition.Role, value);
+            remainder.replace(span.Begin, span.End - span.Begin, span.End - span.Begin, ' ');
+            remainder.replace(valueBegin, valueEnd - valueBegin, valueEnd - valueBegin, ' ');
+        }
+        if (std::regex_search(remainder, std::regex(numeric)) ||
+            HasParameterOption(remainder))
+        {
+            fail("label every value; an unrecognized or extra parameter remains. Repeat the complete request.");
+            return true;
+        }
+        for (const auto& definition : AssistantParameters())
+            if (definition.Intent == result.Intent)
+                for (const auto& choice : definition.Choices)
+                    if (ContainsAny(remainder, {choice}))
+                    {
+                        fail("label the option value '" + choice + "'. Repeat the complete request.");
+                        return true;
+                    }
+        if (result.Intent == "miaia_network_create")
+        {
+            if (result.Entities.empty())
+            {
+                static const std::regex hint(R"(\b(?:with|con|layers?|neurons?|livelli|strati|neuroni|activation|attivazione)\b)");
+                if (std::regex_search(text, hint))
+                    fail("use labelled values, for example: 2 inputs, 4 neurons per hidden layer, 0 hidden layers, 1 output.");
+                return true;
+            }
+            std::string missing;
+            for (const auto role : {"inputs", "hidden_width", "hidden_layers", "outputs"})
+                if (std::none_of(result.Entities.begin(), result.Entities.end(),
+                    [&](const auto& entity) { return entity.Role == role; }))
+                    missing += (missing.empty() ? "" : ", ") + std::string(role);
+            if (!missing.empty()) fail("missing " + missing + ". Repeat the complete request.");
+        }
+        return true;
+    }
+
+    void ExtractEntities(CommandAssistantUnderstanding& result, const std::string& language,
+        const std::vector<MiaIA::Studio::LocalCommandAssistantLanguagePack>& packs)
+    {
+        if (ExtractLabelledEntities(result, language, packs)) return;
         for (const auto& entry : MiaIA::Studio::AssistantInspectionCatalog)
         {
             if (entry.Intent != result.Intent) continue;
@@ -656,7 +788,7 @@ namespace
         }
         else if (result.Intent == "miaia_network_create")
         {
-            ExtractNetworkEntities(result, language);
+            ExtractLabelledEntities(result, language, packs);
         }
         else if (result.Intent == "miaia_training_start")
         {
@@ -722,6 +854,12 @@ bool MiaIA::Studio::LocalCommandAssistant::Interpret(
 
     CommandAssistantUnderstanding result;
     result.Text = text;
+    if (text.size() > MaximumPhraseBytes)
+    {
+        result.Error = "The request exceeds the supported 2048-byte limit.";
+        completion(std::move(result));
+        return true;
+    }
     const std::string normalized = Normalize(text);
     if (normalized.empty())
     {
@@ -741,7 +879,7 @@ bool MiaIA::Studio::LocalCommandAssistant::Interpret(
         {
             result.Intent = example.Intent;
             result.Confidence = 1.0;
-            ExtractEntities(result, languageCode_);
+            ExtractEntities(result, languageCode_, languagePacks_);
             completion(std::move(result));
             return true;
         }
@@ -863,7 +1001,7 @@ bool MiaIA::Studio::LocalCommandAssistant::Interpret(
         return true;
     }
 
-    ExtractEntities(result, languageCode_);
+    ExtractEntities(result, languageCode_, languagePacks_);
     completion(std::move(result));
     return true;
 }
@@ -1290,7 +1428,7 @@ bool MiaIA::Studio::LocalCommandAssistant::ImportCorpus(
 std::string MiaIA::Studio::LocalCommandAssistant::ExportLanguageTemplate()
 {
     std::ostringstream stream;
-    stream << "MIAIA_LOCAL_LANGUAGE_PACK\t1\n"
+    stream << "MIAIA_LOCAL_LANGUAGE_PACK\t2\n"
         << "L\txx\tLanguage name\n";
     for (const Example& example : Examples)
     {
@@ -1302,6 +1440,31 @@ std::string MiaIA::Studio::LocalCommandAssistant::ExportLanguageTemplate()
     {
         stream << "E\t" << entry.Intent << '\t' << entry.English << "\t\n";
     }
+    for (const auto& parameter : AssistantParameters())
+        stream << "P\t" << parameter.Intent << '\t' << parameter.Role << '\t'
+            << parameter.Labels.front() << "\t\n";
+    return stream.str();
+}
+
+std::string MiaIA::Studio::LocalCommandAssistant::ExportParameterTemplate(std::string_view code) const
+{
+    const auto installed = ExportLanguagePack(code);
+    if (!installed.empty())
+    {
+        std::ostringstream stream;
+        stream << installed;
+        for (const auto& parameter : AssistantParameters())
+            stream << "P\t" << parameter.Intent << '\t' << parameter.Role << '\t'
+                << parameter.Labels.front() << "\t\n";
+        return stream.str();
+    }
+    if (code != "en" && code != "it") return {};
+    std::ostringstream stream;
+    stream << "MIAIA_LOCAL_LANGUAGE_PACK\t2\nL\t" << code << '\t'
+        << (code == "it" ? "Italiano" : "English") << '\n';
+    for (const auto& parameter : AssistantParameters())
+        stream << "P\t" << parameter.Intent << '\t' << parameter.Role << '\t'
+            << parameter.Labels.front() << '\t' << parameter.Labels.front() << '\n';
     return stream.str();
 }
 
@@ -1324,7 +1487,8 @@ bool MiaIA::Studio::LocalCommandAssistant::ImportLanguagePack(
         return false;
     }
     if (!line.empty() && line.back() == '\r') line.pop_back();
-    if (line != "MIAIA_LOCAL_LANGUAGE_PACK\t1")
+    const bool version2 = line == "MIAIA_LOCAL_LANGUAGE_PACK\t2";
+    if (!version2 && line != "MIAIA_LOCAL_LANGUAGE_PACK\t1")
     {
         error = "The language pack header or version is invalid.";
         return false;
@@ -1344,7 +1508,8 @@ bool MiaIA::Studio::LocalCommandAssistant::ImportLanguagePack(
             error = "Invalid language pack entry at line " +
                 std::to_string(lineNumber) +
                 ". Use real TAB separators: L<TAB>es<TAB>Espanol; "
-                "E<TAB>intent<TAB>English source<TAB>translation.";
+                "E<TAB>intent<TAB>English source<TAB>translation; "
+                "P<TAB>intent<TAB>role<TAB>source<TAB>synonym (version 2).";
             return false;
         };
 
@@ -1365,7 +1530,7 @@ bool MiaIA::Studio::LocalCommandAssistant::ImportLanguagePack(
             }
             if (imported.Code.empty() || imported.Code == "xx" ||
                 imported.Code == "auto" ||
-                imported.Code == "en" || imported.Code == "it" ||
+                (!version2 && (imported.Code == "en" || imported.Code == "it")) ||
                 imported.DisplayName.empty() ||
                 imported.DisplayName == "Language name" ||
                 imported.DisplayName.size() > MaximumLanguageNameBytes)
@@ -1373,6 +1538,48 @@ bool MiaIA::Studio::LocalCommandAssistant::ImportLanguagePack(
                 return fail();
             }
             hasLanguageRecord = true;
+        }
+        else if (fields[0] == "P" && version2)
+        {
+            if (!hasLanguageRecord || (fields.size() != 4 && fields.size() != 5)) return fail();
+            const std::string intent(fields[1]), role(fields[2]);
+            if (!FindAssistantParameter(intent, role))
+            {
+                error = "Unknown parameter role or unsupported intent at line " + std::to_string(lineNumber) + ".";
+                return false;
+            }
+            if (fields.size() == 4 || fields[4].empty()) continue;
+            const auto alias = ParameterLabel(fields[4]);
+            if (alias.empty() || alias.size() > 160 || !std::any_of(alias.begin(), alias.end(),
+                [](unsigned char c) { return c >= 128 || (c >= 'a' && c <= 'z'); }) || !std::all_of(alias.begin(), alias.end(),
+                [](unsigned char c) { return c >= 128 || (c >= 'a' && c <= 'z') || c == ' ' || c == '_' || c == '-'; }))
+                return fail();
+            const auto conflicting = [&](const auto& other)
+                { return other.Intent == intent && other.Text == alias && other.Role != role; };
+            bool conflict = std::any_of(imported.ParameterAliases.begin(), imported.ParameterAliases.end(), conflicting);
+            for (const auto& pack : languagePacks_)
+                if (pack.Code != imported.Code)
+                    conflict |= std::any_of(pack.ParameterAliases.begin(), pack.ParameterAliases.end(), conflicting);
+            for (const auto& definition : AssistantParameters())
+            {
+                if (definition.Intent != intent || definition.Role == role) continue;
+                for (const auto& label : definition.Labels) conflict |= ParameterLabel(label) == alias;
+                std::string option = definition.Role;
+                std::replace(option.begin(), option.end(), '_', '-');
+                conflict |= "--" + option == alias;
+            }
+            if (conflict)
+            {
+                error = "Ambiguous parameter synonym at line " + std::to_string(lineNumber) +
+                    ": '" + alias + "' already names a different role for this intent (including Auto mode).";
+                return false;
+            }
+            if (std::none_of(imported.ParameterAliases.begin(), imported.ParameterAliases.end(),
+                [&](const auto& other) { return other.Intent == intent && other.Role == role && other.Text == alias; }))
+            {
+                if (imported.ParameterAliases.size() >= 256) return fail();
+                imported.ParameterAliases.push_back({intent, role, alias});
+            }
         }
         else if (fields[0] == "E")
         {
@@ -1404,9 +1611,9 @@ bool MiaIA::Studio::LocalCommandAssistant::ImportLanguagePack(
         }
     }
 
-    if (!hasLanguageRecord || imported.Examples.empty())
+    if (!hasLanguageRecord || (imported.Examples.empty() && imported.ParameterAliases.empty()))
     {
-        error = "The language pack needs a language and at least one translation in column 4. "
+        error = "The language pack needs a language and at least one translation in column 4 (E), or a parameter synonym in column 5 (P, version 2). "
             "Keep the English source in column 3 and add a TAB before the translation.";
         return false;
     }
@@ -1442,12 +1649,14 @@ std::string MiaIA::Studio::LocalCommandAssistant::ExportLanguagePack(
         return {};
 
     std::ostringstream stream;
-    stream << "MIAIA_LOCAL_LANGUAGE_PACK\t1\n"
+    stream << "MIAIA_LOCAL_LANGUAGE_PACK\t2\n"
         << "L\t" << found->Code << '\t' << found->DisplayName << '\n';
     for (const auto& example : found->Examples)
     {
         stream << "E\t" << example.Intent << "\t\t" << example.Text << '\n';
     }
+    for (const auto& alias : found->ParameterAliases)
+        stream << "P\t" << alias.Intent << '\t' << alias.Role << "\t\t" << alias.Text << '\n';
     return stream.str();
 }
 

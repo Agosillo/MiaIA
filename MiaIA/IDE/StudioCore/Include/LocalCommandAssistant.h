@@ -41,6 +41,13 @@ namespace MiaIA::Studio
         std::string Code;
         std::string DisplayName;
         std::vector<LocalCommandAssistantLanguagePackExample> Examples;
+        struct ParameterAlias
+        {
+            std::string Intent;
+            std::string Role;
+            std::string Text;
+        };
+        std::vector<ParameterAlias> ParameterAliases;
     };
 
     // Offline, deterministic NLU for MiaIA commands. This provider only uses
@@ -87,6 +94,8 @@ namespace MiaIA::Studio
             std::string& error);
 
         static std::string ExportLanguageTemplate();
+        // Export the installed pack, or an editable built-in-language supplement.
+        std::string ExportParameterTemplate(std::string_view code) const;
         bool ImportLanguagePack(
             std::string_view serialized,
             std::string& error);
